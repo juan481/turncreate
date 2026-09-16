@@ -6,8 +6,8 @@ estética de Argentina. Plan maestro completo en
 system en `../DESIGN.md` y pantallas de referencia en
 `../Pantallas - Referencias/`.
 
-Estado: Fase 0 (fundaciones), 100% local — ver
-`docs/adr/0001-fase-0-fundaciones.md`.
+Estado: Fase 1 (operación del local), 100% local — ver
+`docs/adr/0001-fase-0-fundaciones.md` y `docs/adr/0002-fase-1-operacion-del-local.md`.
 
 ## Desarrollo local
 
@@ -36,8 +36,12 @@ Supabase Studio local queda en `http://127.0.0.1:54323`.
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test` | Vitest (lógica de `src/domain/`) |
-| `npx supabase test db supabase/tests` | pgTAP (aislamiento y permisos por rol) |
+| `npm run db:types` | Regenera `src/lib/database.types.ts` desde el schema local |
+| `npx supabase test db supabase/tests` | pgTAP (aislamiento, permisos por rol, doble reserva) |
 | `npx supabase db reset` | Reaplica migraciones + `seed.sql` desde cero |
+
+Corré `npm run db:types` después de cualquier cambio de schema (migración
+nueva) — el resto del código depende de esos tipos para el typecheck.
 
 ## Estructura
 

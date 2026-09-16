@@ -6,6 +6,8 @@ import { signOut } from "./actions";
 const NAV = [
   { href: "agenda", label: "Agenda" },
   { href: "clientes", label: "Clientes" },
+  { href: "servicios", label: "Servicios" },
+  { href: "staff", label: "Staff" },
   { href: "caja", label: "Caja" },
 ];
 
