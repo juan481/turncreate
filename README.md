@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TurnCreate
 
-## Getting Started
+SaaS multi-tenant de turnos, CRM y caja para barberías, salones y centros de
+estética de Argentina. Plan maestro completo en
+`../TurnCreate — Plan maestro de desarrollo.docx` (carpeta padre); design
+system en `../DESIGN.md` y pantallas de referencia en
+`../Pantallas - Referencias/`.
 
-First, run the development server:
+Estado: Fase 0 (fundaciones), 100% local — ver
+`docs/adr/0001-fase-0-fundaciones.md`.
+
+## Desarrollo local
+
+Requisitos: Node 22+, Docker Desktop corriendo.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx supabase start        # levanta Postgres + Auth + Studio local (Docker)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copiá las credenciales que imprime `supabase start` (o `npx supabase status`)
+a un `.env.local` (ver `.env.example`). Después:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev                # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Supabase Studio local queda en `http://127.0.0.1:54323`.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Comando | Qué hace |
+| --- | --- |
+| `npm run dev` | Servidor de desarrollo Next.js |
+| `npm run build` | Build de producción |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run test` | Vitest (lógica de `src/domain/`) |
+| `npx supabase test db supabase/tests` | pgTAP (aislamiento y permisos por rol) |
+| `npx supabase db reset` | Reaplica migraciones + `seed.sql` desde cero |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estructura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Ver la sección 2.3 del plan maestro. Resumen:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app/` — 4 zonas por route group: `(public)/[slug]` (turnero),
+  `(auth)`, `(onboarding)/onboarding`, `(app)/app/[tenant]`,
+  `(platform)/platform`, más `(marketing)` (landing) y `api/`.
+- `src/domain/` — lógica pura, sin Next ni Supabase (Vitest).
+- `src/server/` — clientes de Supabase (y, más adelante, MP/WhatsApp/Brevo).
+- `src/components/ui/` — primitives del design system (`Button`, `Card`,
+  `StatusPill`, `Input`, `Icon`, `Logo`).
+- `supabase/migrations/` — esquema; `supabase/tests/database/` — pgTAP.
