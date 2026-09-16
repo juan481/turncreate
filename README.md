@@ -6,8 +6,13 @@ estética de Argentina. Plan maestro completo en
 system en `../DESIGN.md` y pantallas de referencia en
 `../Pantallas - Referencias/`.
 
-Estado: Fase 1 (operación del local), 100% local — ver
-`docs/adr/0001-fase-0-fundaciones.md` y `docs/adr/0002-fase-1-operacion-del-local.md`.
+Estado: Fase 2 en curso (turnero público, onboarding, mensajería), 100%
+local — ver `docs/adr/0001-fase-0-fundaciones.md`,
+`docs/adr/0002-fase-1-operacion-del-local.md` y
+`docs/adr/0003-fase-2-turnero-publico.md`. Mercado Pago real y Cloudflare
+Turnstile todavía no están conectados (necesitan cuentas externas, ver
+`docs/checklist-cuentas-externas.md`); el turnero funciona en modo
+"sin seña" mientras tanto.
 
 ## Desarrollo local
 

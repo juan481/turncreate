@@ -1,27 +1,27 @@
-import { Card } from "@/components/ui/card";
-import { StatusPill } from "@/components/ui/status-pill";
+import { getPublicTenant } from "./actions";
+import { notFound } from "next/navigation";
+import { BookingFlow } from "./booking-flow";
 
 export default async function PublicBookingPage({
   params,
+  searchParams,
 }: PageProps<"/[slug]">) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const tenant = await getPublicTenant(slug);
+
+  if (!tenant) {
+    notFound();
+  }
+
+  const rescheduleFrom = typeof sp.rescheduleFrom === "string" ? sp.rescheduleFrom : undefined;
 
   return (
-    <div className="space-y-lg">
-      <div className="space-y-2">
-        <StatusPill status="pending">Paso 1 de 4 · Servicio</StatusPill>
-        <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
-          Elegí tu tratamiento o servicio
-        </h1>
-      </div>
-
-      {/* TODO Fase 2: listar servicios reales via public_catalog(slug) */}
-      <Card className="space-y-1 p-lg">
-        <p className="font-body-sm text-body-sm text-on-surface-variant">
-          Turnero de <strong>{slug}</strong> — el catálogo de servicios y el
-          motor de disponibilidad se conectan en la Fase 2 del plan.
-        </p>
-      </Card>
-    </div>
+    <BookingFlow
+      tenantId={tenant.id}
+      slug={slug}
+      timezone={tenant.timezone || "America/Argentina/Buenos_Aires"}
+      rescheduleFrom={rescheduleFrom}
+    />
   );
 }

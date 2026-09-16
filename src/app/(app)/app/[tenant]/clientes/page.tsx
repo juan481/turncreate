@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
 import { Card } from "@/components/ui/card";
@@ -32,7 +33,7 @@ export default async function ClientesPage({
 
       <Card className="divide-y divide-border p-0">
         {clients.map((client) => (
-          <div key={client.id} className="flex items-center justify-between px-lg py-3">
+          <Link key={client.id} href={`/app/${tenantSlug}/clientes/${client.id}`} className="flex items-center justify-between px-lg py-3 hover:bg-surface-muted transition-colors">
             <div>
               <p className="font-label-lg text-label-lg text-on-surface">{client.full_name}</p>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
@@ -43,7 +44,7 @@ export default async function ClientesPage({
             {client.no_show_count > 0 && (
               <StatusPill status="alert">{client.no_show_count} ausencias</StatusPill>
             )}
-          </div>
+          </Link>
         ))}
         {clients.length === 0 && (
           <p className="px-lg py-6 font-body-sm text-body-sm text-on-surface-variant">

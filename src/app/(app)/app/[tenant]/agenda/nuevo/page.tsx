@@ -42,6 +42,32 @@ export default async function NuevoTurnoPage({
     staffId && serviceId
       ? await (async () => {
           const combo = await getServiceCombo(supabase, [serviceId]);
+          
+          if (staffId === "any") {
+            const allStaffSlots = await Promise.all(
+              staffRes.data.map(async (s) => {
+                const stSlots = await getAvailableSlotsForStaff(supabase, {
+                  tenantId: tenant.id,
+                  staffId: s.id,
+                  dateISO,
+                  timezone: tenant.timezone,
+                  combo,
+                  slotIntervalMin: settings?.slot_interval_min ?? 15,
+                  minNoticeMin: settings?.min_notice_min ?? 60,
+                });
+                return stSlots;
+              })
+            );
+            
+            const uniqueStarts = new Map<string, typeof allStaffSlots[0][0]>();
+            for (const stSlots of allStaffSlots) {
+               for (const slot of stSlots) {
+                  uniqueStarts.set(slot.startsAt.toISOString(), slot);
+               }
+            }
+            return Array.from(uniqueStarts.values()).sort((a,b) => a.startsAt.getTime() - b.startsAt.getTime());
+          }
+          
           return getAvailableSlotsForStaff(supabase, {
             tenantId: tenant.id,
             staffId,
@@ -94,6 +120,7 @@ export default async function NuevoTurnoPage({
               <option value="" disabled>
                 Elegir…
               </option>
+              <option value="any">Cualquiera</option>
               {staffRes.data.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.display_name}

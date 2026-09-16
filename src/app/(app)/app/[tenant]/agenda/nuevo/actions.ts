@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
-import { computeSegmentInstants, getServiceCombo, instantToMinutes } from "@/server/availability";
+import { computeSegmentInstants, getServiceCombo, instantToMinutes, assignAnyStaffForSlot } from "@/server/availability";
 import { computeTotalDuration } from "@/domain/availability";
 
 export type ConfirmAppointmentState = { error: string | null };
@@ -35,6 +35,27 @@ export async function confirmAppointment(
   const combo = await getServiceCombo(supabase, [serviceId]);
 
   const startMinute = instantToMinutes(startsAtISO, tenant.timezone);
+
+  let finalStaffId = staffId;
+  if (staffId === "any") {
+    const { data: activeStaff } = await supabase.from("staff").select("id").eq("tenant_id", tenant.id).eq("active", true);
+    if (!activeStaff || activeStaff.length === 0) {
+      return { error: "No hay profesionales disponibles." };
+    }
+    const assigned = await assignAnyStaffForSlot(supabase, {
+      tenantId: tenant.id,
+      dateISO,
+      timezone: tenant.timezone,
+      combo,
+      startMinute,
+      staffIds: activeStaff.map(s => s.id)
+    });
+    if (!assigned) {
+      return { error: "No hay profesionales disponibles en este horario." };
+    }
+    finalStaffId = assigned;
+  }
+
   const segments = computeSegmentInstants({ dateISO, startMinute, combo, timezone: tenant.timezone });
 
   const startsAt = new Date(startsAtISO);
@@ -43,7 +64,7 @@ export async function confirmAppointment(
 
   const { error } = await supabase.rpc("create_staff_appointment", {
     p_tenant_id: tenant.id,
-    p_staff_id: staffId,
+    p_staff_id: finalStaffId,
     p_client_id: clientId,
     p_starts_at: startsAt.toISOString(),
     p_ends_at: endsAt.toISOString(),

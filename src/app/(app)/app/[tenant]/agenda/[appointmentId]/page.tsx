@@ -67,9 +67,9 @@ export default async function AppointmentDetailPage({
         </div>
 
         <div>
-          <p className="font-label-lg text-label-lg text-on-surface">
+          <Link href={`/app/${tenantSlug}/clientes/${appointment.clients?.id}`} className="font-label-lg text-label-lg text-on-surface hover:underline">
             {appointment.clients?.full_name}
-          </p>
+          </Link>
           <p className="font-body-sm text-body-sm text-on-surface-variant">
             {appointment.clients?.phone_e164} · {appointment.staff?.display_name}
           </p>

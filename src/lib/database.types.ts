@@ -87,8 +87,9 @@ export type Database = {
       }
       appointment_segments: {
         Row: {
-          appointment_id: string
+          appointment_id: string | null
           created_at: string
+          hold_id: string | null
           id: string
           period: unknown
           staff_id: string
@@ -96,8 +97,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          appointment_id: string
+          appointment_id?: string | null
           created_at?: string
+          hold_id?: string | null
           id?: string
           period: unknown
           staff_id: string
@@ -105,8 +107,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          appointment_id?: string
+          appointment_id?: string | null
           created_at?: string
+          hold_id?: string | null
           id?: string
           period?: unknown
           staff_id?: string
@@ -119,6 +122,13 @@ export type Database = {
             columns: ["appointment_id"]
             isOneToOne: false
             referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_segments_hold_id_fkey"
+            columns: ["hold_id"]
+            isOneToOne: false
+            referencedRelation: "holds"
             referencedColumns: ["id"]
           },
           {
@@ -190,6 +200,7 @@ export type Database = {
           starts_at: string
           status: string
           tenant_id: string
+          token: string | null
           total: number
           updated_at: string
         }
@@ -210,6 +221,7 @@ export type Database = {
           starts_at: string
           status?: string
           tenant_id: string
+          token?: string | null
           total?: number
           updated_at?: string
         }
@@ -230,6 +242,7 @@ export type Database = {
           starts_at?: string
           status?: string
           tenant_id?: string
+          token?: string | null
           total?: number
           updated_at?: string
         }
@@ -507,6 +520,64 @@ export type Database = {
           },
         ]
       }
+      holds: {
+        Row: {
+          created_at: string
+          ends_at: string
+          expires_at: string
+          id: string
+          items: Json
+          rescheduled_from_id: string | null
+          staff_id: string
+          starts_at: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          expires_at?: string
+          id?: string
+          items: Json
+          rescheduled_from_id?: string | null
+          staff_id: string
+          starts_at: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          expires_at?: string
+          id?: string
+          items?: Json
+          rescheduled_from_id?: string | null
+          staff_id?: string
+          starts_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holds_rescheduled_from_id_fkey"
+            columns: ["rescheduled_from_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holds_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holds_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holidays: {
         Row: {
           country: string
@@ -581,6 +652,101 @@ export type Database = {
           },
           {
             foreignKeyName: "invitations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_logs: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          error_details: string | null
+          id: string
+          message_type: string
+          outbox_event_id: string | null
+          recipient: string
+          status: string | null
+          tenant_id: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          error_details?: string | null
+          id?: string
+          message_type: string
+          outbox_event_id?: string | null
+          recipient: string
+          status?: string | null
+          tenant_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          error_details?: string | null
+          id?: string
+          message_type?: string
+          outbox_event_id?: string | null
+          recipient?: string
+          status?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_logs_outbox_event_id_fkey"
+            columns: ["outbox_event_id"]
+            isOneToOne: false
+            referencedRelation: "outbox_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbox_events: {
+        Row: {
+          created_at: string | null
+          id: string
+          next_retry_at: string | null
+          payload: Json
+          retries: number | null
+          status: string | null
+          tenant_id: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          next_retry_at?: string | null
+          payload: Json
+          retries?: number | null
+          status?: string | null
+          tenant_id: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          next_retry_at?: string | null
+          payload?: Json
+          retries?: number | null
+          status?: string | null
+          tenant_id?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbox_events_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1502,6 +1668,65 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_appointment_by_token: { Args: { p_token: string }; Returns: Json }
+      confirm_public_hold: {
+        Args: { p_client_data: Json; p_hold_id: string }
+        Returns: {
+          balance: number
+          cancel_reason: string | null
+          client_id: string
+          created_at: string
+          deposit_paid: number
+          deposit_required: number
+          ends_at: string
+          hold_expires_at: string | null
+          id: string
+          manage_token_hash: string | null
+          rescheduled_from_id: string | null
+          source: string
+          staff_id: string
+          starts_at: string
+          status: string
+          tenant_id: string
+          token: string | null
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_public_hold: {
+        Args: {
+          p_ends_at: string
+          p_items: Json
+          p_rescheduled_from_id?: string
+          p_segments: Json
+          p_staff_id: string
+          p_starts_at: string
+          p_tenant_id: string
+        }
+        Returns: {
+          created_at: string
+          ends_at: string
+          expires_at: string
+          id: string
+          items: Json
+          rescheduled_from_id: string | null
+          staff_id: string
+          starts_at: string
+          tenant_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "holds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_staff_appointment: {
         Args: {
           p_client_id: string
@@ -1530,6 +1755,7 @@ export type Database = {
           starts_at: string
           status: string
           tenant_id: string
+          token: string | null
           total: number
           updated_at: string
         }
@@ -1540,11 +1766,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_appointment_by_token: { Args: { p_token: string }; Returns: Json }
+      get_public_catalog: { Args: { p_tenant_id: string }; Returns: Json }
+      get_public_staff: { Args: { p_tenant_id: string }; Returns: Json }
+      get_public_tenant: { Args: { p_slug: string }; Returns: Json }
       has_role: {
         Args: { p_roles: string[]; p_tenant_id: string }
         Returns: boolean
       }
       my_staff_id: { Args: { p_tenant_id: string }; Returns: string }
+      onboard_tenant: {
+        Args: {
+          p_business_hours: Json
+          p_business_type_id: string
+          p_name: string
+          p_slug: string
+        }
+        Returns: {
+          business_type_id: string
+          created_at: string
+          currency: string
+          id: string
+          logo_url: string | null
+          name: string
+          slug: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tenants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       transition_appointment: {
         Args: {
           p_appointment_id: string
@@ -1568,6 +1824,7 @@ export type Database = {
           starts_at: string
           status: string
           tenant_id: string
+          token: string | null
           total: number
           updated_at: string
         }

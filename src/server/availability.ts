@@ -5,13 +5,15 @@ import {
   computeFreeWindows,
   computeOccupiedSegments,
   computeTotalDuration,
+  pickLeastBusyStaff,
+  isCandidateAvailable,
   type Phase,
   type TimeRange,
 } from "@/domain/availability";
 import type { Database } from "@/lib/database.types";
 
 /** "HH:MM:SS" (columnas `time` de Postgres) -> minutos desde medianoche. */
-function timeToMinutes(time: string): number {
+export function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }
@@ -29,7 +31,7 @@ export function instantToMinutes(instant: string, timezone: string): number {
   return zoned.getHours() * 60 + zoned.getMinutes();
 }
 
-function dayBoundsUTC(dateISO: string, timezone: string) {
+export function dayBoundsUTC(dateISO: string, timezone: string) {
   const start = new TZDate(`${dateISO}T00:00:00`, timezone);
   const end = new TZDate(`${dateISO}T23:59:59.999`, timezone);
   return { startUTC: start.toISOString(), endUTC: end.toISOString() };
@@ -221,4 +223,41 @@ export function computeSegmentInstants(params: {
     startsAt: minutesToInstant(params.dateISO, segment.start, params.timezone),
     endsAt: minutesToInstant(params.dateISO, segment.end, params.timezone),
   }));
+}
+export async function assignAnyStaffForSlot(
+  supabase: SupabaseClient<Database>,
+  params: {
+    tenantId: string;
+    dateISO: string;
+    timezone: string;
+    combo: ServiceCombo;
+    startMinute: number;
+    staffIds: string[];
+  }
+): Promise<string | null> {
+  const candidates: { staffId: string; busyMinutes: number }[] = [];
+  const { startUTC, endUTC } = dayBoundsUTC(params.dateISO, params.timezone);
+
+  for (const staffId of params.staffIds) {
+    const freeWindows = await getStaffFreeWindows(supabase, { ...params, staffId });
+    const segments = computeOccupiedSegments(params.startMinute, params.combo.phases, params.combo.bufferAfterMin);
+    
+    if (segments.length > 0 && isCandidateAvailable(segments, freeWindows)) {
+      const { data } = await supabase.from("appointment_segments")
+          .select("period")
+          .eq("staff_id", staffId)
+          .overlaps("period", `[${startUTC},${endUTC})`);
+      
+      let busyMinutes = 0;
+      for (const row of (data || [])) {
+         const [start, end] = (row.period as string).replace(/[[\])]/g, "").split(",");
+         const startMin = Math.max(0, instantToMinutes(start, params.timezone));
+         const endMin = Math.min(24 * 60, instantToMinutes(end, params.timezone));
+         busyMinutes += (endMin - startMin);
+      }
+      candidates.push({ staffId, busyMinutes });
+    }
+  }
+  
+  return pickLeastBusyStaff(candidates);
 }
