@@ -1507,6 +1507,7 @@ export type Database = {
           p_client_id: string
           p_ends_at: string
           p_items: Json
+          p_rescheduled_from_id?: string
           p_segments: Json
           p_staff_id: string
           p_starts_at: string
@@ -1545,7 +1546,11 @@ export type Database = {
       }
       my_staff_id: { Args: { p_tenant_id: string }; Returns: string }
       transition_appointment: {
-        Args: { p_appointment_id: string; p_to_status: string }
+        Args: {
+          p_appointment_id: string
+          p_reason?: string
+          p_to_status: string
+        }
         Returns: {
           balance: number
           cancel_reason: string | null

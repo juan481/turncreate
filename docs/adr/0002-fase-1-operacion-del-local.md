@@ -57,15 +57,41 @@ transición de estados y la vista `client_stats`.
   múltiples todavía), aunque `create_staff_appointment` y el dominio ya
   soportan un array de items — falta la UI para elegir varios.
 
+## Segunda pasada (2026-09-18): reprogramar, bloqueos, semana, Realtime
+
+- **Reprogramar y cancelar desde la UI**: ficha de turno
+  (`/agenda/[appointmentId]`) con las transiciones válidas según el
+  estado actual. `transition_appointment` ahora acepta un `p_reason`
+  opcional (se guarda en `cancel_reason` solo al cancelar).
+  `create_staff_appointment` ahora acepta `p_rescheduled_from_id`: crea
+  el turno nuevo y cancela el original en la misma transacción (motivo
+  `"Reprogramado"` automático). Ambos cambios de firma requirieron `DROP
+  FUNCTION` antes del `CREATE` — un `CREATE OR REPLACE` con una firma de
+  parámetros distinta sobrecarga en vez de reemplazar.
+- **Bloqueos de horario** (`time_blocks`) desde la UI, dentro de la
+  página de Staff: alta (todo el local o un profesional puntual, con
+  motivo) y listado de los próximos.
+- **Agenda semana**: vista adicional con toggle Día/Semana, conteo de
+  turnos por día y por profesional, sin drag & drop todavía.
+- **Realtime**: la tabla `appointments` está en la publication
+  `supabase_realtime`; un Client Component sin UI propia
+  (`realtime-refresh.tsx`) se suscribe filtrando por `tenant_id` y llama
+  `router.refresh()` en cada cambio, en vez de duplicar la lógica de
+  fetch del lado del cliente.
+
+Probado end-to-end contra la API real (no solo pgTAP): crear turno,
+cancelar con motivo, reprogramar a otro horario y confirmar que el
+original queda `cancelled` con `rescheduled_from_id` en el nuevo.
+
 ## Qué queda para seguir Fase 1
 
-- Agenda semana (vista además de la de día).
-- Grilla con drag & drop (`dnd-kit`, mencionado en el stack del plan).
-- Realtime: refrescar la agenda en vivo con cambios de otros usuarios.
-- Reprogramar y cancelar desde la UI (el RPC `transition_appointment` ya
-  soporta las transiciones; falta el botón y el flujo de reasignación).
-- Editar horarios de staff y cargar bloqueos (`time_blocks`) desde la UI
-  — hoy `staff_schedules` se ve pero no se edita después del seed.
+- Grilla con drag & drop (`dnd-kit`, mencionado en el stack del plan) —
+  hoy la agenda es de solo lectura + click para el detalle.
 - Combo "Cualquiera" en la UI (el dominio ya lo resuelve:
-  `unionAnyStaffSlots` + `pickLeastBusyStaff`).
+  `unionAnyStaffSlots` + `pickLeastBusyStaff`, falta conectarlo al form
+  de "Nuevo turno").
 - Notas de cliente (`client_notes`, con el matiz de notas clínicas).
+- Editor de fases múltiples en la UI de Servicios (hoy solo una fase
+  activa; el dominio y la base ya soportan combos con espera).
+- Editar `staff_schedules` desde la UI (hoy solo se ve, se carga por
+  seed).

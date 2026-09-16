@@ -18,6 +18,7 @@ export async function confirmAppointment(
   const serviceId = formData.get("serviceId");
   const dateISO = formData.get("date");
   const startsAtISO = formData.get("startsAt");
+  const rescheduleFrom = formData.get("rescheduleFrom");
 
   if (
     typeof staffId !== "string" ||
@@ -59,6 +60,8 @@ export async function confirmAppointment(
       starts_at: s.startsAt.toISOString(),
       ends_at: s.endsAt.toISOString(),
     })),
+    p_rescheduled_from_id:
+      typeof rescheduleFrom === "string" && rescheduleFrom ? rescheduleFrom : undefined,
   });
 
   if (error) {

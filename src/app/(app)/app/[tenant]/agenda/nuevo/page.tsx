@@ -25,6 +25,7 @@ export default async function NuevoTurnoPage({
   const staffId = typeof sp.staffId === "string" ? sp.staffId : undefined;
   const serviceId = typeof sp.serviceId === "string" ? sp.serviceId : undefined;
   const clientId = typeof sp.clientId === "string" ? sp.clientId : undefined;
+  const rescheduleFrom = typeof sp.rescheduleFrom === "string" ? sp.rescheduleFrom : undefined;
 
   const [staffRes, servicesRes, clientsRes] = await Promise.all([
     supabase.from("staff").select("id, display_name").eq("tenant_id", tenant.id).eq("active", true),
@@ -56,11 +57,12 @@ export default async function NuevoTurnoPage({
   return (
     <div className="space-y-lg">
       <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
-        Nuevo turno
+        {rescheduleFrom ? "Reprogramar turno" : "Nuevo turno"}
       </h1>
 
       <Card className="p-lg">
         <form className="grid gap-3 sm:grid-cols-4" method="GET">
+          {rescheduleFrom && <input type="hidden" name="rescheduleFrom" value={rescheduleFrom} />}
           <div className="space-y-1.5">
             <label className="font-label-md text-label-md text-on-surface-variant">Cliente</label>
             <select
@@ -148,6 +150,7 @@ export default async function NuevoTurnoPage({
                 dateISO={dateISO}
                 startsAtISO={slot.startsAt.toISOString()}
                 label={formatHour(slot.startsAt, tenant.timezone)}
+                rescheduleFrom={rescheduleFrom}
               />
             ))}
             {slots.length === 0 && (

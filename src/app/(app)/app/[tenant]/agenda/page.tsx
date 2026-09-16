@@ -5,6 +5,8 @@ import { getTenantBySlug } from "@/server/tenant";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
 import { buttonVariants } from "@/components/ui/button";
+import { ViewToggle } from "./view-toggle";
+import { RealtimeAgendaRefresh } from "./realtime-refresh";
 
 const STATUS_LABEL: Record<string, { label: string; pill: StatusPillStatus }> = {
   pending_payment: { label: "Pendiente de pago", pill: "pending" },
@@ -66,6 +68,7 @@ export default async function AgendaPage({
 
   return (
     <div className="space-y-lg">
+      <RealtimeAgendaRefresh tenantId={tenant.id} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
@@ -73,12 +76,15 @@ export default async function AgendaPage({
           </h1>
           <p className="font-body-sm text-body-sm text-on-surface-variant">{dateISO}</p>
         </div>
-        <Link
-          href={`/app/${tenantSlug}/agenda/nuevo?date=${dateISO}`}
-          className={buttonVariants({ size: "default" })}
-        >
-          + Nuevo turno
-        </Link>
+        <div className="flex items-center gap-3">
+          <ViewToggle tenantSlug={tenantSlug} dateISO={dateISO} active="day" />
+          <Link
+            href={`/app/${tenantSlug}/agenda/nuevo?date=${dateISO}`}
+            className={buttonVariants({ size: "default" })}
+          >
+            + Nuevo turno
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-md md:grid-cols-2 lg:grid-cols-4">
@@ -103,7 +109,11 @@ export default async function AgendaPage({
                     pill: "pending" as StatusPillStatus,
                   };
                   return (
-                    <div key={appointment.id} className="rounded-inner bg-surface-muted p-3">
+                    <Link
+                      key={appointment.id}
+                      href={`/app/${tenantSlug}/agenda/${appointment.id}`}
+                      className="block rounded-inner bg-surface-muted p-3 transition-colors hover:bg-secondary-soft"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="font-label-md text-label-md text-on-surface">
                           {formatHour(appointment.starts_at, tenant.timezone)}–
@@ -117,7 +127,7 @@ export default async function AgendaPage({
                       <p className="font-body-sm text-body-sm text-on-surface-variant">
                         {appointment.appointment_items.map((i) => i.name).join(", ")}
                       </p>
-                    </div>
+                    </Link>
                   );
                 })}
                 {appointments.length === 0 && (

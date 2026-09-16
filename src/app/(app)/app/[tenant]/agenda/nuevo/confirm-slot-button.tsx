@@ -14,6 +14,7 @@ export function ConfirmSlotButton(props: {
   dateISO: string;
   startsAtISO: string;
   label: string;
+  rescheduleFrom?: string;
 }) {
   const [state, formAction, pending] = useActionState(
     confirmAppointment.bind(null, props.tenantSlug),
@@ -27,6 +28,9 @@ export function ConfirmSlotButton(props: {
       <input type="hidden" name="serviceId" value={props.serviceId} />
       <input type="hidden" name="date" value={props.dateISO} />
       <input type="hidden" name="startsAt" value={props.startsAtISO} />
+      {props.rescheduleFrom && (
+        <input type="hidden" name="rescheduleFrom" value={props.rescheduleFrom} />
+      )}
       <Button type="submit" variant="secondary" size="sm" disabled={pending}>
         {props.label}
       </Button>
