@@ -382,6 +382,110 @@ export type Database = {
         }
         Relationships: []
       }
+      cash_movements: {
+        Row: {
+          amount: number
+          cash_session_id: string
+          created_at: string
+          id: string
+          payment_id: string | null
+          reason: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          cash_session_id: string
+          created_at?: string
+          id?: string
+          payment_id?: string | null
+          reason: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          cash_session_id?: string
+          created_at?: string
+          id?: string
+          payment_id?: string | null
+          reason?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_movements_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_sessions: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          counted_amount: number | null
+          created_at: string
+          difference: number | null
+          difference_reason: string | null
+          expected_amount: number | null
+          id: string
+          opened_at: string
+          opened_by: string
+          opening_amount: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          counted_amount?: number | null
+          created_at?: string
+          difference?: number | null
+          difference_reason?: string | null
+          expected_amount?: number | null
+          id?: string
+          opened_at?: string
+          opened_by: string
+          opening_amount?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          counted_amount?: number | null
+          created_at?: string
+          difference?: number | null
+          difference_reason?: string | null
+          expected_amount?: number | null
+          id?: string
+          opened_at?: string
+          opened_by?: string
+          opening_amount?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_notes: {
         Row: {
           author_id: string
@@ -513,6 +617,177 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "clients_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commission_entries: {
+        Row: {
+          amount: number
+          appointment_id: string
+          base_amount: number
+          created_at: string
+          id: string
+          payout_id: string | null
+          staff_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          appointment_id: string
+          base_amount: number
+          created_at?: string
+          id?: string
+          payout_id?: string | null
+          staff_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          appointment_id?: string
+          base_amount?: number
+          created_at?: string
+          id?: string
+          payout_id?: string | null
+          staff_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_entries_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_entries_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "commission_payouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_entries_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commission_payouts: {
+        Row: {
+          created_at: string
+          id: string
+          paid_at: string | null
+          period_from: string
+          period_to: string
+          staff_id: string
+          tenant_id: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          period_from: string
+          period_to: string
+          staff_id: string
+          tenant_id: string
+          total: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          period_from?: string
+          period_to?: string
+          staff_id?: string
+          tenant_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_payouts_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_payouts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commission_rules: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          id: string
+          service_id: string | null
+          staff_id: string | null
+          tenant_id: string
+          type: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          service_id?: string | null
+          staff_id?: string | null
+          tenant_id: string
+          type: string
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          service_id?: string | null
+          staff_id?: string | null
+          tenant_id?: string
+          type?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "service_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_rules_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_rules_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_rules_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -754,6 +1029,70 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount: number
+          appointment_id: string | null
+          cash_session_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          method: string
+          mp_payment_id: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          appointment_id?: string | null
+          cash_session_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          method: string
+          mp_payment_id?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          appointment_id?: string | null
+          cash_session_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          method?: string
+          mp_payment_id?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           created_at: string
@@ -887,6 +1226,51 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      sale_items: {
+        Row: {
+          appointment_id: string
+          created_at: string
+          id: string
+          product_id: string
+          qty: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string
+          id?: string
+          product_id: string
+          qty: number
+          unit_price: number
+          updated_at?: string
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string
+          id?: string
+          product_id?: string
+          qty?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_items_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_categories: {
         Row: {
@@ -1669,6 +2053,34 @@ export type Database = {
     }
     Functions: {
       cancel_appointment_by_token: { Args: { p_token: string }; Returns: Json }
+      close_cash_session: {
+        Args: {
+          p_counted_amount: number
+          p_difference_reason?: string
+          p_session_id: string
+        }
+        Returns: {
+          closed_at: string | null
+          closed_by: string | null
+          counted_amount: number | null
+          created_at: string
+          difference: number | null
+          difference_reason: string | null
+          expected_amount: number | null
+          id: string
+          opened_at: string
+          opened_by: string
+          opening_amount: number
+          tenant_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "cash_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       confirm_public_hold: {
         Args: { p_client_data: Json; p_hold_id: string }
         Returns: {
@@ -1766,6 +2178,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      finalize_appointment: {
+        Args: {
+          p_appointment_id: string
+          p_cash_session_id?: string
+          p_payments: Json
+          p_sale_items?: Json
+        }
+        Returns: {
+          balance: number
+          cancel_reason: string | null
+          client_id: string
+          created_at: string
+          deposit_paid: number
+          deposit_required: number
+          ends_at: string
+          hold_expires_at: string | null
+          id: string
+          manage_token_hash: string | null
+          rescheduled_from_id: string | null
+          source: string
+          staff_id: string
+          starts_at: string
+          status: string
+          tenant_id: string
+          token: string | null
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_appointment_by_token: { Args: { p_token: string }; Returns: Json }
       get_public_catalog: { Args: { p_tenant_id: string }; Returns: Json }
       get_public_staff: { Args: { p_tenant_id: string }; Returns: Json }
@@ -1801,6 +2248,30 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "tenants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      open_cash_session: {
+        Args: { p_opening_amount: number; p_tenant_id: string }
+        Returns: {
+          closed_at: string | null
+          closed_by: string | null
+          counted_amount: number | null
+          created_at: string
+          difference: number | null
+          difference_reason: string | null
+          expected_amount: number | null
+          id: string
+          opened_at: string
+          opened_by: string
+          opening_amount: number
+          tenant_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "cash_sessions"
           isOneToOne: true
           isSetofReturn: false
         }
