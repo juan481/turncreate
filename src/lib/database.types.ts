@@ -1769,6 +1769,10 @@ export type Database = {
       get_appointment_by_token: { Args: { p_token: string }; Returns: Json }
       get_public_catalog: { Args: { p_tenant_id: string }; Returns: Json }
       get_public_staff: { Args: { p_tenant_id: string }; Returns: Json }
+      get_public_staff_for_service: {
+        Args: { p_service_id: string; p_tenant_id: string }
+        Returns: Json
+      }
       get_public_tenant: { Args: { p_slug: string }; Returns: Json }
       has_role: {
         Args: { p_roles: string[]; p_tenant_id: string }

@@ -3,7 +3,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
-import { computeSegmentInstants, getServiceCombo, instantToMinutes, assignAnyStaffForSlot } from "@/server/availability";
+import {
+  computeSegmentInstants,
+  getServiceCombo,
+  getStaffIdsForService,
+  instantToMinutes,
+  assignAnyStaffForSlot,
+} from "@/server/availability";
 import { computeTotalDuration } from "@/domain/availability";
 
 export type ConfirmAppointmentState = { error: string | null };
@@ -38,9 +44,12 @@ export async function confirmAppointment(
 
   let finalStaffId = staffId;
   if (staffId === "any") {
-    const { data: activeStaff } = await supabase.from("staff").select("id").eq("tenant_id", tenant.id).eq("active", true);
-    if (!activeStaff || activeStaff.length === 0) {
-      return { error: "No hay profesionales disponibles." };
+    const eligibleStaffIds = await getStaffIdsForService(supabase, {
+      tenantId: tenant.id,
+      serviceId,
+    });
+    if (eligibleStaffIds.length === 0) {
+      return { error: "Ningún profesional activo tiene este servicio asignado." };
     }
     const assigned = await assignAnyStaffForSlot(supabase, {
       tenantId: tenant.id,
@@ -48,7 +57,7 @@ export async function confirmAppointment(
       timezone: tenant.timezone,
       combo,
       startMinute,
-      staffIds: activeStaff.map(s => s.id)
+      staffIds: eligibleStaffIds,
     });
     if (!assigned) {
       return { error: "No hay profesionales disponibles en este horario." };

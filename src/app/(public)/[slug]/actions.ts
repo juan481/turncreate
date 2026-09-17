@@ -39,6 +39,24 @@ export async function getPublicStaff(tenantId: string): Promise<PublicStaffMembe
   return data as unknown as PublicStaffMember[];
 }
 
+/**
+ * Solo los profesionales que dictan `serviceId` (staff_services, sección
+ * 3.3) -- sin esto, el paso 2 ("¿con quién?") podía ofrecer a alguien
+ * que no hace el servicio elegido en el paso 1.
+ */
+export async function getPublicStaffForService(
+  tenantId: string,
+  serviceId: string,
+): Promise<PublicStaffMember[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_public_staff_for_service", {
+    p_tenant_id: tenantId,
+    p_service_id: serviceId,
+  });
+  if (error) throw error;
+  return data as unknown as PublicStaffMember[];
+}
+
 export async function getAvailableSlots(
   tenantId: string, 
   serviceId: string, 

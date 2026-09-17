@@ -105,11 +105,32 @@ agrupados bajo "Servicios". Probado creando un servicio de 3 fases
 categoría, confirmando la duración calculada en el catálogo público de
 ambos.
 
+## Cuarta pasada (2026-09-17): staff_services aplicado de verdad
+
+El combo "Cualquiera" (tanto en `/agenda/nuevo` del panel de staff como
+en el turnero público) consideraba a **todos** los profesionales activos
+del tenant sin mirar `staff_services` — la tabla que dice qué servicios
+dicta cada uno existía desde la Fase 0, pero ningún flujo de reserva la
+consultaba. En la práctica esto significaba que "Cualquiera" podía
+asignarle a un cliente un profesional que no sabe hacer el servicio
+elegido, y que el paso 2 del turnero ("¿con quién?") ofrecía a cualquiera
+sin importar el servicio del paso 1.
+
+Se agregó `getStaffIdsForService` (server, usado por el panel de staff)
+y la RPC pública `get_public_staff_for_service` (usada por el turnero),
+y ambos flujos de "Cualquiera" ahora arrancan de la lista de
+profesionales que efectivamente dictan el servicio elegido, no de todo
+el staff activo. Verificado contra los datos del seed: "Limpieza Facial"
+sólo devuelve a Lucía, "Coloración" devuelve a Lucía y Ana.
+
 ## Qué queda para seguir Fase 1
 
 - Grilla con drag & drop (`dnd-kit`, mencionado en el stack del plan) —
   hoy la agenda es de solo lectura + click para el detalle.
-- Combo "Cualquiera" en la UI del panel de staff (`/agenda/nuevo`): el
-  turnero público ya lo tiene (ADR 0003); falta conectarlo también ahí.
 - Editar `staff_schedules` desde la UI (hoy solo se ve, se carga por
   seed).
+- Si se elige un profesional específico (no "Cualquiera") en
+  `/agenda/nuevo`, el selector de servicio no se filtra por lo que esa
+  persona dicta — se puede armar una combinación que `staff_services` no
+  respalda. El combo "Cualquiera" ya lo hace bien; falta la misma
+  restricción para la selección directa.

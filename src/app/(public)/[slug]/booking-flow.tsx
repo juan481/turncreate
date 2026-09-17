@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import {
   getPublicCatalog,
-  getPublicStaff,
+  getPublicStaffForService,
   getAvailableSlots,
   createHold,
   confirmHold,
@@ -47,8 +47,14 @@ export function BookingFlow({
 
   useEffect(() => {
     getPublicCatalog(tenantId).then(setCatalog);
-    getPublicStaff(tenantId).then(setStaffList);
   }, [tenantId]);
+
+  useEffect(() => {
+    // staffList arranca en [] -- no hace falta resetearlo acá, solo
+    // evitar el fetch cuando todavía no hay servicio elegido.
+    if (!selectedService) return;
+    getPublicStaffForService(tenantId, selectedService.id).then(setStaffList);
+  }, [tenantId, selectedService]);
 
   useEffect(() => {
     if (step !== 3 || !selectedService) return;

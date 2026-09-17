@@ -1,7 +1,7 @@
 import { TZDate } from "@date-fns/tz";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
-import { getAvailableSlotsForStaff, getServiceCombo } from "@/server/availability";
+import { getAvailableSlotsForStaff, getServiceCombo, getStaffIdsForService } from "@/server/availability";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ConfirmSlotButton } from "./confirm-slot-button";
@@ -44,11 +44,15 @@ export default async function NuevoTurnoPage({
           const combo = await getServiceCombo(supabase, [serviceId]);
           
           if (staffId === "any") {
+            const eligibleStaffIds = await getStaffIdsForService(supabase, {
+              tenantId: tenant.id,
+              serviceId,
+            });
             const allStaffSlots = await Promise.all(
-              staffRes.data.map(async (s) => {
+              eligibleStaffIds.map(async (id) => {
                 const stSlots = await getAvailableSlotsForStaff(supabase, {
                   tenantId: tenant.id,
-                  staffId: s.id,
+                  staffId: id,
                   dateISO,
                   timezone: tenant.timezone,
                   combo,

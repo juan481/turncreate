@@ -44,6 +44,29 @@ export type ServiceCombo = {
   items: { serviceId: string; name: string; price: number; phases: Phase[]; bufferAfterMin: number }[];
 };
 
+/**
+ * Profesionales activos del tenant que dictan un servicio, según
+ * staff_services (sección 3.3). Sin este filtro, el combo "Cualquiera"
+ * podía asignar un turno a alguien que no sabe hacer el servicio
+ * elegido -- staff_services existía en el schema desde la Fase 0 pero
+ * ningún flujo de reserva lo consultaba todavía.
+ */
+export async function getStaffIdsForService(
+  supabase: SupabaseClient<Database>,
+  params: { tenantId: string; serviceId: string },
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("staff_services")
+    .select("staff_id, staff(tenant_id, active)")
+    .eq("service_id", params.serviceId);
+
+  if (error) throw error;
+
+  return data
+    .filter((row) => row.staff?.tenant_id === params.tenantId && row.staff?.active)
+    .map((row) => row.staff_id);
+}
+
 /** Trae los servicios elegidos y concatena sus fases en el orden pedido (combo). */
 export async function getServiceCombo(
   supabase: SupabaseClient<Database>,
