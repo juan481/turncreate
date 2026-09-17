@@ -28,7 +28,7 @@ export function CajaClient() {
 
   if (!isOpen) {
     return (
-      <Card className="max-w-md mx-auto p-lg mt-xl space-y-md">
+      <Card className="max-w-[28rem] mx-auto p-lg mt-xl space-y-md">
         <div className="flex justify-between items-center">
           <h2 className="font-headline-sm text-headline-sm text-on-surface">Estado de Caja</h2>
           <StatusPill status="alert">Cerrada</StatusPill>

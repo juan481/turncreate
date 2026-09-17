@@ -13,7 +13,7 @@ export default function RegistroPage() {
   const [state, formAction, pending] = useActionState(signUp, initialState);
 
   return (
-    <Card className="w-full max-w-sm space-y-lg">
+    <Card className="w-full max-w-[24rem] space-y-lg">
       <div className="space-y-1">
         <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
           Creá tu local

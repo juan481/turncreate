@@ -16,7 +16,7 @@ export default function OnboardingLayout({
   return (
     <div className="flex min-h-screen flex-col items-center gap-2xl px-margin py-2xl">
       <Logo className="h-7 w-auto" />
-      <div className="flex w-full max-w-lg items-center gap-1.5">
+      <div className="flex w-full max-w-[32rem] items-center gap-1.5">
         {PASOS.map((paso, i) => (
           <div
             key={paso}
@@ -26,7 +26,7 @@ export default function OnboardingLayout({
           />
         ))}
       </div>
-      <div className="w-full max-w-lg">{children}</div>
+      <div className="w-full max-w-[32rem]">{children}</div>
     </div>
   );
 }

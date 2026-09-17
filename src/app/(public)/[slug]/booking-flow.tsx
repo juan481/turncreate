@@ -335,7 +335,7 @@ export function BookingFlow({
         <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
           ¡Turno confirmado!
         </h1>
-        <p className="mx-auto max-w-sm font-body-md text-body-md text-on-surface-variant">
+        <p className="mx-auto max-w-[24rem] font-body-md text-body-md text-on-surface-variant">
           Te esperamos el {format(parseISO(selectedTime!), "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es })}.
         </p>
         {confirmedData?.token && (

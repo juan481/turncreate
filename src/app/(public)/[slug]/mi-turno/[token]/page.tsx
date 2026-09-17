@@ -72,7 +72,7 @@ export default async function MiTurnoPage({
   });
 
   return (
-    <div className="container max-w-2xl py-8">
+    <div className="container max-w-[42rem] py-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Detalle de tu turno</h1>
         <p className="text-gray-500">

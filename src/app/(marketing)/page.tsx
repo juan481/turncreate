@@ -33,10 +33,10 @@ export default function MarketingHomePage() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-2xl px-gutter py-2xl">
       <section className="flex flex-col items-center gap-lg text-center">
         <StatusPill status="pending">Diseñado para salones y barberías</StatusPill>
-        <h1 className="max-w-2xl font-headline-xl-mobile text-headline-xl-mobile text-on-surface md:font-headline-xl md:text-headline-xl">
+        <h1 className="max-w-[42rem] font-headline-xl-mobile text-headline-xl-mobile text-on-surface md:font-headline-xl md:text-headline-xl">
           Multiplicá tus reservas y terminá con los turnos colgados
         </h1>
-        <p className="max-w-xl font-body-lg text-body-lg text-on-surface-variant">
+        <p className="max-w-[36rem] font-body-lg text-body-lg text-on-surface-variant">
           TurnCreate es el SaaS de turnos, CRM y caja diseñado para barberías,
           salones y centros de estética de Argentina.
         </p>

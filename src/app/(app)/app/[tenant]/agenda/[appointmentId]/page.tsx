@@ -49,7 +49,7 @@ export default async function AppointmentDetailPage({
   };
 
   return (
-    <div className="mx-auto max-w-lg space-y-lg">
+    <div className="mx-auto max-w-[32rem] space-y-lg">
       <Link
         href={`/app/${tenantSlug}/agenda?date=${dateISO}`}
         className="font-label-md text-label-md text-on-surface-variant"

@@ -32,7 +32,7 @@ export default async function PublicBookingLayout({
           )}
         </div>
       </header>
-      <main className="mx-auto w-full max-w-lg flex-1 px-margin py-xl">
+      <main className="mx-auto w-full max-w-[32rem] flex-1 px-margin py-xl">
         {children}
       </main>
     </div>

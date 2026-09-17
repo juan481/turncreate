@@ -72,7 +72,15 @@
   --text-label-sm--letter-spacing: 0.02em;
   --text-label-sm--font-weight: 600;
 
-  /* Spacing (gutters, márgenes, escala interna) */
+  /* Spacing: gutters, margenes, escala interna.
+     Ojo, gotcha de Tailwind v4: estos nombres xs, sm, md, lg, xl, 2xl
+     alimentan la escala compartida de padding, gap, width, height y
+     max width a la vez, no solo padding y gap. Un elemento con clase
+     max width sm, md, lg, xl o dos xl toma este valor de acá en vez
+     del tamano de contenedor por defecto de Tailwind, y declarar ese
+     contenedor por separado no cambia la prioridad, ya lo probamos.
+     Para max width o width con estos nombres, usar un valor entre
+     corchetes en rem en vez del nombre corto. */
   --spacing-gutter: 1.25rem;
   --spacing-gutter-desktop: 1.5rem;
   --spacing-margin: 1rem;
