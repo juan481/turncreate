@@ -12,11 +12,19 @@ export async function createService(
   _prevState: ServiceActionState,
   formData: FormData,
 ): Promise<ServiceActionState> {
+  const phasesRaw = formData.get("phases");
+  let phases: unknown = [];
+  try {
+    phases = JSON.parse(typeof phasesRaw === "string" ? phasesRaw : "[]");
+  } catch {
+    return { error: "Las fases no se pudieron leer, probá de nuevo" };
+  }
+
   const parsed = createServiceSchema.safeParse({
     name: formData.get("name"),
     price: formData.get("price"),
-    durationMin: formData.get("durationMin"),
     bufferAfterMin: formData.get("bufferAfterMin") || 0,
+    phases,
   });
 
   if (!parsed.success) {
@@ -41,14 +49,19 @@ export async function createService(
     return { error: serviceError.message };
   }
 
-  const { error: phaseError } = await supabase.from("service_phases").insert({
-    service_id: service.id,
-    position: 1,
-    kind: "active",
-    minutes: parsed.data.durationMin,
-  });
+  const { error: phaseError } = await supabase.from("service_phases").insert(
+    parsed.data.phases.map((phase, index) => ({
+      service_id: service.id,
+      position: index + 1,
+      kind: phase.kind,
+      minutes: phase.minutes,
+    })),
+  );
 
   if (phaseError) {
+    // Sin esto, un fallo acá deja un servicio sin fases (duración 0,
+    // invisible para el motor de disponibilidad pero visible en la lista).
+    await supabase.from("services").delete().eq("id", service.id);
     return { error: phaseError.message };
   }
 

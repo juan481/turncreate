@@ -83,15 +83,33 @@ Probado end-to-end contra la API real (no solo pgTAP): crear turno,
 cancelar con motivo, reprogramar a otro horario y confirmar que el
 original queda `cancelled` con `rescheduled_from_id` en el nuevo.
 
+## Tercera pasada (2026-09-17): editor de fases múltiples
+
+`NewServiceForm` pasó de una sola fase fija a un editor dinámico
+(agregar/quitar fases, elegir activa/espera, buffer final, duración
+total calculada en vivo). El array de fases viaja como JSON en un input
+hidden y se valida con Zod (`phases: z.array(phaseSchema).min(1)`, con
+el refine de que al menos una sea `active` — si no, no hay nada que
+reservar). Si falla el insert de `service_phases` después de crear el
+`service`, se borra el service para no dejar un registro huérfano sin
+fases (duración 0, invisible para el motor de disponibilidad).
+
+De paso encontré y corregí un bug real en `get_public_catalog` (no
+específico de esta pasada, existía desde el ADR 0003): sólo traía
+servicios con `category_id` asignado. Como `services.category_id` es
+nullable y el formulario de alta nunca pidió categoría, cualquier
+servicio nuevo quedaba invisible en el turnero público aunque el panel
+de staff lo mostrara normal. Ahora los servicios sin categoría aparecen
+agrupados bajo "Servicios". Probado creando un servicio de 3 fases
+(activa 20 + espera 30 + activa 15, buffer 5 = 70 min) y uno sin
+categoría, confirmando la duración calculada en el catálogo público de
+ambos.
+
 ## Qué queda para seguir Fase 1
 
 - Grilla con drag & drop (`dnd-kit`, mencionado en el stack del plan) —
   hoy la agenda es de solo lectura + click para el detalle.
-- Combo "Cualquiera" en la UI (el dominio ya lo resuelve:
-  `unionAnyStaffSlots` + `pickLeastBusyStaff`, falta conectarlo al form
-  de "Nuevo turno").
-- Notas de cliente (`client_notes`, con el matiz de notas clínicas).
-- Editor de fases múltiples en la UI de Servicios (hoy solo una fase
-  activa; el dominio y la base ya soportan combos con espera).
+- Combo "Cualquiera" en la UI del panel de staff (`/agenda/nuevo`): el
+  turnero público ya lo tiene (ADR 0003); falta conectarlo también ahí.
 - Editar `staff_schedules` desde la UI (hoy solo se ve, se carga por
   seed).
