@@ -1,11 +1,20 @@
+import { notFound } from "next/navigation";
 import { Logo } from "@/components/ui/logo";
 import { StatusPill } from "@/components/ui/status-pill";
+import { isPlatformAdmin } from "@/server/platform";
 
-export default function PlatformLayout({
+export default async function PlatformLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Sección 4.3: verificación en middleware (proxy.ts solo chequea sesión)
+  // y en cada ruta. notFound() en vez de redirect a /login: no hay razón
+  // para confirmarle a un usuario sin permiso que esta ruta existe.
+  if (!(await isPlatformAdmin())) {
+    notFound();
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex h-16 items-center justify-between border-b border-border bg-primary px-gutter">

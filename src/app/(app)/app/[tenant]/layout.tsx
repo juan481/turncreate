@@ -9,6 +9,7 @@ const NAV = [
   { href: "servicios", label: "Servicios" },
   { href: "staff", label: "Staff" },
   { href: "caja", label: "Caja" },
+  { href: "reportes", label: "Reportes" },
 ];
 
 export default async function TenantAppLayout({

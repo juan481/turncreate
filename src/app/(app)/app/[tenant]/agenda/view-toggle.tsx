@@ -8,11 +8,12 @@ export function ViewToggle({
 }: {
   tenantSlug: string;
   dateISO: string;
-  active: "day" | "week";
+  active: "day" | "week" | "month";
 }) {
   const tabs = [
     { key: "day" as const, label: "Día", href: `/app/${tenantSlug}/agenda?date=${dateISO}` },
     { key: "week" as const, label: "Semana", href: `/app/${tenantSlug}/agenda/semana?date=${dateISO}` },
+    { key: "month" as const, label: "Mes", href: `/app/${tenantSlug}/agenda/mes?date=${dateISO}` },
   ];
 
   return (
