@@ -19,7 +19,7 @@ export function timeToMinutes(time: string): number {
 }
 
 /** Minuto del día (en `timezone`) -> instante real, para la fecha dada. */
-function minutesToInstant(dateISO: string, minutes: number, timezone: string): Date {
+export function minutesToInstant(dateISO: string, minutes: number, timezone: string): Date {
   const zoned = new TZDate(`${dateISO}T00:00:00`, timezone);
   zoned.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
   return zoned;

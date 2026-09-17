@@ -138,11 +138,40 @@ y confirmar que `staff_schedules` para miércoles queda vacío (lo que el
 motor de disponibilidad, ya cubierto por 22 tests de Vitest, traduce
 directamente en cero horarios disponibles ese día).
 
+## Sexta pasada (2026-09-17): agenda con drag & drop
+
+La agenda día pasó de ser una lista de cards por profesional a una
+grilla temporal real: eje de horas a la izquierda (calculado desde
+`business_hours` del día, con fallback 8:00-20:00 si el local no abre
+ese día), una columna por profesional, y los turnos posicionados
+absolutamente según su horario (`dnd-kit`, tal como pide el stack del
+plan). Los turnos cancelados/vencidos no se traen a la grilla — un
+turno arrastrado se reprograma (crea uno nuevo, cancela el original,
+sección 5.3), así que si se mostrara el cancelado aparecería a la vez
+en su posición vieja y la nueva.
+
+Arrastrar un turno dispara `moveAppointment`: toma los `phases`/
+`buffer_min` ya guardados en `appointment_items` (no vuelve a consultar
+`services`, por fidelidad histórica igual que el resto del sistema),
+recalcula los segmentos ocupados para el nuevo horario/profesional con
+`computeSegmentInstants`, y llama a `create_staff_appointment` con
+`p_rescheduled_from_id` — el mismo mecanismo ya probado del botón
+"Reprogramar". El `PointerSensor` de dnd-kit necesita un
+`activationConstraint: { distance: 8 }`: sin eso, cualquier click
+intercepta el gesto y rompe la navegación normal del `Link` a la ficha
+del turno.
+
+Probado extremo a extremo contra la API real (no el drag visual, que
+necesita un navegador, pero sí la lógica completa que dispara):
+un turno de coloración con espera (30 activo + 40 espera + 20 activo +
+10 buffer) movido de las 10:00 a las 16:00 recalculó los dos segmentos
+ocupados correctamente (16:00-16:30 y 17:10-17:40, dejando la espera
+libre) y confirmó que el original queda `cancelled` enlazado al nuevo.
+
+Con esto se cierra la lista original de pendientes de la Fase 1.
+
 ## Qué queda para seguir Fase 1
 
-- Grilla con drag & drop (`dnd-kit`, mencionado en el stack del plan) —
-  hoy la agenda es de solo lectura + click para el detalle. Es lo único
-  que queda pendiente de la lista original de esta fase.
 - Si se elige un profesional específico (no "Cualquiera") en
   `/agenda/nuevo`, el selector de servicio no se filtra por lo que esa
   persona dicta — se puede armar una combinación que `staff_services` no
@@ -151,3 +180,9 @@ directamente en cero horarios disponibles ese día).
 - Versionar `staff_schedules` con `valid_from`/`valid_to` en vez de
   reemplazar el conjunto completo (permitiría programar un cambio de
   horario a futuro sin perder el vigente hasta esa fecha).
+- El drag & drop no valida de antemano si el nuevo horario está dentro
+  del `business_hours`/`staff_schedules` del profesional -- si no está
+  libre, el `EXCLUDE` constraint lo rechaza igual (no se pierde
+  integridad), pero el error que ve el usuario es el mensaje crudo de
+  Postgres en vez de uno más amigable tipo "ese horario no está
+  disponible".

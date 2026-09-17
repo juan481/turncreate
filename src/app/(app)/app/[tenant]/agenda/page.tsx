@@ -2,25 +2,11 @@ import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
-import { Card } from "@/components/ui/card";
-import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
+import { timeToMinutes, instantToMinutes } from "@/server/availability";
 import { buttonVariants } from "@/components/ui/button";
 import { ViewToggle } from "./view-toggle";
 import { RealtimeAgendaRefresh } from "./realtime-refresh";
-
-const STATUS_LABEL: Record<string, { label: string; pill: StatusPillStatus }> = {
-  pending_payment: { label: "Pendiente de pago", pill: "pending" },
-  confirmed: { label: "Confirmado", pill: "confirmed" },
-  completed: { label: "Completado", pill: "confirmed" },
-  no_show: { label: "No vino", pill: "alert" },
-  cancelled: { label: "Cancelado", pill: "alert" },
-  expired: { label: "Vencido", pill: "alert" },
-};
-
-function formatHour(instant: string, timezone: string) {
-  const zoned = new TZDate(new Date(instant), timezone);
-  return `${zoned.getHours().toString().padStart(2, "0")}:${zoned.getMinutes().toString().padStart(2, "0")}`;
-}
+import { AgendaDayGrid } from "./agenda-day-grid";
 
 export default async function AgendaPage({
   params,
@@ -32,13 +18,14 @@ export default async function AgendaPage({
   const tenant = await getTenantBySlug(supabase, tenantSlug);
 
   const dateISO = typeof date === "string" ? date : new TZDate(new Date(), tenant.timezone).toISOString().slice(0, 10);
+  const weekday = new TZDate(`${dateISO}T12:00:00`, tenant.timezone).getDay();
   const { startUTC, endUTC } = (() => {
     const start = new TZDate(`${dateISO}T00:00:00`, tenant.timezone);
     const end = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone);
     return { startUTC: start.toISOString(), endUTC: end.toISOString() };
   })();
 
-  const [staffRes, appointmentsRes] = await Promise.all([
+  const [staffRes, appointmentsRes, businessHoursRes] = await Promise.all([
     supabase
       .from("staff")
       .select("id, display_name, color")
@@ -53,18 +40,46 @@ export default async function AgendaPage({
       .eq("tenant_id", tenant.id)
       .gte("starts_at", startUTC)
       .lte("starts_at", endUTC)
+      // Turnos cancelados/vencidos no ocupan lugar visual en la grilla --
+      // mueven un turno por drag & drop crea uno nuevo y cancela el
+      // viejo (sección 5.3); si se mostrara iría a la vez en su posición
+      // vieja (cancelado) y la nueva, como si fueran dos turnos.
+      .in("status", ["pending_payment", "confirmed", "completed", "no_show"])
       .order("starts_at"),
+    supabase
+      .from("business_hours")
+      .select("opens_at, closes_at")
+      .eq("tenant_id", tenant.id)
+      .eq("weekday", weekday),
   ]);
 
   if (staffRes.error) throw staffRes.error;
   if (appointmentsRes.error) throw appointmentsRes.error;
+  if (businessHoursRes.error) throw businessHoursRes.error;
 
-  const appointmentsByStaff = new Map<string, typeof appointmentsRes.data>();
-  for (const appointment of appointmentsRes.data) {
-    const list = appointmentsByStaff.get(appointment.staff_id) ?? [];
-    list.push(appointment);
-    appointmentsByStaff.set(appointment.staff_id, list);
-  }
+  const opensAt = businessHoursRes.data.length > 0
+    ? Math.min(...businessHoursRes.data.map((h) => timeToMinutes(h.opens_at)))
+    : 8 * 60;
+  const closesAt = businessHoursRes.data.length > 0
+    ? Math.max(...businessHoursRes.data.map((h) => timeToMinutes(h.closes_at)))
+    : 20 * 60;
+
+  const staff = staffRes.data.map((s) => ({
+    id: s.id,
+    displayName: s.display_name,
+    color: s.color,
+  }));
+
+  const appointments = appointmentsRes.data.map((a) => ({
+    id: a.id,
+    staffId: a.staff_id,
+    startMinute: instantToMinutes(a.starts_at, tenant.timezone),
+    endMinute: instantToMinutes(a.ends_at, tenant.timezone),
+    status: a.status,
+    clientName: a.clients?.full_name ?? "",
+    serviceNames: a.appointment_items.map((i) => i.name).join(", "),
+    total: Number(a.total),
+  }));
 
   return (
     <div className="space-y-lg">
@@ -87,59 +102,21 @@ export default async function AgendaPage({
         </div>
       </div>
 
-      <div className="grid gap-md md:grid-cols-2 lg:grid-cols-4">
-        {staffRes.data.map((staff) => {
-          const appointments = appointmentsByStaff.get(staff.id) ?? [];
-          return (
-            <Card key={staff.id} className="space-y-3 p-lg">
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: staff.color ?? "#767582" }}
-                />
-                <h2 className="font-headline-sm text-headline-sm text-on-surface">
-                  {staff.display_name}
-                </h2>
-              </div>
-
-              <div className="space-y-2">
-                {appointments.map((appointment) => {
-                  const status = STATUS_LABEL[appointment.status] ?? {
-                    label: appointment.status,
-                    pill: "pending" as StatusPillStatus,
-                  };
-                  return (
-                    <Link
-                      key={appointment.id}
-                      href={`/app/${tenantSlug}/agenda/${appointment.id}`}
-                      className="block rounded-inner bg-surface-muted p-3 transition-colors hover:bg-secondary-soft"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-label-md text-label-md text-on-surface">
-                          {formatHour(appointment.starts_at, tenant.timezone)}–
-                          {formatHour(appointment.ends_at, tenant.timezone)}
-                        </span>
-                        <StatusPill status={status.pill}>{status.label}</StatusPill>
-                      </div>
-                      <p className="mt-1 font-body-sm text-body-sm text-on-surface">
-                        {appointment.clients?.full_name}
-                      </p>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant">
-                        {appointment.appointment_items.map((i) => i.name).join(", ")}
-                      </p>
-                    </Link>
-                  );
-                })}
-                {appointments.length === 0 && (
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    Sin turnos.
-                  </p>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+      {staff.length === 0 ? (
+        <p className="font-body-sm text-body-sm text-on-surface-variant">
+          Todavía no hay profesionales activos.
+        </p>
+      ) : (
+        <AgendaDayGrid
+          tenantSlug={tenantSlug}
+          dateISO={dateISO}
+          dayStartMinute={opensAt}
+          dayEndMinute={closesAt}
+          slotIntervalMin={tenant.tenant_settings?.slot_interval_min ?? 15}
+          staff={staff}
+          appointments={appointments}
+        />
+      )}
     </div>
   );
 }
