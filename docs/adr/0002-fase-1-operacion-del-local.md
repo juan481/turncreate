@@ -123,14 +123,31 @@ profesionales que efectivamente dictan el servicio elegido, no de todo
 el staff activo. Verificado contra los datos del seed: "Limpieza Facial"
 sólo devuelve a Lucía, "Coloración" devuelve a Lucía y Ana.
 
+## Quinta pasada (2026-09-17): editar horarios de staff desde la UI
+
+Cada card de staff tiene ahora un `<details>` "Editar horario" con los 7
+días de la semana (checkbox activo/cerrado + hora inicio/fin), igual de
+simple que el paso de horarios del wizard de onboarding. Al guardar,
+`updateStaffSchedule` borra el conjunto completo de `staff_schedules` de
+ese profesional y lo reemplaza por el nuevo — no versiona con
+`valid_from`/`valid_to` (sección 3.3 los tiene para poder programar un
+cambio de horario a futuro sin perder el vigente); esta UI siempre edita
+"el horario de hoy en adelante". Probado contra la API real: reemplazar
+el horario de Lucía (lunes a sábado 9-19) por sólo lunes y martes 10-15,
+y confirmar que `staff_schedules` para miércoles queda vacío (lo que el
+motor de disponibilidad, ya cubierto por 22 tests de Vitest, traduce
+directamente en cero horarios disponibles ese día).
+
 ## Qué queda para seguir Fase 1
 
 - Grilla con drag & drop (`dnd-kit`, mencionado en el stack del plan) —
-  hoy la agenda es de solo lectura + click para el detalle.
-- Editar `staff_schedules` desde la UI (hoy solo se ve, se carga por
-  seed).
+  hoy la agenda es de solo lectura + click para el detalle. Es lo único
+  que queda pendiente de la lista original de esta fase.
 - Si se elige un profesional específico (no "Cualquiera") en
   `/agenda/nuevo`, el selector de servicio no se filtra por lo que esa
   persona dicta — se puede armar una combinación que `staff_services` no
   respalda. El combo "Cualquiera" ya lo hace bien; falta la misma
   restricción para la selección directa.
+- Versionar `staff_schedules` con `valid_from`/`valid_to` en vez de
+  reemplazar el conjunto completo (permitiría programar un cambio de
+  horario a futuro sin perder el vigente hasta esa fecha).

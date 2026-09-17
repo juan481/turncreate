@@ -4,6 +4,7 @@ import { getTenantBySlug } from "@/server/tenant";
 import { Card } from "@/components/ui/card";
 import { NewStaffForm } from "./new-staff-form";
 import { NewTimeBlockForm } from "./new-time-block-form";
+import { EditScheduleForm } from "./edit-schedule-form";
 
 const WEEKDAY_LABEL = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
@@ -91,6 +92,19 @@ export default async function StaffPage({
                   );
                 })}
               </div>
+
+              <details className="group">
+                <summary className="cursor-pointer font-label-sm text-label-sm text-secondary [&::-webkit-details-marker]:hidden">
+                  Editar horario
+                </summary>
+                <div className="mt-3 border-t border-border pt-3">
+                  <EditScheduleForm
+                    tenantSlug={tenantSlug}
+                    staffId={s.id}
+                    initialSchedule={s.staff_schedules}
+                  />
+                </div>
+              </details>
             </Card>
           );
         })}
