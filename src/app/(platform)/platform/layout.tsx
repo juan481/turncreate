@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { Logo } from "@/components/ui/logo";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Icon } from "@/components/ui/icon";
+import { PageTransition } from "@/components/ui/page-transition";
 import { isPlatformAdmin } from "@/server/platform";
 
 export default async function PlatformLayout({
@@ -20,13 +22,17 @@ export default async function PlatformLayout({
       <header className="flex h-16 items-center justify-between border-b border-border bg-primary px-gutter">
         <div className="flex items-center gap-3">
           <Logo className="h-6 w-auto [&_text]:fill-white [&_tspan]:fill-[#C4B5FD]" />
-          <span className="font-label-sm text-label-sm text-white/70">
+          <span className="h-4 w-px bg-white/20" />
+          <span className="flex items-center gap-1.5 font-label-sm text-label-sm text-white/70">
+            <Icon name="shield_person" className="text-[16px]" />
             Consola de plataforma
           </span>
         </div>
         <StatusPill status="alert">Acceso restringido · 2FA</StatusPill>
       </header>
-      <main className="flex-1 px-gutter py-lg">{children}</main>
+      <main className="flex-1 px-gutter py-lg">
+        <PageTransition>{children}</PageTransition>
+      </main>
     </div>
   );
 }

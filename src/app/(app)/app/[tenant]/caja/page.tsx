@@ -14,7 +14,7 @@ export default async function CajaPage({
   const startUTC = new TZDate(`${dateISO}T00:00:00`, tenant.timezone).toISOString();
   const endUTC = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone).toISOString();
 
-  const [sessionRes, appointmentsRes, productsRes] = await Promise.all([
+  const [sessionRes, appointmentsRes, productsRes, lastClosedRes] = await Promise.all([
     supabase
       .from("cash_sessions")
       .select("id, opened_at, opening_amount")
@@ -35,6 +35,14 @@ export default async function CajaPage({
       .eq("tenant_id", tenant.id)
       .eq("active", true)
       .order("name"),
+    supabase
+      .from("cash_sessions")
+      .select("closed_at, expected_amount, counted_amount, difference")
+      .eq("tenant_id", tenant.id)
+      .not("closed_at", "is", null)
+      .order("closed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (sessionRes.error) throw sessionRes.error;
@@ -50,6 +58,8 @@ export default async function CajaPage({
         .eq("cash_session_id", session.id)
         .order("created_at", { ascending: false })
     : { data: [] };
+
+  const lastClosed = lastClosedRes.data;
 
   return (
     <CajaClient
@@ -71,7 +81,18 @@ export default async function CajaPage({
         type: m.type,
         amount: Number(m.amount),
         reason: m.reason,
+        createdAt: m.created_at,
       }))}
+      lastClosedSession={
+        lastClosed
+          ? {
+              closedAt: lastClosed.closed_at as string,
+              expectedAmount: Number(lastClosed.expected_amount),
+              countedAmount: Number(lastClosed.counted_amount),
+              difference: Number(lastClosed.difference),
+            }
+          : null
+      }
     />
   );
 }

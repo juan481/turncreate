@@ -11,8 +11,48 @@ import {
   assignAnyStaffForSlot,
 } from "@/server/availability";
 import { computeTotalDuration } from "@/domain/availability";
+import { createClientSchema } from "@/lib/schemas/client";
 
 export type ConfirmAppointmentState = { error: string | null };
+
+// Cliente nuevo cargado en el momento de agendar (sección 3.5: un turno
+// manual no debería requerir salir del flujo a /clientes primero).
+export async function createClientQuick(
+  tenantSlug: string,
+  data: { fullName: string; phoneE164: string; email: string },
+): Promise<{ id: string } | { error: string }> {
+  const parsed = createClientSchema.safeParse({
+    fullName: data.fullName,
+    phoneE164: data.phoneE164,
+    email: data.email || "",
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  }
+
+  const supabase = await createClient();
+  const tenant = await getTenantBySlug(supabase, tenantSlug);
+
+  const { data: inserted, error } = await supabase
+    .from("clients")
+    .insert({
+      tenant_id: tenant.id,
+      full_name: parsed.data.fullName,
+      phone_e164: parsed.data.phoneE164,
+      email: parsed.data.email || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    return {
+      error: error.code === "23505" ? "Ya existe un cliente con ese teléfono" : error.message,
+    };
+  }
+
+  return { id: inserted.id };
+}
 
 export async function confirmAppointment(
   tenantSlug: string,
@@ -25,6 +65,11 @@ export async function confirmAppointment(
   const dateISO = formData.get("date");
   const startsAtISO = formData.get("startsAt");
   const rescheduleFrom = formData.get("rescheduleFrom");
+  const keepDeposit = formData.get("keepDeposit");
+  const depositAmountRaw = formData.get("depositAmount");
+  const depositMethod = formData.get("depositMethod");
+  const depositAmount =
+    typeof depositAmountRaw === "string" && depositAmountRaw ? Number(depositAmountRaw) : 0;
 
   if (
     typeof staffId !== "string" ||
@@ -71,7 +116,7 @@ export async function confirmAppointment(
   const totalDuration = computeTotalDuration(combo.phases, combo.bufferAfterMin);
   const endsAt = new Date(startsAt.getTime() + totalDuration * 60_000);
 
-  const { error } = await supabase.rpc("create_staff_appointment", {
+  const { data: created, error } = await supabase.rpc("create_staff_appointment", {
     p_tenant_id: tenant.id,
     p_staff_id: finalStaffId,
     p_client_id: clientId,
@@ -92,10 +137,39 @@ export async function confirmAppointment(
     })),
     p_rescheduled_from_id:
       typeof rescheduleFrom === "string" && rescheduleFrom ? rescheduleFrom : undefined,
+    p_keep_deposit: keepDeposit !== "false",
   });
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (depositAmount > 0 && (depositMethod === "cash" || depositMethod === "mercadopago")) {
+    let cashSessionId: string | null = null;
+    if (depositMethod === "cash") {
+      const { data: session } = await supabase
+        .from("cash_sessions")
+        .select("id")
+        .eq("tenant_id", tenant.id)
+        .is("closed_at", null)
+        .maybeSingle();
+      cashSessionId = session?.id ?? null;
+    }
+
+    const { error: depositError } = await supabase.rpc("register_appointment_deposit", {
+      p_appointment_id: created.id,
+      p_amount: depositAmount,
+      p_method: depositMethod,
+      p_cash_session_id: cashSessionId ?? undefined,
+    });
+
+    if (depositError) {
+      // El turno ya se creó -- no lo perdemos por un error al cobrar la
+      // seña, solo avisamos para que se cobre después desde el detalle.
+      redirect(
+        `/app/${tenantSlug}/agenda/${created.id}?depositError=${encodeURIComponent(depositError.message)}`,
+      );
+    }
   }
 
   redirect(`/app/${tenantSlug}/agenda?date=${dateISO}`);

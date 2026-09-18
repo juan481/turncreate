@@ -78,7 +78,7 @@ export default async function AgendaSemanaPage({
 
           return (
             <Link key={dayISO} href={`/app/${tenantSlug}/agenda?date=${dayISO}`}>
-              <Card className="h-full space-y-2 p-lg transition-shadow hover:shadow-card-hover">
+              <Card className="h-full space-y-2 p-lg">
                 <div className="flex items-baseline justify-between">
                   <span className="font-label-lg text-label-lg text-on-surface">
                     {WEEKDAY_LABEL[i]} {day.getDate()}

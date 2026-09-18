@@ -12,17 +12,18 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
-import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
+import { Avatar } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 import { moveAppointment } from "./move-appointment-action";
 
 const PX_PER_MINUTE = 1.5;
-const HEADER_HEIGHT = 44;
+const HEADER_HEIGHT = 68;
 
-const STATUS_LABEL: Record<string, { label: string; pill: StatusPillStatus }> = {
-  pending_payment: { label: "Pendiente", pill: "pending" },
-  confirmed: { label: "Confirmado", pill: "confirmed" },
-  completed: { label: "Completado", pill: "confirmed" },
-  no_show: { label: "No vino", pill: "alert" },
+const STATUS_DOT: Record<string, string> = {
+  pending_payment: "bg-status-pending-dot",
+  confirmed: "bg-status-confirmed-dot",
+  completed: "bg-status-confirmed-dot",
+  no_show: "bg-status-alert-dot",
 };
 
 type Appointment = {
@@ -34,9 +35,16 @@ type Appointment = {
   clientName: string;
   serviceNames: string;
   total: number;
+  balance: number;
 };
 
-type Staff = { id: string; displayName: string; color: string | null };
+type Staff = {
+  id: string;
+  displayName: string;
+  color: string | null;
+  photoUrl: string | null;
+  specialty: string | null;
+};
 
 function minutesToLabel(minute: number) {
   const h = Math.floor(minute / 60).toString().padStart(2, "0");
@@ -57,12 +65,10 @@ function DraggableAppointment({
     id: appointment.id,
   });
 
-  const status = STATUS_LABEL[appointment.status] ?? {
-    label: appointment.status,
-    pill: "pending" as StatusPillStatus,
-  };
   const top = (appointment.startMinute - dayStartMinute) * PX_PER_MINUTE;
   const height = Math.max((appointment.endMinute - appointment.startMinute) * PX_PER_MINUTE, 34);
+  const paid = appointment.balance <= 0;
+  const compact = height < 70;
 
   return (
     <Link
@@ -74,26 +80,42 @@ function DraggableAppointment({
         transform: transform ? CSS.Translate.toString(transform) : undefined,
         zIndex: isDragging ? 20 : 1,
       }}
-      className={`absolute left-1 right-1 block touch-none overflow-hidden rounded-inner bg-surface-muted p-1.5 shadow-card transition-shadow hover:shadow-card-hover ${
-        isDragging ? "opacity-70 shadow-card-hover" : ""
-      }`}
+      className={cn(
+        "group absolute left-1 right-1 block touch-none overflow-hidden rounded-inner bg-surface-container-low p-2 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover",
+        isDragging && "opacity-70 shadow-card-hover",
+      )}
       {...listeners}
       {...attributes}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="font-label-sm text-label-sm text-on-surface">
+        <span className="rounded-pill bg-surface-container-high px-2 py-0.5 font-label-sm text-label-sm text-on-surface">
           {minutesToLabel(appointment.startMinute)}
         </span>
-        <StatusPill status={status.pill} className="shrink-0">
-          {status.label}
-        </StatusPill>
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", STATUS_DOT[appointment.status])} />
       </div>
-      <p className="truncate font-body-sm text-body-sm text-on-surface">
+      <p className="mt-1 truncate font-label-md text-label-md font-semibold text-on-surface">
         {appointment.clientName}
       </p>
-      <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
-        {appointment.serviceNames}
-      </p>
+      {!compact && (
+        <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
+          {appointment.serviceNames}
+        </p>
+      )}
+      {!compact && (
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="font-label-sm text-label-sm font-bold text-on-surface">
+            ${appointment.total.toLocaleString("es-AR")}
+          </span>
+          <span
+            className={cn(
+              "rounded-pill px-2 py-0.5 font-label-sm text-label-sm",
+              paid ? "bg-status-confirmed-bg text-status-confirmed" : "bg-surface-container-highest text-on-surface-variant",
+            )}
+          >
+            {paid ? "Pagado" : "Seña"}
+          </span>
+        </div>
+      )}
     </Link>
   );
 }
@@ -114,22 +136,28 @@ function StaffColumn({
   const { setNodeRef, isOver } = useDroppable({ id: staff.id });
 
   return (
-    <div className="w-56 shrink-0 border-l border-border">
+    <div className="w-60 shrink-0 border-l border-border">
       <div
         className="flex items-center gap-2 border-b border-border px-2"
         style={{ height: HEADER_HEIGHT }}
       >
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: staff.color ?? "#767582" }}
-        />
-        <span className="truncate font-label-md text-label-md text-on-surface">
-          {staff.displayName}
-        </span>
+        <Avatar name={staff.displayName} src={staff.photoUrl} size="sm" />
+        <div className="min-w-0">
+          <p className="truncate font-label-md text-label-md font-semibold text-on-surface">
+            {staff.displayName}
+          </p>
+          <span className="inline-flex items-center gap-1 truncate font-label-sm text-label-sm text-on-surface-variant">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: staff.color ?? "#767582" }} />
+            <span className="truncate">
+              {staff.specialty ? `${staff.specialty} · ` : ""}
+              {appointments.length} turno{appointments.length === 1 ? "" : "s"}
+            </span>
+          </span>
+        </div>
       </div>
       <div
         ref={setNodeRef}
-        className={`relative transition-colors ${isOver ? "bg-secondary-soft" : ""}`}
+        className={cn("relative transition-colors", isOver && "bg-secondary-soft")}
         style={{ height: totalHeight }}
       >
         {appointments.map((appointment) => (
@@ -153,6 +181,7 @@ export function AgendaDayGrid({
   slotIntervalMin,
   staff,
   appointments,
+  nowMinute,
 }: {
   tenantSlug: string;
   dateISO: string;
@@ -161,6 +190,7 @@ export function AgendaDayGrid({
   slotIntervalMin: number;
   staff: Staff[];
   appointments: Appointment[];
+  nowMinute?: number | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -219,9 +249,23 @@ export function AgendaDayGrid({
       {pending && (
         <p className="font-body-sm text-body-sm text-on-surface-variant">Moviendo turno…</p>
       )}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="overflow-x-auto rounded-card border border-border bg-surface shadow-card">
-          <div className="flex" style={{ width: "max-content" }}>
+      {/* id fijo: sin esto dnd-kit genera aria-describedby con un contador
+          global que no coincide entre el render de servidor y el del
+          cliente (hydration mismatch), aunque no afecta al drag en sí. */}
+      <DndContext id="agenda-day-grid" sensors={sensors} onDragEnd={handleDragEnd}>
+        <div className="overflow-x-auto rounded-card border border-border bg-surface-container-lowest p-lg shadow-card">
+          <div className="relative flex" style={{ width: "max-content" }}>
+            {nowMinute != null && nowMinute >= dayStartMinute && nowMinute <= dayEndMinute && (
+              <div
+                className="pointer-events-none absolute left-14 right-0 z-10 flex items-center gap-2"
+                style={{ top: HEADER_HEIGHT + (nowMinute - dayStartMinute) * PX_PER_MINUTE }}
+              >
+                <span className="rounded-pill bg-surface-container-high px-2.5 py-0.5 font-label-sm text-label-sm font-semibold text-secondary">
+                  {minutesToLabel(nowMinute)} hs · En curso
+                </span>
+                <div className="h-0.5 flex-1 rounded-full bg-secondary/40" />
+              </div>
+            )}
             <div className="w-14 shrink-0 border-r border-border">
               <div className="border-b border-border" style={{ height: HEADER_HEIGHT }} />
               {hourMarks.map((minute) => (

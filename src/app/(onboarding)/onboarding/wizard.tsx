@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { useRouter } from "next/navigation";
 import { createTenantAction } from "./actions";
 
@@ -23,24 +24,25 @@ const WEEKDAYS = [
   { id: 0, label: "Domingo" },
 ];
 
+type HourBlock = { opens_at: string; closes_at: string };
+type DayHours = { weekday: number; active: boolean; blocks: HourBlock[] };
+
 export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [businessTypeId, setBusinessTypeId] = useState(
     businessTypes[0]?.id || ""
   );
-  
-  const [hours, setHours] = useState<
-    { weekday: number; opens_at: string; closes_at: string; active: boolean }[]
-  >(
+
+  const [hours, setHours] = useState<DayHours[]>(
     WEEKDAYS.map((day) => ({
       weekday: day.id,
-      opens_at: "09:00",
-      closes_at: "18:00",
       active: day.id >= 1 && day.id <= 5, // Mon-Fri active by default
+      blocks: [{ opens_at: "09:00", closes_at: "18:00" }],
     }))
   );
 
@@ -60,22 +62,55 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
     }
   };
 
-  const handleHourChange = (weekday: number, field: string, value: string | boolean) => {
+  const toggleDayActive = (weekday: number, active: boolean) => {
+    setHours((prev) => prev.map((h) => (h.weekday === weekday ? { ...h, active } : h)));
+  };
+
+  const updateBlock = (weekday: number, index: number, field: keyof HourBlock, value: string) => {
     setHours((prev) =>
-      prev.map((h) => (h.weekday === weekday ? { ...h, [field]: value } : h))
+      prev.map((h) =>
+        h.weekday === weekday
+          ? { ...h, blocks: h.blocks.map((b, i) => (i === index ? { ...b, [field]: value } : b)) }
+          : h
+      )
+    );
+  };
+
+  // Horario cortado: un segundo bloque para el corte de mediodía
+  // (p. ej. 09:00-13:00 y 17:00-21:00). business_hours no tiene
+  // restricción de un solo rango por día -- el motor de disponibilidad
+  // ya opera sobre listas de rangos (src/domain/availability/ranges.ts).
+  const addBlock = (weekday: number) => {
+    setHours((prev) =>
+      prev.map((h) =>
+        h.weekday === weekday
+          ? { ...h, blocks: [...h.blocks, { opens_at: "17:00", closes_at: "21:00" }] }
+          : h
+      )
+    );
+  };
+
+  const removeBlock = (weekday: number, index: number) => {
+    setHours((prev) =>
+      prev.map((h) =>
+        h.weekday === weekday ? { ...h, blocks: h.blocks.filter((_, i) => i !== index) } : h
+      )
     );
   };
 
   const handleSubmit = async () => {
     try {
       setLoading(true);
+      setSubmitError(null);
       const activeHours = hours
         .filter((h) => h.active)
-        .map((h) => ({
-          weekday: h.weekday,
-          opens_at: h.opens_at,
-          closes_at: h.closes_at,
-        }));
+        .flatMap((h) =>
+          h.blocks.map((b) => ({
+            weekday: h.weekday,
+            opens_at: b.opens_at,
+            closes_at: b.closes_at,
+          }))
+        );
       const { slug: newSlug } = await createTenantAction({
         name,
         slug,
@@ -85,7 +120,7 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
       router.push(`/app/${newSlug}`);
     } catch (error) {
       console.error(error);
-      alert("Hubo un error al crear el local.");
+      setSubmitError(error instanceof Error ? error.message : "Hubo un error al crear el local.");
       setLoading(false);
     }
   };
@@ -151,51 +186,72 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
         )}
 
         {step === 3 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {hours.map((h) => {
               const dayLabel = WEEKDAYS.find((w) => w.id === h.weekday)?.label;
               return (
-                <div key={h.weekday} className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={h.active}
-                    onChange={(e) =>
-                      handleHourChange(h.weekday, "active", e.target.checked)
-                    }
-                    className="h-5 w-5 rounded border-gray-300 accent-secondary"
-                  />
-                  <span className="w-24 font-body-sm">{dayLabel}</span>
-                  {h.active ? (
-                    <>
-                      <Input
-                        type="time"
-                        value={h.opens_at}
-                        onChange={(e) =>
-                          handleHourChange(h.weekday, "opens_at", e.target.value)
-                        }
-                        className="h-9 px-2 w-28"
-                      />
-                      <span>-</span>
-                      <Input
-                        type="time"
-                        value={h.closes_at}
-                        onChange={(e) =>
-                          handleHourChange(
-                            h.weekday,
-                            "closes_at",
-                            e.target.value
-                          )
-                        }
-                        className="h-9 px-2 w-28"
-                      />
-                    </>
-                  ) : (
-                    <span className="text-on-surface-variant text-sm">Cerrado</span>
+                <div key={h.weekday} className="space-y-1.5">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={h.active}
+                      onChange={(e) => toggleDayActive(h.weekday, e.target.checked)}
+                      className="h-5 w-5 rounded border-gray-300 accent-secondary"
+                    />
+                    <span className="w-24 font-body-sm">{dayLabel}</span>
+                    {!h.active && (
+                      <span className="text-on-surface-variant text-sm">Cerrado</span>
+                    )}
+                  </div>
+                  {h.active && (
+                    <div className="space-y-1.5 pl-8">
+                      {h.blocks.map((b, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Input
+                            type="time"
+                            value={b.opens_at}
+                            onChange={(e) => updateBlock(h.weekday, i, "opens_at", e.target.value)}
+                            className="h-9 w-[8.5rem] px-3"
+                          />
+                          <span>-</span>
+                          <Input
+                            type="time"
+                            value={b.closes_at}
+                            onChange={(e) => updateBlock(h.weekday, i, "closes_at", e.target.value)}
+                            className="h-9 w-[8.5rem] px-3"
+                          />
+                          {h.blocks.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeBlock(h.weekday, i)}
+                              className="flex h-7 w-7 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-muted hover:text-status-alert"
+                              aria-label="Quitar franja"
+                            >
+                              <Icon name="close" className="text-[16px]" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {h.blocks.length < 2 && (
+                        <button
+                          type="button"
+                          onClick={() => addBlock(h.weekday)}
+                          className="flex items-center gap-1 font-label-sm text-label-sm text-secondary transition-colors hover:text-secondary/80"
+                        >
+                          <Icon name="add" className="text-[16px]" />
+                          Agregar corte (ej. horario partido)
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
+        )}
+
+        {submitError && (
+          <p className="font-body-sm text-body-sm text-status-alert">{submitError}</p>
         )}
 
         <div className="flex gap-3 pt-4">

@@ -22,10 +22,25 @@ export async function login(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
     return { error: "Email o contraseña incorrectos" };
+  }
+
+  // Si ya es miembro de un local, entra directo a su app -- el wizard de
+  // /onboarding es solo para quien todavía no tiene ninguno.
+  const { data: membership } = await supabase
+    .from("tenant_members")
+    .select("tenants(slug)")
+    .eq("user_id", data.user.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (membership?.tenants?.slug) {
+    redirect(`/app/${membership.tenants.slug}`);
   }
 
   redirect("/onboarding");

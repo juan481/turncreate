@@ -9,6 +9,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
 import {
   getPublicCatalog,
   getPublicStaffForService,
@@ -125,7 +126,7 @@ export function BookingFlow({
 
   if (step === 1) {
     return (
-      <div className="space-y-lg">
+      <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
           {rescheduleFrom && (
             <StatusPill status="draft">Estás reprogramando tu turno</StatusPill>
@@ -140,9 +141,9 @@ export function BookingFlow({
             <div key={cat.id} className="space-y-2">
               <h2 className="font-headline-sm text-headline-sm text-on-surface">{cat.name}</h2>
               {cat.services.map((svc) => (
-                <Card 
-                  key={svc.id} 
-                  className="p-4 cursor-pointer hover:border-primary transition-colors"
+                <Card
+                  key={svc.id}
+                  className="cursor-pointer p-4 hover:border-primary/30"
                   onClick={() => {
                     setSelectedService(svc);
                     setStep(2);
@@ -166,7 +167,7 @@ export function BookingFlow({
 
   if (step === 2) {
     return (
-      <div className="space-y-lg">
+      <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
           <StatusPill status="pending">Paso 2 de 4 · Profesional</StatusPill>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
@@ -174,8 +175,8 @@ export function BookingFlow({
           </h1>
         </div>
         <div className="space-y-4">
-          <Card 
-            className="p-4 cursor-pointer hover:border-primary transition-colors flex items-center gap-4"
+          <Card
+            className="flex cursor-pointer items-center gap-4 p-4 hover:border-primary/30"
             onClick={() => {
               setSelectedStaff("any");
               setStep(3);
@@ -190,9 +191,9 @@ export function BookingFlow({
             </div>
           </Card>
           {staffList.map(staff => (
-            <Card 
-              key={staff.id} 
-              className="p-4 cursor-pointer hover:border-primary transition-colors flex items-center gap-4"
+            <Card
+              key={staff.id}
+              className="flex cursor-pointer items-center gap-4 p-4 hover:border-primary/30"
               onClick={() => {
                 setSelectedStaff(staff.id);
                 setStep(3);
@@ -215,22 +216,28 @@ export function BookingFlow({
   if (step === 3) {
     const dates = Array.from({ length: 14 }).map((_, i) => addDays(startOfToday(), i));
     return (
-      <div className="space-y-lg">
+      <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
           <StatusPill status="pending">Paso 3 de 4 · Fecha y Hora</StatusPill>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
             ¿Cuándo venís?
           </h1>
         </div>
-        
+
         <div className="flex gap-2 overflow-x-auto pb-2">
           {dates.map(d => {
             const dateStr = d.toISOString().split("T")[0];
+            const active = selectedDate === dateStr;
             return (
               <button
                 key={dateStr}
                 onClick={() => setSelectedDate(dateStr)}
-                className={`min-w-[80px] p-2 rounded-xl border ${selectedDate === dateStr ? 'bg-primary text-on-primary border-primary' : 'bg-surface border-border'} text-center flex-shrink-0`}
+                className={cn(
+                  "min-w-[80px] flex-shrink-0 rounded-xl border p-2 text-center transition-all duration-200 ease-out active:scale-95",
+                  active
+                    ? "border-primary bg-primary text-on-primary shadow-card-hover"
+                    : "border-border bg-surface hover:-translate-y-0.5 hover:shadow-card",
+                )}
               >
                 <div className="text-xs uppercase opacity-80">{format(d, "EEE", { locale: es })}</div>
                 <div className="text-xl font-bold">{format(d, "d")}</div>
@@ -241,26 +248,35 @@ export function BookingFlow({
 
         <div className="grid grid-cols-4 gap-2">
           {loading ? (
-            <p className="col-span-4 text-center text-on-surface-variant py-8">Buscando horarios...</p>
+            <p className="col-span-4 flex items-center justify-center gap-2 py-8 text-center text-on-surface-variant">
+              <Icon name="progress_activity" className="animate-spin text-[18px]" />
+              Buscando horarios...
+            </p>
           ) : availableSlots.length === 0 ? (
-            <p className="col-span-4 text-center text-on-surface-variant py-8">No hay horarios disponibles para esta fecha.</p>
+            <p className="col-span-4 animate-fade-up text-center text-on-surface-variant py-8">No hay horarios disponibles para esta fecha.</p>
           ) : (
-            availableSlots.map(slot => (
+            availableSlots.map((slot, i) => (
               <button
                 key={slot}
                 onClick={() => setSelectedTime(slot)}
-                className={`py-2 rounded-pill border text-sm font-medium transition-colors ${selectedTime === slot ? 'bg-primary text-on-primary border-primary' : 'bg-surface border-border hover:bg-surface-muted'}`}
+                style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
+                className={cn(
+                  "animate-fade-up rounded-pill border py-2 text-sm font-medium transition-all duration-200 ease-out active:scale-95",
+                  selectedTime === slot
+                    ? "border-primary bg-primary text-on-primary shadow-card-hover"
+                    : "border-border bg-surface hover:-translate-y-0.5 hover:bg-surface-muted hover:shadow-card",
+                )}
               >
                 {format(parseISO(slot), "HH:mm")}
               </button>
             ))
           )}
         </div>
-        
+
         <div className="flex justify-between items-center pt-4">
           <Button variant="ghost" onClick={() => setStep(2)}>Volver</Button>
-          <Button 
-            onClick={handleCreateHold} 
+          <Button
+            onClick={handleCreateHold}
             disabled={!selectedTime || loading}
           >
             Continuar
@@ -272,7 +288,7 @@ export function BookingFlow({
 
   if (step === 4) {
     return (
-      <div className="space-y-lg">
+      <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
           <StatusPill status="pending">Paso 4 de 4 · Tus datos</StatusPill>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
@@ -328,20 +344,30 @@ export function BookingFlow({
 
   if (step === 5) {
     return (
-      <div className="space-y-lg text-center py-8">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-status-confirmed-bg text-status-confirmed">
-          <Icon name="check" className="text-[28px]" />
+      <div key={step} className="space-y-lg py-8 text-center">
+        <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-confirmed-dot opacity-30" />
+          <div className="animate-pop-in relative flex h-16 w-16 items-center justify-center rounded-full bg-status-confirmed-bg text-status-confirmed">
+            <Icon name="check" className="text-[28px]" />
+          </div>
         </div>
-        <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
+        <h1
+          className="animate-fade-up font-headline-lg-mobile text-headline-lg-mobile text-on-surface"
+          style={{ animationDelay: "120ms" }}
+        >
           ¡Turno confirmado!
         </h1>
-        <p className="mx-auto max-w-[24rem] font-body-md text-body-md text-on-surface-variant">
+        <p
+          className="mx-auto max-w-[24rem] animate-fade-up font-body-md text-body-md text-on-surface-variant"
+          style={{ animationDelay: "200ms" }}
+        >
           Te esperamos el {format(parseISO(selectedTime!), "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es })}.
         </p>
         {confirmedData?.token && (
           <Link
             href={`/${slug}/mi-turno/${confirmedData.token}`}
-            className={buttonVariants({ variant: "secondary" })}
+            className={cn(buttonVariants({ variant: "secondary" }), "animate-fade-up")}
+            style={{ animationDelay: "280ms" }}
           >
             Ver mi turno
           </Link>

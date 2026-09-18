@@ -110,11 +110,26 @@
   --color-surface-muted: #f4f3f9;
   --color-border: rgb(28 25 43 / 0.06);
 
+  /* Jerarquía de superficies (valores literales del YAML de DESIGN.md,
+     los mismos que usan las 20 pantallas de referencia) -- surface/
+     surface-muted de arriba alcanzan para cards sueltas, pero no para
+     apilar niveles dentro de un mismo header/panel como hacen los
+     mockups (chip sobre chip sobre fondo). */
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f5f2ff;
+  --color-surface-container: #efecfb;
+  --color-surface-container-high: #e9e6f5;
+  --color-outline-variant: #c8c5cb;
+
   --color-on-surface: #1c1930;
   --color-on-surface-variant: #767582; /* Heather Slate */
 
-  --color-primary: #121217; /* Deep Obsidian */
-  --color-primary-hover: #23232b;
+  /* Violeta como color de marca en vez de negro (pedido explícito, ya no
+     "Deep Obsidian" del DESIGN.md original) -- mismo tono que secondary,
+     Electric Iris, para que todo el sistema de acciones/estados activos
+     hable el mismo idioma de color. */
+  --color-primary: #7069e8;
+  --color-primary-hover: #5b52d6;
   --color-on-primary: #ffffff;
 
   --color-secondary: #7069e8; /* Electric Iris */
@@ -144,10 +159,76 @@
   --color-status-draft: #92400e;
   --color-status-draft-bg: #fffbeb;
   --color-status-draft-dot: #f59e0b;
+
+  /* Fondo con vida para heroes/secciones destacadas (blobs difusos, sección Brand & Style) */
+  --animate-float-slow: float-slow 9s ease-in-out infinite;
+  --animate-float-slow-delayed: float-slow 9s ease-in-out -4.5s infinite;
+  --animate-fade-up: fade-up 0.5s ease-out both;
+  --animate-pop-in: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-sheet-up: sheet-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-scrim-in: scrim-in 0.2s ease-out both;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(3%, -4%) scale(1.08);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 html {
   color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+/* Anclas de la landing (#beneficios, #como-funciona, ...): sin esto el
+   salto del scroll suave las deja tapadas justo debajo del header
+   flotante fijo. */
+section[id] {
+  scroll-margin-top: 6rem;
 }
 
 body {

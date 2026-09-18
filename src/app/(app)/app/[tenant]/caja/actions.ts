@@ -54,6 +54,36 @@ export async function closeCash(
   return { error: null };
 }
 
+export async function addCashMovement(
+  tenantSlug: string,
+  sessionId: string,
+  _prevState: CajaActionState,
+  formData: FormData,
+): Promise<CajaActionState> {
+  const type = formData.get("type");
+  const amount = Number(formData.get("amount") ?? 0);
+  const reason = formData.get("reason");
+
+  if (type !== "in" && type !== "out") {
+    return { error: "Tipo de movimiento inválido" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("add_cash_movement", {
+    p_cash_session_id: sessionId,
+    p_type: type,
+    p_amount: amount,
+    p_reason: typeof reason === "string" ? reason : "",
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/app/${tenantSlug}/caja`);
+  return { error: null };
+}
+
 export type ChargeActionState = { error: string | null };
 
 export async function chargeAppointment(

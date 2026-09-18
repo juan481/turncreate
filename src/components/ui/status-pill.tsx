@@ -38,13 +38,20 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex h-6 items-center gap-1.5 rounded-pill px-2.5 font-label-sm text-label-sm",
+        "inline-flex h-6 items-center gap-1.5 rounded-pill px-2.5 font-label-sm text-label-sm transition-colors",
         styles.bg,
         styles.text,
         className,
       )}
     >
-      <span className={cn("h-1.5 w-1.5 rounded-full", styles.dot)} />
+      {status === "confirmed" ? (
+        <span className="relative flex h-1.5 w-1.5">
+          <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-75", styles.dot)} />
+          <span className={cn("relative inline-flex h-1.5 w-1.5 rounded-full", styles.dot)} />
+        </span>
+      ) : (
+        <span className={cn("h-1.5 w-1.5 rounded-full", styles.dot)} />
+      )}
       {children}
     </span>
   );

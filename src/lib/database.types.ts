@@ -1904,40 +1904,49 @@ export type Database = {
       }
       tenants: {
         Row: {
+          address: string | null
           business_type_id: string
           created_at: string
           currency: string
           id: string
+          instagram_url: string | null
           logo_url: string | null
           name: string
           slug: string
           status: string
           timezone: string
           updated_at: string
+          whatsapp_number: string | null
         }
         Insert: {
+          address?: string | null
           business_type_id: string
           created_at?: string
           currency?: string
           id?: string
+          instagram_url?: string | null
           logo_url?: string | null
           name: string
           slug: string
           status?: string
           timezone?: string
           updated_at?: string
+          whatsapp_number?: string | null
         }
         Update: {
+          address?: string | null
           business_type_id?: string
           created_at?: string
           currency?: string
           id?: string
+          instagram_url?: string | null
           logo_url?: string | null
           name?: string
           slug?: string
           status?: string
           timezone?: string
           updated_at?: string
+          whatsapp_number?: string | null
         }
         Relationships: [
           {
@@ -2052,6 +2061,30 @@ export type Database = {
       }
     }
     Functions: {
+      add_cash_movement: {
+        Args: {
+          p_amount: number
+          p_cash_session_id: string
+          p_reason: string
+          p_type: string
+        }
+        Returns: {
+          amount: number
+          cash_session_id: string
+          created_at: string
+          id: string
+          payment_id: string | null
+          reason: string
+          type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "cash_movements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancel_appointment_by_token: { Args: { p_token: string }; Returns: Json }
       close_cash_session: {
         Args: {
@@ -2144,6 +2177,7 @@ export type Database = {
           p_client_id: string
           p_ends_at: string
           p_items: Json
+          p_keep_deposit?: boolean
           p_rescheduled_from_id?: string
           p_segments: Json
           p_staff_id: string
@@ -2234,16 +2268,19 @@ export type Database = {
           p_slug: string
         }
         Returns: {
+          address: string | null
           business_type_id: string
           created_at: string
           currency: string
           id: string
+          instagram_url: string | null
           logo_url: string | null
           name: string
           slug: string
           status: string
           timezone: string
           updated_at: string
+          whatsapp_number: string | null
         }
         SetofOptions: {
           from: "*"
@@ -2272,6 +2309,41 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "cash_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      register_appointment_deposit: {
+        Args: {
+          p_amount: number
+          p_appointment_id: string
+          p_cash_session_id?: string
+          p_method: string
+        }
+        Returns: {
+          balance: number
+          cancel_reason: string | null
+          client_id: string
+          created_at: string
+          deposit_paid: number
+          deposit_required: number
+          ends_at: string
+          hold_expires_at: string | null
+          id: string
+          manage_token_hash: string | null
+          rescheduled_from_id: string | null
+          source: string
+          staff_id: string
+          starts_at: string
+          status: string
+          tenant_id: string
+          token: string | null
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
           isOneToOne: true
           isSetofReturn: false
         }
