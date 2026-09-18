@@ -1,14 +1,15 @@
 "use server";
 
 import { createClient } from "@/server/supabase/server";
-import { 
-  getServiceCombo, 
-  getAvailableSlotsForStaff, 
-  assignAnyStaffForSlot, 
+import {
+  getServiceCombo,
+  getAvailableSlotsForStaff,
+  assignAnyStaffForSlot,
   computeSegmentInstants,
-  instantToMinutes 
+  instantToMinutes
 } from "@/server/availability";
 import { unionAnyStaffSlots } from "@/domain/availability/slots";
+import { sendAppointmentConfirmation } from "@/server/email";
 import type {
   PublicCategory,
   PublicStaffMember,
@@ -156,5 +157,36 @@ export async function confirmHold(
   });
 
   if (error) throw error;
-  return data as unknown as PublicAppointment;
+
+  const appt = data as unknown as PublicAppointment;
+
+  // Confirmation email (fire and forget — never throw to client on failure)
+  if (clientData.email && appt?.id) {
+    void (async () => {
+      try {
+        const { data: full } = await supabase
+          .from("appointments")
+          .select("starts_at, appointment_items(name), tenants(name, address, whatsapp_number, timezone)")
+          .eq("id", appt.id)
+          .maybeSingle();
+        if (!full) return;
+        const tenantData = (full.tenants as unknown as { name: string; address?: string | null; whatsapp_number?: string | null; timezone: string } | null);
+        const tz = tenantData?.timezone ?? "America/Argentina/Buenos_Aires";
+        const startsAtDate = new Date(full.starts_at);
+        await sendAppointmentConfirmation(clientData.email!, {
+          clientName: clientData.full_name,
+          businessName: tenantData?.name ?? "",
+          serviceName: (full.appointment_items as { name: string }[])[0]?.name ?? "Turno",
+          date: startsAtDate.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", timeZone: tz }),
+          time: startsAtDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: tz }),
+          address: tenantData?.address ?? undefined,
+          whatsapp: tenantData?.whatsapp_number ?? undefined,
+        });
+      } catch (e) {
+        console.error("[email] public confirmation failed:", e);
+      }
+    })();
+  }
+
+  return appt;
 }

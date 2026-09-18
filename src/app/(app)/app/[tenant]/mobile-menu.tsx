@@ -6,15 +6,20 @@ import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
+import { TenantSwitcherMobile, type TenantOption } from "./tenant-switcher";
 
 export function MobileMenuButton({
   tenantSlug,
   items,
   signOutAction,
+  tenantOptions,
+  currentTenant,
 }: {
   tenantSlug: string;
   items: { href: string; label: string; icon: string }[];
   signOutAction: () => Promise<void>;
+  tenantOptions?: TenantOption[];
+  currentTenant?: TenantOption;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -31,6 +36,11 @@ export function MobileMenuButton({
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Menú" variant="sheet">
+        {tenantOptions && currentTenant && tenantOptions.length > 1 && (
+          <div className="mb-md border-b border-border pb-md">
+            <TenantSwitcherMobile current={currentTenant} options={tenantOptions} />
+          </div>
+        )}
         <nav className="flex flex-col gap-1">
           {items.map((item) => {
             const href = item.href ? `/app/${tenantSlug}/${item.href}` : `/app/${tenantSlug}`;

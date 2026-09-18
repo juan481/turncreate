@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
+import { sendAppointmentConfirmation } from "@/server/email";
 import {
   computeSegmentInstants,
   getServiceCombo,
@@ -143,6 +144,36 @@ export async function confirmAppointment(
   if (error) {
     return { error: error.message };
   }
+
+  // Send confirmation email (fire and forget — never block the redirect on it)
+  void (async () => {
+    try {
+      const { data: appt } = await supabase
+        .from("appointments")
+        .select("starts_at, clients(full_name, email), appointment_items(name), tenants(name, address, whatsapp_number)")
+        .eq("id", created.id)
+        .maybeSingle();
+      const clientRow = appt?.clients as { full_name: string; email?: string | null } | null;
+      const clientEmail = clientRow?.email;
+      if (appt && clientEmail) {
+        const startsAtDate = new Date(appt.starts_at);
+        const date = startsAtDate.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", timeZone: tenant.timezone });
+        const time = startsAtDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: tenant.timezone });
+        const tenantData = appt.tenants as { name: string; address?: string | null; whatsapp_number?: string | null } | null;
+        await sendAppointmentConfirmation(clientEmail, {
+          clientName: clientRow.full_name,
+          businessName: tenantData?.name ?? tenant.name,
+          serviceName: (appt.appointment_items as { name: string }[])[0]?.name ?? "Turno",
+          date,
+          time,
+          address: tenantData?.address ?? undefined,
+          whatsapp: tenantData?.whatsapp_number ?? undefined,
+        });
+      }
+    } catch (e) {
+      console.error("[email] confirmation failed:", e);
+    }
+  })();
 
   if (depositAmount > 0 && (depositMethod === "cash" || depositMethod === "mercadopago")) {
     let cashSessionId: string | null = null;

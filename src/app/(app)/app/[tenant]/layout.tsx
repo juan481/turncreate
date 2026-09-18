@@ -12,6 +12,7 @@ import { MobileMenuButton } from "./mobile-menu";
 import { MobileBottomNav } from "./mobile-bottom-nav";
 import { NewAppointmentFab } from "./new-appointment-fab";
 import { NotificationsButton } from "./notifications-button";
+import { TenantSwitcher, type TenantOption } from "./tenant-switcher";
 
 const NAV = [
   { href: "", label: "Inicio", icon: "home" },
@@ -42,6 +43,10 @@ export default async function TenantAppLayout({
     supabase.from("staff").select("id", { count: "exact", head: true }).eq("tenant_id", tenant.id).eq("active", true),
     getRecentNotifications(supabase, tenant.id),
   ]);
+
+  // All tenants this user belongs to (for the switcher)
+  let tenantOptions: TenantOption[] = [];
+  let currentTenantOption: TenantOption | undefined;
   // Con un solo profesional (el dueño), gestionar "staff" no aporta nada
   // -- se accede desde Configuración si algún día suma a alguien más.
   const hasMultipleStaff = (staffCountRes.count ?? 0) > 1;
@@ -71,6 +76,28 @@ export default async function TenantAppLayout({
       displayName = profile.full_name || displayName;
       avatarUrl = profile.avatar_url;
     }
+
+    const { data: memberships } = await supabase
+      .from("tenant_members")
+      .select("role, tenants(id, name, slug)")
+      .eq("user_id", user.id);
+
+    if (memberships) {
+      tenantOptions = memberships
+        .filter((m) => m.tenants)
+        .map((m) => ({
+          id: (m.tenants as { id: string; name: string; slug: string }).id,
+          name: (m.tenants as { id: string; name: string; slug: string }).name,
+          slug: (m.tenants as { id: string; name: string; slug: string }).slug,
+          role: m.role,
+        }));
+      currentTenantOption = tenantOptions.find((o) => o.id === tenant.id) ?? {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenantSlug,
+        role: member?.role ?? "admin",
+      };
+    }
   }
 
   return (
@@ -85,10 +112,10 @@ export default async function TenantAppLayout({
               </span>
             </Link>
             <span className="hidden h-4 w-px bg-outline-variant/50 xl:block" />
-            <div className="hidden items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant xl:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-status-confirmed-dot" />
-              {tenant.name}
-            </div>
+            <TenantSwitcher
+              current={currentTenantOption ?? { id: tenant.id, name: tenant.name, slug: tenantSlug, role: "admin" }}
+              options={tenantOptions.length > 0 ? tenantOptions : [{ id: tenant.id, name: tenant.name, slug: tenantSlug, role: "admin" }]}
+            />
           </div>
 
           <NavPills tenantSlug={tenantSlug} items={nav} />
@@ -125,6 +152,8 @@ export default async function TenantAppLayout({
               tenantSlug={tenantSlug}
               items={[...nav, { href: "configuracion", label: "Configuración", icon: "settings" }]}
               signOutAction={signOut}
+              tenantOptions={tenantOptions.length > 0 ? tenantOptions : undefined}
+              currentTenant={currentTenantOption}
             />
           </div>
         </div>
