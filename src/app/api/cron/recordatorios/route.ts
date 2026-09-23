@@ -5,7 +5,12 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function GET() {
+export async function GET(req: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || req.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const now = new Date();
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -24,51 +29,46 @@ export async function GET() {
       return NextResponse.json({ message: 'No upcoming appointments to remind' });
     }
 
-    let enqueued = 0;
+    const { data: existingEvents, error: evError } = await supabase
+      .from('outbox_events')
+      .select('payload')
+      .eq('type', 'appointment_reminder')
+      .gte('created_at', new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString());
 
-    for (const apt of appointments) {
-      // Check if a reminder already exists for this appointment in outbox_events
-      const { data: existingEvents, error: evError } = await supabase
-        .from('outbox_events')
-        .select('id')
-        .eq('tenant_id', apt.tenant_id)
-        .eq('type', 'appointment_reminder')
-        .contains('payload', { appointment_id: apt.id })
-        .limit(1);
-        
-      if (evError) {
-        console.error('Error checking existing events:', evError);
-        continue;
-      }
+    if (evError) throw evError;
 
-      if (existingEvents && existingEvents.length > 0) {
-        continue; // Reminder already enqueued
-      }
+    const alreadyEnqueued = new Set(
+      (existingEvents ?? []).map((e) => (e.payload as { appointment_id?: string })?.appointment_id),
+    );
 
-      // Enqueue reminder in outbox_events
-      const { error: insertError } = await supabase
-        .from('outbox_events')
-        .insert({
-          tenant_id: apt.tenant_id,
-          type: 'appointment_reminder',
-          payload: {
-            appointment_id: apt.id,
-            client_id: apt.client_id,
-            starts_at: apt.starts_at
-          }
-        });
+    const pending = appointments.filter((apt) => !alreadyEnqueued.has(apt.id));
 
-      if (insertError) {
-        console.error(`Failed to enqueue reminder for appointment ${apt.id}:`, insertError);
-      } else {
-        enqueued++;
-      }
+    if (pending.length === 0) {
+      return NextResponse.json({
+        message: 'Reminders job completed',
+        processed: appointments.length,
+        enqueued: 0,
+      });
     }
 
-    return NextResponse.json({ 
+    const { error: insertError } = await supabase.from('outbox_events').insert(
+      pending.map((apt) => ({
+        tenant_id: apt.tenant_id,
+        type: 'appointment_reminder',
+        payload: {
+          appointment_id: apt.id,
+          client_id: apt.client_id,
+          starts_at: apt.starts_at,
+        },
+      })),
+    );
+
+    if (insertError) throw insertError;
+
+    return NextResponse.json({
       message: 'Reminders job completed',
       processed: appointments.length,
-      enqueued 
+      enqueued: pending.length,
     });
 
   } catch (error) {
