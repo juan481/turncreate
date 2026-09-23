@@ -474,11 +474,11 @@ declare
   v_starts timestamptz; v_ends timestamptz; v_appt uuid; v_stat text;
 begin
   for v_date in
-    select d::date from generate_series('2026-01-01'::date,'2026-08-31'::date,'1 day') d
+    select d::date from generate_series(date_trunc('year', current_date)::date, current_date, '1 day') d
   loop
     v_dow := extract(dow from v_date)::int;
     if v_dow = 0 then continue; end if;
-    v_off     := (v_date - '2026-01-01'::date);
+    v_off     := (v_date - date_trunc('year', current_date)::date);
     v_n_slots := case v_dow when 6 then 9 when 5 then 8 when 1 then 6 else 7 end;
     for v_slot in 0..(v_n_slots - 1) loop
       v_si     := (v_off * 3 + v_slot) % 3 + 1;
@@ -487,6 +487,7 @@ begin
       v_starts := (v_date + v_slots[v_slot + 1]) at time zone v_tz;
       v_ends   := v_starts + (v_durs[v_si] || ' minutes')::interval;
       v_stat   := case
+        when v_date = current_date and v_slots[v_slot + 1] >= '13:00'::time then 'confirmed'
         when (v_off * 9 + v_slot) % 12 = 0 then 'no_show'
         when (v_off * 9 + v_slot) % 25 = 0 then 'cancelled'
         else 'completed'
@@ -539,11 +540,14 @@ declare
   v_starts timestamptz; v_ends timestamptz; v_appt uuid;
 begin
   for v_date in
-    select d::date from generate_series('2026-10-01'::date,'2026-12-31'::date,'1 day') d
+    select d::date from generate_series(
+      current_date + 1,
+      (date_trunc('year', current_date) + interval '1 year' - interval '1 day')::date,
+      '1 day') d
   loop
     v_dow := extract(dow from v_date)::int;
     if v_dow = 0 then continue; end if;
-    v_off := (v_date - '2026-10-01'::date);
+    v_off := (v_date - current_date);
     v_n_slots := case
       when extract(month from v_date) = 12 and v_dow in (5,6) then 8
       when v_dow = 6 then 7 when v_dow = 1 then 5 else 6
@@ -611,11 +615,11 @@ declare
   v_price numeric; v_stat text; v_comm_pct numeric;
 begin
   for v_date in
-    select d::date from generate_series('2026-01-01'::date,'2026-08-31'::date,'1 day') d
+    select d::date from generate_series(date_trunc('year', current_date)::date, current_date, '1 day') d
   loop
     v_dow := extract(dow from v_date)::int;
     if v_dow = 0 then continue; end if;
-    v_off := (v_date - '2026-01-01'::date);
+    v_off := (v_date - date_trunc('year', current_date)::date);
     for v_sid in 1..4 loop
       if v_sid <= 2 then
         v_n_slots := case v_dow when 6 then 4 when 1 then 3 else 4 end;
@@ -626,6 +630,9 @@ begin
         v_ci   := (v_off * 11 + v_sid * 5 + v_slot) % 26 + 1;
         v_mi   := (v_off + v_sid + v_slot) % 5 + 1;
         v_stat := case
+          when v_date = current_date
+           and (case when v_sid <= 2 then v_slots_f[v_slot + 1] else v_slots_p[v_slot + 1] end) >= '13:00'::time
+            then 'confirmed'
           when (v_off * 13 + v_sid * 7 + v_slot) % 11 = 0 then 'no_show'
           when (v_off * 13 + v_sid * 7 + v_slot) % 27 = 0 then 'cancelled'
           else 'completed'
@@ -717,11 +724,14 @@ declare
   v_starts timestamptz; v_ends timestamptz; v_appt uuid; v_price numeric;
 begin
   for v_date in
-    select d::date from generate_series('2026-10-01'::date,'2026-12-31'::date,'1 day') d
+    select d::date from generate_series(
+      current_date + 1,
+      (date_trunc('year', current_date) + interval '1 year' - interval '1 day')::date,
+      '1 day') d
   loop
     v_dow := extract(dow from v_date)::int;
     if v_dow = 0 then continue; end if;
-    v_off := (v_date - '2026-10-01'::date);
+    v_off := (v_date - current_date);
     for v_sid in 1..4 loop
       if v_sid <= 2 then
         v_n_slots := case
@@ -768,3 +778,14 @@ begin
     end loop;
   end loop;
 end $studio_fut$;
+
+-- Los inserts de arriba dejan created_at = now(), asi que toda la
+-- facturacion del año caeria en el dia que se corrio el seed y reportes
+-- mostraria un solo pico. Cada cobro va a la fecha en que se atendio.
+update payments p
+  set created_at = a.ends_at, updated_at = a.ends_at
+  from appointments a where a.id = p.appointment_id;
+
+update commission_entries ce
+  set created_at = a.ends_at, updated_at = a.ends_at
+  from appointments a where a.id = ce.appointment_id;
