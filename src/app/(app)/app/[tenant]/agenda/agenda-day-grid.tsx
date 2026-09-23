@@ -136,7 +136,9 @@ function StaffColumn({
   const { setNodeRef, isOver } = useDroppable({ id: staff.id });
 
   return (
-    <div className="w-60 shrink-0 border-l border-border">
+    // 240px por columna deja ver una y media en un celular; a 160 entran
+    // dos completas y el scroll horizontal sigue disponible para el resto.
+    <div className="w-40 shrink-0 border-l border-border sm:w-60">
       <div
         className="flex items-center gap-2 border-b border-border px-2"
         style={{ height: HEADER_HEIGHT }}
@@ -146,7 +148,7 @@ function StaffColumn({
           <p className="truncate font-label-md text-label-md font-semibold text-on-surface">
             {staff.displayName}
           </p>
-          <span className="inline-flex items-center gap-1 truncate font-label-sm text-label-sm text-on-surface-variant">
+          <span className="flex min-w-0 items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: staff.color ?? "#767582" }} />
             <span className="truncate">
               {staff.specialty ? `${staff.specialty} · ` : ""}

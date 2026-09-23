@@ -107,7 +107,7 @@ export default async function TenantAppLayout({
           <div className="flex shrink-0 items-center gap-lg">
             <Link href={`/app/${tenantSlug}`} className="flex items-center gap-2">
               <Logo iconOnly className="h-8 w-auto" />
-              <span className="hidden font-headline-sm text-headline-sm tracking-tight text-on-surface sm:inline">
+              <span className="font-headline-sm text-headline-sm tracking-tight text-on-surface">
                 TurnCreate
               </span>
             </Link>

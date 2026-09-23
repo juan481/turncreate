@@ -112,7 +112,9 @@ export default async function NuevoTurnoPage({
     // achica, así que centrar con items-center dejaba la mitad de arriba
     // inalcanzable. items-start + scroll del contenedor entero lo evita.
     <div className="fixed inset-0 z-[100] overflow-y-auto bg-on-surface/40 backdrop-blur-sm">
-      <div className="flex min-h-full items-start justify-center p-4 sm:items-center">
+      {/* pt-24 en mobile: el header flota fijo arriba y si no, tapa el
+          título y el botón de cerrar de la tarjeta. */}
+      <div className="flex min-h-full items-start justify-center p-4 pt-24 sm:items-center sm:pt-4">
       <div className="relative my-6 w-full max-w-[30rem] animate-pop-in space-y-lg rounded-card border border-border bg-surface-container-lowest/85 p-xl shadow-card-hover backdrop-blur-xl sm:my-0">
         <Link
           href={closeHref}

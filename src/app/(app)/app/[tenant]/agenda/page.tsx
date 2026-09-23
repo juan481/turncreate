@@ -4,6 +4,7 @@ import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
 import { timeToMinutes, instantToMinutes } from "@/server/availability";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { ViewToggle } from "./view-toggle";
 import { DateNav } from "./date-nav";
@@ -127,9 +128,12 @@ export default async function AgendaPage({
         </div>
         <div className="flex items-center gap-3 self-end lg:self-auto">
           <ViewToggle tenantSlug={tenantSlug} dateISO={dateISO} active="day" />
+          {/* En mobile el FAB ya cubre "turno nuevo": con el botón acá la
+              fila mide más que el ancho disponible y self-end empuja el
+              sobrante fuera del borde izquierdo. */}
           <Link
             href={`/app/${tenantSlug}/agenda/nuevo?date=${dateISO}`}
-            className={buttonVariants({ size: "default" })}
+            className={cn(buttonVariants({ size: "default" }), "hidden sm:inline-flex")}
           >
             <Icon name="add" className="text-[18px]" />
             Nuevo Turno
