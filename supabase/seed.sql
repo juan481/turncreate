@@ -380,3 +380,391 @@ begin
   insert into appointment_status_history (appointment_id, from_status, to_status)
   values (v_appt_id, 'confirmed', 'completed');
 end $$;
+
+-- =========================================================
+-- Datos anuales demo — Barbería del Centro + Studio Lumière
+-- Cubre: Jan–Aug 2026 (histórico, completed) +
+--        Oct–Dic 2026 (futuro, confirmed)
+-- Sep 2026 se omite: el seed base ya tiene datos de hoy.
+-- cash_sessions se omite: opened_by requiere UUID de auth.users
+-- que no existe hasta que el admin se registre.
+-- =========================================================
+
+-- Barbería del Centro: 20 clientes nuevos (IDs 10–29)
+insert into clients (id, tenant_id, full_name, phone_e164, email) values
+  ('40000000-0000-0000-0000-000000000010','10000000-0000-0000-0000-000000000002','Tomás Acosta',         '+5491155667710','tomas.acosta@gmail.com'),
+  ('40000000-0000-0000-0000-000000000011','10000000-0000-0000-0000-000000000002','Matías Rodríguez',     '+5491155667711', null),
+  ('40000000-0000-0000-0000-000000000012','10000000-0000-0000-0000-000000000002','Sebastián López',      '+5491155667712','sebas.lopez@hotmail.com'),
+  ('40000000-0000-0000-0000-000000000013','10000000-0000-0000-0000-000000000002','Diego Herrera',        '+5491155667713', null),
+  ('40000000-0000-0000-0000-000000000014','10000000-0000-0000-0000-000000000002','Gabriel Méndez',       '+5491155667714','gabriel.mendez@gmail.com'),
+  ('40000000-0000-0000-0000-000000000015','10000000-0000-0000-0000-000000000002','Nicolás Castro',       '+5491155667715', null),
+  ('40000000-0000-0000-0000-000000000016','10000000-0000-0000-0000-000000000002','Cristian Ortiz',       '+5491155667716','c.ortiz@gmail.com'),
+  ('40000000-0000-0000-0000-000000000017','10000000-0000-0000-0000-000000000002','Pablo Jiménez',        '+5491155667717', null),
+  ('40000000-0000-0000-0000-000000000018','10000000-0000-0000-0000-000000000002','Facundo Ramos',        '+5491155667718','facu.ramos@gmail.com'),
+  ('40000000-0000-0000-0000-000000000019','10000000-0000-0000-0000-000000000002','Alejandro Reyes',      '+5491155667719', null),
+  ('40000000-0000-0000-0000-000000000020','10000000-0000-0000-0000-000000000002','Emilio Vargas',        '+5491155667720','emilio.vargas@gmail.com'),
+  ('40000000-0000-0000-0000-000000000021','10000000-0000-0000-0000-000000000002','Ricardo Flores',       '+5491155667721', null),
+  ('40000000-0000-0000-0000-000000000022','10000000-0000-0000-0000-000000000002','Maximiliano Torres',   '+5491155667722','max.torres@gmail.com'),
+  ('40000000-0000-0000-0000-000000000023','10000000-0000-0000-0000-000000000002','Leandro Gutiérrez',    '+5491155667723', null),
+  ('40000000-0000-0000-0000-000000000024','10000000-0000-0000-0000-000000000002','Mariano Pereyra',      '+5491155667724','mariano.pereyra@gmail.com'),
+  ('40000000-0000-0000-0000-000000000025','10000000-0000-0000-0000-000000000002','Claudio Álvarez',      '+5491155667725', null),
+  ('40000000-0000-0000-0000-000000000026','10000000-0000-0000-0000-000000000002','Ángel Moreno',         '+5491155667726','angel.moreno@gmail.com'),
+  ('40000000-0000-0000-0000-000000000027','10000000-0000-0000-0000-000000000002','Walter Navarro',       '+5491155667727', null),
+  ('40000000-0000-0000-0000-000000000028','10000000-0000-0000-0000-000000000002','Esteban Cruz',         '+5491155667728','esteban.cruz@gmail.com'),
+  ('40000000-0000-0000-0000-000000000029','10000000-0000-0000-0000-000000000002','Hernán Sosa',          '+5491155667729', null);
+
+-- Studio Lumière: 20 clientes nuevos (IDs 30–49)
+insert into clients (id, tenant_id, full_name, phone_e164, email) values
+  ('40000000-0000-0000-0000-000000000030','10000000-0000-0000-0000-000000000001','Florencia Ramírez',    '+5491166778830','flor.ramirez@gmail.com'),
+  ('40000000-0000-0000-0000-000000000031','10000000-0000-0000-0000-000000000001','Andrea Gómez',         '+5491166778831', null),
+  ('40000000-0000-0000-0000-000000000032','10000000-0000-0000-0000-000000000001','Cecilia Herrera',      '+5491166778832','ceci.herrera@gmail.com'),
+  ('40000000-0000-0000-0000-000000000033','10000000-0000-0000-0000-000000000001','Paola Díaz',           '+5491166778833', null),
+  ('40000000-0000-0000-0000-000000000034','10000000-0000-0000-0000-000000000001','Natalia García',       '+5491166778834','natalia.garcia@hotmail.com'),
+  ('40000000-0000-0000-0000-000000000035','10000000-0000-0000-0000-000000000001','Laura Fernández',      '+5491166778835', null),
+  ('40000000-0000-0000-0000-000000000036','10000000-0000-0000-0000-000000000001','Silvana Torres',       '+5491166778836','silvana.torres@gmail.com'),
+  ('40000000-0000-0000-0000-000000000037','10000000-0000-0000-0000-000000000001','Viviana Castro',       '+5491166778837', null),
+  ('40000000-0000-0000-0000-000000000038','10000000-0000-0000-0000-000000000001','Lorena Méndez',        '+5491166778838','lorena.mendez@gmail.com'),
+  ('40000000-0000-0000-0000-000000000039','10000000-0000-0000-0000-000000000001','Daniela Ortiz',        '+5491166778839', null),
+  ('40000000-0000-0000-0000-000000000040','10000000-0000-0000-0000-000000000001','Patricia López',       '+5491166778840','patricia.lopez@gmail.com'),
+  ('40000000-0000-0000-0000-000000000041','10000000-0000-0000-0000-000000000001','Alejandra Romero',     '+5491166778841', null),
+  ('40000000-0000-0000-0000-000000000042','10000000-0000-0000-0000-000000000001','Marcela Ruiz',         '+5491166778842','marcela.ruiz@gmail.com'),
+  ('40000000-0000-0000-0000-000000000043','10000000-0000-0000-0000-000000000001','Gabriela Sánchez',     '+5491166778843', null),
+  ('40000000-0000-0000-0000-000000000044','10000000-0000-0000-0000-000000000001','Luciana Pérez',        '+5491166778844','luciana.perez@gmail.com'),
+  ('40000000-0000-0000-0000-000000000045','10000000-0000-0000-0000-000000000001','Verónica Martínez',    '+5491166778845', null),
+  ('40000000-0000-0000-0000-000000000046','10000000-0000-0000-0000-000000000001','Claudia Reyes',        '+5491166778846','claudia.reyes@hotmail.com'),
+  ('40000000-0000-0000-0000-000000000047','10000000-0000-0000-0000-000000000001','Mónica Acosta',        '+5491166778847', null),
+  ('40000000-0000-0000-0000-000000000048','10000000-0000-0000-0000-000000000001','Graciela Jiménez',     '+5491166778848','graciela.jimenez@gmail.com'),
+  ('40000000-0000-0000-0000-000000000049','10000000-0000-0000-0000-000000000001','Norma Vargas',         '+5491166778849', null);
+
+-- ── Barbería del Centro: histórico Jan-Aug 2026 ──────────
+do $barb_hist$
+declare
+  v_tenant   constant uuid := '10000000-0000-0000-0000-000000000002';
+  v_tz       constant text := 'America/Argentina/Buenos_Aires';
+  v_martin   constant uuid := '20000000-0000-0000-0000-000000000005';
+  v_clients  uuid[] := array[
+    '40000000-0000-0000-0000-000000000007'::uuid,'40000000-0000-0000-0000-000000000008'::uuid,
+    '40000000-0000-0000-0000-000000000009'::uuid,'40000000-0000-0000-0000-000000000010'::uuid,
+    '40000000-0000-0000-0000-000000000011'::uuid,'40000000-0000-0000-0000-000000000012'::uuid,
+    '40000000-0000-0000-0000-000000000013'::uuid,'40000000-0000-0000-0000-000000000014'::uuid,
+    '40000000-0000-0000-0000-000000000015'::uuid,'40000000-0000-0000-0000-000000000016'::uuid,
+    '40000000-0000-0000-0000-000000000017'::uuid,'40000000-0000-0000-0000-000000000018'::uuid,
+    '40000000-0000-0000-0000-000000000019'::uuid,'40000000-0000-0000-0000-000000000020'::uuid,
+    '40000000-0000-0000-0000-000000000021'::uuid,'40000000-0000-0000-0000-000000000022'::uuid,
+    '40000000-0000-0000-0000-000000000023'::uuid,'40000000-0000-0000-0000-000000000024'::uuid,
+    '40000000-0000-0000-0000-000000000025'::uuid,'40000000-0000-0000-0000-000000000026'::uuid,
+    '40000000-0000-0000-0000-000000000027'::uuid,'40000000-0000-0000-0000-000000000028'::uuid,
+    '40000000-0000-0000-0000-000000000029'::uuid
+  ];
+  v_svcs      uuid[]    := array[
+    '31000000-0000-0000-0000-000000000005'::uuid,
+    '31000000-0000-0000-0000-000000000006'::uuid,
+    '31000000-0000-0000-0000-000000000007'::uuid
+  ];
+  v_svc_names text[]    := array['Corte Clásico','Arreglo de Barba','Corte + Barba'];
+  v_prices    numeric[] := array[8500, 6500, 13500];
+  v_durs      int[]     := array[35, 25, 55];
+  v_slots     time[]    := array[
+    '09:00'::time,'10:00'::time,'11:00'::time,'12:00'::time,
+    '14:00'::time,'15:00'::time,'16:00'::time,'17:00'::time,'18:00'::time
+  ];
+  v_methods   text[]    := array['cash','cash','cash','transfer','mercadopago'];
+  v_date date; v_dow int; v_off int; v_n_slots int; v_slot int;
+  v_si int; v_ci int; v_mi int;
+  v_starts timestamptz; v_ends timestamptz; v_appt uuid; v_stat text;
+begin
+  for v_date in
+    select d::date from generate_series('2026-01-01'::date,'2026-08-31'::date,'1 day') d
+  loop
+    v_dow := extract(dow from v_date)::int;
+    if v_dow = 0 then continue; end if;
+    v_off     := (v_date - '2026-01-01'::date);
+    v_n_slots := case v_dow when 6 then 9 when 5 then 8 when 1 then 6 else 7 end;
+    for v_slot in 0..(v_n_slots - 1) loop
+      v_si     := (v_off * 3 + v_slot) % 3 + 1;
+      v_ci     := (v_off * 7 + v_slot) % 23 + 1;
+      v_mi     := (v_off + v_slot) % 5 + 1;
+      v_starts := (v_date + v_slots[v_slot + 1]) at time zone v_tz;
+      v_ends   := v_starts + (v_durs[v_si] || ' minutes')::interval;
+      v_stat   := case
+        when (v_off * 9 + v_slot) % 12 = 0 then 'no_show'
+        when (v_off * 9 + v_slot) % 25 = 0 then 'cancelled'
+        else 'completed'
+      end;
+      v_appt := gen_random_uuid();
+      insert into appointments(id, tenant_id, client_id, staff_id, starts_at, ends_at,
+        status, source, total, deposit_required, deposit_paid)
+      values(v_appt, v_tenant, v_clients[v_ci], v_martin,
+        v_starts, v_ends, v_stat, 'staff', v_prices[v_si], 0, 0);
+      insert into appointment_items(appointment_id, service_id, name, price)
+      values(v_appt, v_svcs[v_si], v_svc_names[v_si], v_prices[v_si]);
+      insert into appointment_segments(tenant_id, appointment_id, staff_id, period)
+      values(v_tenant, v_appt, v_martin, tstzrange(v_starts, v_ends, '[)'));
+      if v_stat = 'completed' then
+        insert into payments(tenant_id, appointment_id, kind, method, amount, status)
+        values(v_tenant, v_appt, 'balance', v_methods[v_mi], v_prices[v_si], 'approved');
+        insert into commission_entries(appointment_id, staff_id, base_amount, amount)
+        values(v_appt, v_martin, v_prices[v_si], v_prices[v_si]);
+      end if;
+    end loop;
+  end loop;
+end $barb_hist$;
+
+-- ── Barbería del Centro: futuro Oct-Dic 2026 ─────────────
+do $barb_fut$
+declare
+  v_tenant  constant uuid := '10000000-0000-0000-0000-000000000002';
+  v_tz      constant text := 'America/Argentina/Buenos_Aires';
+  v_martin  constant uuid := '20000000-0000-0000-0000-000000000005';
+  v_clients uuid[] := array[
+    '40000000-0000-0000-0000-000000000007'::uuid,'40000000-0000-0000-0000-000000000008'::uuid,
+    '40000000-0000-0000-0000-000000000009'::uuid,'40000000-0000-0000-0000-000000000010'::uuid,
+    '40000000-0000-0000-0000-000000000011'::uuid,'40000000-0000-0000-0000-000000000012'::uuid,
+    '40000000-0000-0000-0000-000000000013'::uuid,'40000000-0000-0000-0000-000000000014'::uuid,
+    '40000000-0000-0000-0000-000000000015'::uuid,'40000000-0000-0000-0000-000000000016'::uuid,
+    '40000000-0000-0000-0000-000000000017'::uuid,'40000000-0000-0000-0000-000000000018'::uuid,
+    '40000000-0000-0000-0000-000000000019'::uuid,'40000000-0000-0000-0000-000000000020'::uuid,
+    '40000000-0000-0000-0000-000000000021'::uuid,'40000000-0000-0000-0000-000000000022'::uuid,
+    '40000000-0000-0000-0000-000000000023'::uuid,'40000000-0000-0000-0000-000000000024'::uuid,
+    '40000000-0000-0000-0000-000000000025'::uuid,'40000000-0000-0000-0000-000000000026'::uuid,
+    '40000000-0000-0000-0000-000000000027'::uuid,'40000000-0000-0000-0000-000000000028'::uuid,
+    '40000000-0000-0000-0000-000000000029'::uuid
+  ];
+  v_svcs      uuid[]    := array['31000000-0000-0000-0000-000000000005'::uuid,'31000000-0000-0000-0000-000000000006'::uuid,'31000000-0000-0000-0000-000000000007'::uuid];
+  v_svc_names text[]    := array['Corte Clásico','Arreglo de Barba','Corte + Barba'];
+  v_prices    numeric[] := array[8500, 6500, 13500];
+  v_durs      int[]     := array[35, 25, 55];
+  v_slots     time[]    := array['09:00'::time,'10:00'::time,'11:00'::time,'12:00'::time,'14:00'::time,'15:00'::time,'16:00'::time,'17:00'::time];
+  v_date date; v_dow int; v_off int; v_n_slots int; v_slot int; v_si int; v_ci int;
+  v_starts timestamptz; v_ends timestamptz; v_appt uuid;
+begin
+  for v_date in
+    select d::date from generate_series('2026-10-01'::date,'2026-12-31'::date,'1 day') d
+  loop
+    v_dow := extract(dow from v_date)::int;
+    if v_dow = 0 then continue; end if;
+    v_off := (v_date - '2026-10-01'::date);
+    v_n_slots := case
+      when extract(month from v_date) = 12 and v_dow in (5,6) then 8
+      when v_dow = 6 then 7 when v_dow = 1 then 5 else 6
+    end;
+    for v_slot in 0..(v_n_slots - 1) loop
+      v_si     := (v_off * 3 + v_slot) % 3 + 1;
+      v_ci     := (v_off * 7 + v_slot) % 23 + 1;
+      v_starts := (v_date + v_slots[v_slot + 1]) at time zone v_tz;
+      v_ends   := v_starts + (v_durs[v_si] || ' minutes')::interval;
+      v_appt   := gen_random_uuid();
+      insert into appointments(id, tenant_id, client_id, staff_id, starts_at, ends_at,
+        status, source, total, deposit_required, deposit_paid)
+      values(v_appt, v_tenant, v_clients[v_ci], v_martin,
+        v_starts, v_ends, 'confirmed', 'staff', v_prices[v_si], 0, 0);
+      insert into appointment_items(appointment_id, service_id, name, price)
+      values(v_appt, v_svcs[v_si], v_svc_names[v_si], v_prices[v_si]);
+      insert into appointment_segments(tenant_id, appointment_id, staff_id, period)
+      values(v_tenant, v_appt, v_martin, tstzrange(v_starts, v_ends, '[)'));
+    end loop;
+  end loop;
+end $barb_fut$;
+
+-- ── Studio Lumière: histórico Jan-Aug 2026 ───────────────
+do $studio_hist$
+declare
+  v_tenant   constant uuid := '10000000-0000-0000-0000-000000000001';
+  v_tz       constant text := 'America/Argentina/Buenos_Aires';
+  v_staff    uuid[] := array[
+    '20000000-0000-0000-0000-000000000001'::uuid,
+    '20000000-0000-0000-0000-000000000002'::uuid,
+    '20000000-0000-0000-0000-000000000003'::uuid,
+    '20000000-0000-0000-0000-000000000004'::uuid
+  ];
+  v_clients  uuid[] := array[
+    '40000000-0000-0000-0000-000000000001'::uuid,'40000000-0000-0000-0000-000000000002'::uuid,
+    '40000000-0000-0000-0000-000000000003'::uuid,'40000000-0000-0000-0000-000000000004'::uuid,
+    '40000000-0000-0000-0000-000000000005'::uuid,'40000000-0000-0000-0000-000000000006'::uuid,
+    '40000000-0000-0000-0000-000000000030'::uuid,'40000000-0000-0000-0000-000000000031'::uuid,
+    '40000000-0000-0000-0000-000000000032'::uuid,'40000000-0000-0000-0000-000000000033'::uuid,
+    '40000000-0000-0000-0000-000000000034'::uuid,'40000000-0000-0000-0000-000000000035'::uuid,
+    '40000000-0000-0000-0000-000000000036'::uuid,'40000000-0000-0000-0000-000000000037'::uuid,
+    '40000000-0000-0000-0000-000000000038'::uuid,'40000000-0000-0000-0000-000000000039'::uuid,
+    '40000000-0000-0000-0000-000000000040'::uuid,'40000000-0000-0000-0000-000000000041'::uuid,
+    '40000000-0000-0000-0000-000000000042'::uuid,'40000000-0000-0000-0000-000000000043'::uuid,
+    '40000000-0000-0000-0000-000000000044'::uuid,'40000000-0000-0000-0000-000000000045'::uuid,
+    '40000000-0000-0000-0000-000000000046'::uuid,'40000000-0000-0000-0000-000000000047'::uuid,
+    '40000000-0000-0000-0000-000000000048'::uuid,'40000000-0000-0000-0000-000000000049'::uuid
+  ];
+  -- staff 1,2 (Lucía/Ana): facial — slots 120-min (coloración 100-min cabe sin overlap)
+  v_svcs_f  uuid[]    := array['31000000-0000-0000-0000-000000000001'::uuid,'31000000-0000-0000-0000-000000000002'::uuid];
+  v_names_f text[]    := array['Limpieza Facial Profunda','Coloración con Tiempo de Espera'];
+  v_price_f numeric[] := array[24000, 32000];
+  v_dur_f   int[]     := array[50, 100];
+  v_slots_f time[]    := array['09:00'::time,'11:00'::time,'13:00'::time,'15:00'::time,'17:00'::time];
+  -- staff 3,4 (Lucas/Carolina): pelo — slots 60-min
+  v_svcs_p  uuid[]    := array['31000000-0000-0000-0000-000000000003'::uuid,'31000000-0000-0000-0000-000000000004'::uuid];
+  v_names_p text[]    := array['Corte Clásico','Arreglo de Barba'];
+  v_price_p numeric[] := array[8000, 6000];
+  v_dur_p   int[]     := array[35, 25];
+  v_slots_p time[]    := array['09:00'::time,'10:00'::time,'11:00'::time,'12:00'::time,'14:00'::time,'15:00'::time,'16:00'::time,'17:00'::time];
+  v_methods text[]    := array['cash','cash','transfer','mercadopago','cash'];
+  v_date date; v_dow int; v_off int;
+  v_sid int; v_si int; v_ci int; v_mi int; v_n_slots int; v_slot int;
+  v_starts timestamptz; v_ends timestamptz; v_appt uuid;
+  v_price numeric; v_stat text; v_comm_pct numeric;
+begin
+  for v_date in
+    select d::date from generate_series('2026-01-01'::date,'2026-08-31'::date,'1 day') d
+  loop
+    v_dow := extract(dow from v_date)::int;
+    if v_dow = 0 then continue; end if;
+    v_off := (v_date - '2026-01-01'::date);
+    for v_sid in 1..4 loop
+      if v_sid <= 2 then
+        v_n_slots := case v_dow when 6 then 4 when 1 then 3 else 4 end;
+      else
+        v_n_slots := case v_dow when 6 then 7 when 5 then 7 when 1 then 5 else 6 end;
+      end if;
+      for v_slot in 0..(v_n_slots - 1) loop
+        v_ci   := (v_off * 11 + v_sid * 5 + v_slot) % 26 + 1;
+        v_mi   := (v_off + v_sid + v_slot) % 5 + 1;
+        v_stat := case
+          when (v_off * 13 + v_sid * 7 + v_slot) % 11 = 0 then 'no_show'
+          when (v_off * 13 + v_sid * 7 + v_slot) % 27 = 0 then 'cancelled'
+          else 'completed'
+        end;
+        if v_sid <= 2 then
+          v_si     := case when (v_off / 5 + v_slot) % 3 = 0 then 2 else 1 end;
+          v_starts := (v_date + v_slots_f[v_slot + 1]) at time zone v_tz;
+          v_ends   := v_starts + (v_dur_f[v_si] || ' minutes')::interval;
+          v_price  := v_price_f[v_si];
+          v_appt   := gen_random_uuid();
+          insert into appointments(id, tenant_id, client_id, staff_id, starts_at, ends_at,
+            status, source, total, deposit_required, deposit_paid)
+          values(v_appt, v_tenant, v_clients[v_ci], v_staff[v_sid],
+            v_starts, v_ends, v_stat, 'staff', v_price, 0, 0);
+          insert into appointment_items(appointment_id, service_id, name, price)
+          values(v_appt, v_svcs_f[v_si], v_names_f[v_si], v_price);
+          insert into appointment_segments(tenant_id, appointment_id, staff_id, period)
+          values(v_tenant, v_appt, v_staff[v_sid], tstzrange(v_starts, v_ends, '[)'));
+          if v_stat = 'completed' then
+            insert into payments(tenant_id, appointment_id, kind, method, amount, status)
+            values(v_tenant, v_appt, 'balance', v_methods[v_mi], v_price, 'approved');
+            v_comm_pct := 0.20;
+            insert into commission_entries(appointment_id, staff_id, base_amount, amount)
+            values(v_appt, v_staff[v_sid], v_price, round(v_price * v_comm_pct));
+          end if;
+        else
+          v_si     := case when (v_off + v_sid + v_slot) % 3 = 0 then 2 else 1 end;
+          v_starts := (v_date + v_slots_p[v_slot + 1]) at time zone v_tz;
+          v_ends   := v_starts + (v_dur_p[v_si] || ' minutes')::interval;
+          v_price  := v_price_p[v_si];
+          v_appt   := gen_random_uuid();
+          insert into appointments(id, tenant_id, client_id, staff_id, starts_at, ends_at,
+            status, source, total, deposit_required, deposit_paid)
+          values(v_appt, v_tenant, v_clients[v_ci], v_staff[v_sid],
+            v_starts, v_ends, v_stat, 'staff', v_price, 0, 0);
+          insert into appointment_items(appointment_id, service_id, name, price)
+          values(v_appt, v_svcs_p[v_si], v_names_p[v_si], v_price);
+          insert into appointment_segments(tenant_id, appointment_id, staff_id, period)
+          values(v_tenant, v_appt, v_staff[v_sid], tstzrange(v_starts, v_ends, '[)'));
+          if v_stat = 'completed' then
+            insert into payments(tenant_id, appointment_id, kind, method, amount, status)
+            values(v_tenant, v_appt, 'balance', v_methods[v_mi], v_price, 'approved');
+            v_comm_pct := 0.15;
+            insert into commission_entries(appointment_id, staff_id, base_amount, amount)
+            values(v_appt, v_staff[v_sid], v_price, round(v_price * v_comm_pct));
+          end if;
+        end if;
+      end loop;
+    end loop;
+  end loop;
+end $studio_hist$;
+
+-- ── Studio Lumière: futuro Oct-Dic 2026 ──────────────────
+do $studio_fut$
+declare
+  v_tenant   constant uuid := '10000000-0000-0000-0000-000000000001';
+  v_tz       constant text := 'America/Argentina/Buenos_Aires';
+  v_staff    uuid[] := array[
+    '20000000-0000-0000-0000-000000000001'::uuid,'20000000-0000-0000-0000-000000000002'::uuid,
+    '20000000-0000-0000-0000-000000000003'::uuid,'20000000-0000-0000-0000-000000000004'::uuid
+  ];
+  v_clients  uuid[] := array[
+    '40000000-0000-0000-0000-000000000001'::uuid,'40000000-0000-0000-0000-000000000002'::uuid,
+    '40000000-0000-0000-0000-000000000003'::uuid,'40000000-0000-0000-0000-000000000004'::uuid,
+    '40000000-0000-0000-0000-000000000005'::uuid,'40000000-0000-0000-0000-000000000006'::uuid,
+    '40000000-0000-0000-0000-000000000030'::uuid,'40000000-0000-0000-0000-000000000031'::uuid,
+    '40000000-0000-0000-0000-000000000032'::uuid,'40000000-0000-0000-0000-000000000033'::uuid,
+    '40000000-0000-0000-0000-000000000034'::uuid,'40000000-0000-0000-0000-000000000035'::uuid,
+    '40000000-0000-0000-0000-000000000036'::uuid,'40000000-0000-0000-0000-000000000037'::uuid,
+    '40000000-0000-0000-0000-000000000038'::uuid,'40000000-0000-0000-0000-000000000039'::uuid,
+    '40000000-0000-0000-0000-000000000040'::uuid,'40000000-0000-0000-0000-000000000041'::uuid,
+    '40000000-0000-0000-0000-000000000042'::uuid,'40000000-0000-0000-0000-000000000043'::uuid,
+    '40000000-0000-0000-0000-000000000044'::uuid,'40000000-0000-0000-0000-000000000045'::uuid,
+    '40000000-0000-0000-0000-000000000046'::uuid,'40000000-0000-0000-0000-000000000047'::uuid,
+    '40000000-0000-0000-0000-000000000048'::uuid,'40000000-0000-0000-0000-000000000049'::uuid
+  ];
+  v_svcs_f  uuid[]    := array['31000000-0000-0000-0000-000000000001'::uuid,'31000000-0000-0000-0000-000000000002'::uuid];
+  v_names_f text[]    := array['Limpieza Facial Profunda','Coloración con Tiempo de Espera'];
+  v_price_f numeric[] := array[24000, 32000];
+  v_dur_f   int[]     := array[50, 100];
+  v_slots_f time[]    := array['09:00'::time,'11:00'::time,'13:00'::time,'15:00'::time,'17:00'::time];
+  v_svcs_p  uuid[]    := array['31000000-0000-0000-0000-000000000003'::uuid,'31000000-0000-0000-0000-000000000004'::uuid];
+  v_names_p text[]    := array['Corte Clásico','Arreglo de Barba'];
+  v_price_p numeric[] := array[8000, 6000];
+  v_dur_p   int[]     := array[35, 25];
+  v_slots_p time[]    := array['09:00'::time,'10:00'::time,'11:00'::time,'12:00'::time,'14:00'::time,'15:00'::time,'16:00'::time,'17:00'::time];
+  v_date date; v_dow int; v_off int;
+  v_sid int; v_si int; v_ci int; v_n_slots int; v_slot int;
+  v_starts timestamptz; v_ends timestamptz; v_appt uuid; v_price numeric;
+begin
+  for v_date in
+    select d::date from generate_series('2026-10-01'::date,'2026-12-31'::date,'1 day') d
+  loop
+    v_dow := extract(dow from v_date)::int;
+    if v_dow = 0 then continue; end if;
+    v_off := (v_date - '2026-10-01'::date);
+    for v_sid in 1..4 loop
+      if v_sid <= 2 then
+        v_n_slots := case
+          when extract(month from v_date)=12 and v_dow in(5,6) then 5
+          when v_dow=6 then 4 when v_dow=1 then 3 else 4
+        end;
+      else
+        v_n_slots := case
+          when extract(month from v_date)=12 and v_dow in(5,6) then 8
+          when v_dow=6 then 7 when v_dow=1 then 5 else 6
+        end;
+      end if;
+      for v_slot in 0..(v_n_slots - 1) loop
+        v_ci   := (v_off * 11 + v_sid * 5 + v_slot) % 26 + 1;
+        v_appt := gen_random_uuid();
+        if v_sid <= 2 then
+          v_si     := case when (v_off/5 + v_slot) % 3 = 0 then 2 else 1 end;
+          v_starts := (v_date + v_slots_f[v_slot + 1]) at time zone v_tz;
+          v_ends   := v_starts + (v_dur_f[v_si] || ' minutes')::interval;
+          v_price  := v_price_f[v_si];
+          insert into appointments(id, tenant_id, client_id, staff_id, starts_at, ends_at,
+            status, source, total, deposit_required, deposit_paid)
+          values(v_appt, v_tenant, v_clients[v_ci], v_staff[v_sid],
+            v_starts, v_ends, 'confirmed', 'staff', v_price, 0, 0);
+          insert into appointment_items(appointment_id, service_id, name, price)
+          values(v_appt, v_svcs_f[v_si], v_names_f[v_si], v_price);
+          insert into appointment_segments(tenant_id, appointment_id, staff_id, period)
+          values(v_tenant, v_appt, v_staff[v_sid], tstzrange(v_starts, v_ends, '[)'));
+        else
+          v_si     := case when (v_off + v_sid + v_slot) % 3 = 0 then 2 else 1 end;
+          v_starts := (v_date + v_slots_p[v_slot + 1]) at time zone v_tz;
+          v_ends   := v_starts + (v_dur_p[v_si] || ' minutes')::interval;
+          v_price  := v_price_p[v_si];
+          insert into appointments(id, tenant_id, client_id, staff_id, starts_at, ends_at,
+            status, source, total, deposit_required, deposit_paid)
+          values(v_appt, v_tenant, v_clients[v_ci], v_staff[v_sid],
+            v_starts, v_ends, 'confirmed', 'staff', v_price, 0, 0);
+          insert into appointment_items(appointment_id, service_id, name, price)
+          values(v_appt, v_svcs_p[v_si], v_names_p[v_si], v_price);
+          insert into appointment_segments(tenant_id, appointment_id, staff_id, period)
+          values(v_tenant, v_appt, v_staff[v_sid], tstzrange(v_starts, v_ends, '[)'));
+        end if;
+      end loop;
+    end loop;
+  end loop;
+end $studio_fut$;
