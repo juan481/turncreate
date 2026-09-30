@@ -1,99 +1,13 @@
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { CajaClient } from "./caja-client";
 
-export default async function CajaPage({
-  params,
-}: PageProps<"/app/[tenant]/caja">) {
-  const { tenant: tenantSlug } = await params;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-
-  const dateISO = format(new TZDate(new Date(), tenant.timezone), "yyyy-MM-dd");
-  const startUTC = new TZDate(`${dateISO}T00:00:00`, tenant.timezone).toISOString();
-  const endUTC = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone).toISOString();
-
-  const [sessionRes, appointmentsRes, productsRes, lastClosedRes] = await Promise.all([
-    supabase
-      .from("cash_sessions")
-      .select("id, opened_at, opening_amount")
-      .eq("tenant_id", tenant.id)
-      .is("closed_at", null)
-      .maybeSingle(),
-    supabase
-      .from("appointments")
-      .select("id, starts_at, total, balance, clients(full_name), staff(display_name), appointment_items(name)")
-      .eq("tenant_id", tenant.id)
-      .eq("status", "confirmed")
-      .gte("starts_at", startUTC)
-      .lte("starts_at", endUTC)
-      .order("starts_at"),
-    supabase
-      .from("products")
-      .select("id, name, price")
-      .eq("tenant_id", tenant.id)
-      .eq("active", true)
-      .order("name"),
-    supabase
-      .from("cash_sessions")
-      .select("closed_at, expected_amount, counted_amount, difference")
-      .eq("tenant_id", tenant.id)
-      .not("closed_at", "is", null)
-      .order("closed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-
-  if (sessionRes.error) throw sessionRes.error;
-  if (appointmentsRes.error) throw appointmentsRes.error;
-  if (productsRes.error) throw productsRes.error;
-
-  const session = sessionRes.data;
-
-  const { data: sessionMovements } = session
-    ? await supabase
-        .from("cash_movements")
-        .select("id, type, amount, reason, created_at")
-        .eq("cash_session_id", session.id)
-        .order("created_at", { ascending: false })
-    : { data: [] };
-
-  const lastClosed = lastClosedRes.data;
-
-  return (
-    <CajaClient
-      tenantSlug={tenantSlug}
-      timezone={tenant.timezone}
-      session={session}
-      appointments={appointmentsRes.data.map((a) => ({
-        id: a.id,
-        startsAt: a.starts_at,
-        total: Number(a.total),
-        balance: Number(a.balance),
-        clientName: a.clients?.full_name ?? "",
-        staffName: a.staff?.display_name ?? "",
-        serviceNames: a.appointment_items.map((i) => i.name).join(", "),
-      }))}
-      products={productsRes.data.map((p) => ({ id: p.id, name: p.name, price: Number(p.price) }))}
-      movements={(sessionMovements ?? []).map((m) => ({
-        id: m.id,
-        type: m.type,
-        amount: Number(m.amount),
-        reason: m.reason,
-        createdAt: m.created_at,
-      }))}
-      lastClosedSession={
-        lastClosed
-          ? {
-              closedAt: lastClosed.closed_at as string,
-              expectedAmount: Number(lastClosed.expected_amount),
-              countedAmount: Number(lastClosed.counted_amount),
-              difference: Number(lastClosed.difference),
-            }
-          : null
-      }
-    />
-  );
+export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja">) {
+  const { tenant: tenantSlug } = await params; const tenant = await getTenantBySlugFromFirebase(tenantSlug); if (!tenant) return null;
+  const { db } = firebaseAdmin(); const ref = db.collection("tenants").doc(tenant.id); const today = format(new TZDate(new Date(), tenant.timezone), "yyyy-MM-dd"); const start = new TZDate(`${today}T00:00:00`, tenant.timezone); const end = new TZDate(`${today}T23:59:59.999`, tenant.timezone);
+  const [sessions, appointments, products] = await Promise.all([ref.collection("cashSessions").orderBy("openedAt", "desc").get(), ref.collection("appointments").where("startsAt", ">=", start).where("startsAt", "<=", end).orderBy("startsAt").get(), ref.collection("products").where("active", "==", true).get()]);
+  const open = sessions.docs.find((doc) => !doc.data().closedAt); const movements = open ? await open.ref.collection("movements").orderBy("createdAt", "desc").get() : null; const lastClosed = sessions.docs.find((doc) => doc.data().closedAt)?.data();
+  return <CajaClient tenantSlug={tenantSlug} timezone={tenant.timezone} session={open ? { id: open.id, opened_at: open.data().openedAt?.toDate?.().toISOString?.() ?? new Date().toISOString(), opening_amount: Number(open.data().openingAmount ?? 0) } : null} appointments={appointments.docs.map((doc) => { const item = doc.data(); return { id: doc.id, startsAt: item.startsAt?.toDate?.().toISOString?.() ?? "", total: Number(item.total ?? 0), balance: Number(item.balance ?? 0), clientName: String(item.clientName ?? ""), staffName: String(item.staffName ?? ""), serviceNames: Array.isArray(item.items) ? item.items.map((service: { name?: string }) => service.name ?? "").join(", ") : String(item.serviceName ?? "") }; }).filter((item) => item.balance > 0 && item.startsAt)} products={products.docs.map((doc) => ({ id: doc.id, name: String(doc.data().name ?? ""), price: Number(doc.data().price ?? 0) }))} movements={movements?.docs.map((doc) => ({ id: doc.id, type: String(doc.data().type), amount: Number(doc.data().amount), reason: String(doc.data().reason ?? ""), createdAt: doc.data().createdAt?.toDate?.().toISOString?.() ?? "" })) ?? []} lastClosedSession={lastClosed ? { closedAt: lastClosed.closedAt?.toDate?.().toISOString?.() ?? "", expectedAmount: Number(lastClosed.expectedAmount ?? 0), countedAmount: Number(lastClosed.countedAmount ?? 0), difference: Number(lastClosed.difference ?? 0) } : null} />;
 }
