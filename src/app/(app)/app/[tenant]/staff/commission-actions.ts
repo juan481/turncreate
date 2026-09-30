@@ -1,51 +1,8 @@
 "use server";
-
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
-
+import { FieldValue } from "firebase-admin/firestore";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
+import { requireTenantAccess } from "@/server/firebase/tenants";
 export type CommissionActionState = { error: string | null };
-
-// Regla "genérica" del profesional: staff_id seteado, service_id y
-// category_id nulos -- es la de menor prioridad (sección 5.5: servicio >
-// categoría > profesional), se usa cuando nadie definió algo más
-// específico para ese servicio o categoría.
-export async function upsertStaffCommission(
-  tenantSlug: string,
-  staffId: string,
-  _prevState: CommissionActionState,
-  formData: FormData,
-): Promise<CommissionActionState> {
-  const type = formData.get("type");
-  const value = Number(formData.get("value") ?? 0);
-
-  if (type !== "percent" && type !== "fixed") {
-    return { error: "Tipo de comisión inválido" };
-  }
-  if (value <= 0) {
-    return { error: "El valor tiene que ser mayor a 0" };
-  }
-
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-
-  const { data: existing, error: findError } = await supabase
-    .from("commission_rules")
-    .select("id")
-    .eq("tenant_id", tenant.id)
-    .eq("staff_id", staffId)
-    .is("service_id", null)
-    .is("category_id", null)
-    .maybeSingle();
-
-  if (findError) return { error: findError.message };
-
-  const { error } = existing
-    ? await supabase.from("commission_rules").update({ type, value }).eq("id", existing.id)
-    : await supabase.from("commission_rules").insert({ tenant_id: tenant.id, staff_id: staffId, type, value });
-
-  if (error) return { error: error.message };
-
-  revalidatePath(`/app/${tenantSlug}/staff`);
-  return { error: null };
-}
+export async function upsertStaffCommission(tenantSlug: string, staffId: string, _prev: CommissionActionState, formData: FormData): Promise<CommissionActionState> { const type = formData.get("type"); const value = Number(formData.get("value") ?? 0); if ((type !== "percent" && type !== "fixed") || value <= 0) return { error: "Ingresá una comisión válida" }; try { const user = await getCurrentFirebaseUser(); if (!user) return { error: "Tu sesión venció. Volvé a iniciar sesión." }; const { tenant } = await requireTenantAccess(user.uid, tenantSlug); await firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("staff").doc(staffId).update({ commission: { type, value }, updatedAt: FieldValue.serverTimestamp() }); revalidatePath(`/app/${tenantSlug}/staff`); return { error: null }; } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo guardar la comisión" }; } }
