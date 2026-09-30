@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Avatar } from "@/components/ui/avatar";
@@ -21,38 +21,27 @@ export default async function TenantDashboardPage({
   params,
 }: PageProps<"/app/[tenant]">) {
   const { tenant: tenantSlug } = await params;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) return null;
 
   const now = new TZDate(new Date(), tenant.timezone);
   const dateISO = format(now, "yyyy-MM-dd");
   const startUTC = new TZDate(`${dateISO}T00:00:00`, tenant.timezone).toISOString();
   const endUTC = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone).toISOString();
 
-  const [{ data: appointmentsRaw, error }, paymentsRes, staffCountRes] = await Promise.all([
-    supabase
-      .from("appointments")
-      .select(
-        "id, starts_at, ends_at, status, total, balance, clients(full_name), staff(display_name, photo_url), appointment_items(name)",
-      )
-      .eq("tenant_id", tenant.id)
-      .gte("starts_at", startUTC)
-      .lte("starts_at", endUTC)
-      .in("status", ["confirmed", "completed"])
-      .order("starts_at"),
-    supabase
-      .from("payments")
-      .select("method, amount")
-      .eq("tenant_id", tenant.id)
-      .eq("status", "approved")
-      .gte("created_at", startUTC)
-      .lte("created_at", endUTC),
-    supabase.from("staff").select("id", { count: "exact", head: true }).eq("tenant_id", tenant.id).eq("active", true),
+  const { db } = firebaseAdmin();
+  const tenantRef = db.collection("tenants").doc(tenant.id);
+  const [appointmentSnapshot, staffSnapshot] = await Promise.all([
+    tenantRef.collection("appointments").where("startsAt", ">=", new Date(startUTC)).where("startsAt", "<=", new Date(endUTC)).orderBy("startsAt").get(),
+    tenantRef.collection("staff").where("active", "==", true).get(),
   ]);
-
-  if (error) throw error;
-  if (paymentsRes.error) throw paymentsRes.error;
-  const hasMultipleStaff = (staffCountRes.count ?? 0) > 1;
+  const appointmentsRaw = appointmentSnapshot.docs.map((doc) => {
+    const item = doc.data();
+    return { id: doc.id, starts_at: item.startsAt?.toDate?.().toISOString?.() ?? "", status: item.status, total: Number(item.total ?? 0), balance: Number(item.balance ?? 0), clients: { full_name: item.clientName ?? "" }, staff: { display_name: item.staffName ?? "", photo_url: item.staffPhoto ?? null }, appointment_items: Array.isArray(item.items) ? item.items : [] };
+  }).filter((item) => item.status === "confirmed" || item.status === "completed");
+  const paymentDocs = await Promise.all(appointmentSnapshot.docs.map((doc) => doc.ref.collection("payments").where("status", "==", "approved").get()));
+  const paymentsRes = { data: paymentDocs.flatMap((snapshot) => snapshot.docs.map((doc) => doc.data() as { method: string; amount: number })) };
+  const hasMultipleStaff = staffSnapshot.size > 1;
 
   const appointments = appointmentsRaw.map((a) => ({
     id: a.id,
