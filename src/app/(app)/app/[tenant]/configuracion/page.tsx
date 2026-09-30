@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -40,28 +40,9 @@ export default async function ConfiguracionPage({
   params,
 }: PageProps<"/app/[tenant]/configuracion">) {
   const { tenant: tenantSlug } = await params;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-
-  const [tenantRowRes, businessHoursRes, mpIntegrationRes, staffCountRes] = await Promise.all([
-    supabase.from("tenants").select("name, address, instagram_url, whatsapp_number").eq("id", tenant.id).single(),
-    supabase.from("business_hours").select("weekday, opens_at, closes_at").eq("tenant_id", tenant.id),
-    supabase
-      .from("tenant_integrations")
-      .select("status, mp_user_id")
-      .eq("tenant_id", tenant.id)
-      .eq("provider", "mercadopago")
-      .maybeSingle(),
-    supabase.from("staff").select("id", { count: "exact", head: true }).eq("tenant_id", tenant.id).eq("active", true),
-  ]);
-
-  if (tenantRowRes.error) throw tenantRowRes.error;
-  if (businessHoursRes.error) throw businessHoursRes.error;
-
-  const tenantRow = tenantRowRes.data;
-  const mpIntegration = mpIntegrationRes.data;
-  const mpConnected = mpIntegration?.status === "connected";
-  const staffCount = staffCountRes.count ?? 0;
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) return null;
+  const staffCount = (await firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get()).size;
 
   return (
     <div className="mx-auto max-w-[42rem] space-y-lg">
@@ -76,16 +57,16 @@ export default async function ConfiguracionPage({
         <BusinessInfoForm
           tenantSlug={tenantSlug}
           tenant={{
-            name: tenantRow.name,
-            address: tenantRow.address,
-            instagramUrl: tenantRow.instagram_url,
-            whatsappNumber: tenantRow.whatsapp_number,
+            name: tenant.name,
+            address: (tenant as typeof tenant & { address?: string | null }).address ?? null,
+            instagramUrl: (tenant as typeof tenant & { instagramUrl?: string | null }).instagramUrl ?? null,
+            whatsappNumber: (tenant as typeof tenant & { whatsappNumber?: string | null }).whatsappNumber ?? null,
           }}
         />
       </SectionCard>
 
       <SectionCard icon="schedule" title="Horarios de atención" description="Cuándo se puede reservar un turno.">
-        <BusinessHoursForm tenantSlug={tenantSlug} initialHours={businessHoursRes.data} />
+        <BusinessHoursForm tenantSlug={tenantSlug} initialHours={tenant.businessHours.map((hour) => ({ weekday: hour.weekday, opens_at: hour.opensAt, closes_at: hour.closesAt }))} />
       </SectionCard>
 
       <SectionCard
@@ -96,9 +77,9 @@ export default async function ConfiguracionPage({
         <DepositSettingsForm
           tenantSlug={tenantSlug}
           current={{
-            depositType: (tenant.tenant_settings?.deposit_type as "none" | "percent" | "fixed") ?? "none",
-            depositValue: tenant.tenant_settings?.deposit_value ?? 0,
-            depositMin: tenant.tenant_settings?.deposit_min ?? 0,
+            depositType: tenant.settings.depositType,
+            depositValue: tenant.settings.depositValue,
+            depositMin: tenant.settings.depositMin,
           }}
         />
       </SectionCard>
@@ -127,14 +108,14 @@ export default async function ConfiguracionPage({
           <div className="flex items-center gap-2">
             <Icon name="account_balance_wallet" className="text-[20px] text-[#00B1EA]" />
             <span className="font-label-md text-label-md text-on-surface">
-              {mpConnected ? `Conectado (${mpIntegration?.mp_user_id})` : "No conectado"}
+              No conectado
             </span>
           </div>
-          <StatusPill status={mpConnected ? "confirmed" : "draft"}>
-            {mpConnected ? "Activo" : "Pendiente"}
+          <StatusPill status="draft">
+            Pendiente
           </StatusPill>
         </div>
-        {!mpConnected && (
+        {(
           <p className="font-body-sm text-body-sm text-on-surface-variant">
             Todavía no está disponible conectar Mercado Pago desde acá — requiere dar de alta la aplicación de
             Mercado Pago de TurnCreate primero. Mientras tanto, las señas del turnero público quedan simuladas.
