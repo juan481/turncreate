@@ -1,6 +1,8 @@
 "use server";
 
-import { createClient } from "@/server/supabase/server";
+import { cookies } from "next/headers";
+import { createTenantForOwner } from "@/server/firebase/tenants";
+import { FIREBASE_SESSION_COOKIE, verifyFirebaseSession } from "@/server/firebase/session";
 
 export async function createTenantAction(formData: {
   name: string;
@@ -8,21 +10,21 @@ export async function createTenantAction(formData: {
   businessTypeId: string;
   businessHours: { weekday: number; opens_at: string; closes_at: string }[];
 }) {
-  const supabase = await createClient();
+  const sessionCookie = (await cookies()).get(FIREBASE_SESSION_COOKIE)?.value;
+  if (!sessionCookie) throw new Error("Tu sesión expiró. Iniciá sesión nuevamente.");
 
-  const { data: tenant, error } = await supabase.rpc("onboard_tenant", {
-    p_name: formData.name,
-    p_slug: formData.slug,
-    p_business_type_id: formData.businessTypeId,
-    p_business_hours: formData.businessHours,
+  const user = await verifyFirebaseSession(sessionCookie);
+  const tenant = await createTenantForOwner({
+    ownerUid: user.uid,
+    name: formData.name,
+    slug: formData.slug,
+    businessTypeId: formData.businessTypeId,
+    businessHours: formData.businessHours.map((hour) => ({
+      weekday: hour.weekday,
+      opensAt: hour.opens_at,
+      closesAt: hour.closes_at,
+    })),
   });
-
-  if (error) {
-    if (error.code === "23505") {
-      throw new Error("Esa URL de turnero ya está en uso, probá con otra");
-    }
-    throw new Error(error.message);
-  }
 
   return { slug: tenant.slug };
 }
