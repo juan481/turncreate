@@ -32,12 +32,13 @@ async function authenticatedTenant(tenantSlug: string) {
 export async function createService(tenantSlug: string, _prevState: ServiceActionState, formData: FormData): Promise<ServiceActionState> {
   const input = parseService(formData);
   if (!("data" in input)) return { error: input.error };
+  const data = input.data!;
   try {
     const { tenant } = await authenticatedTenant(tenantSlug);
     const serviceRef = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc();
     await serviceRef.create({
-      id: serviceRef.id, tenantId: tenant.id, name: input.data.name, price: input.data.price,
-      bufferAfterMin: input.data.bufferAfterMin, phases: input.data.phases.map((phase, index) => ({ ...phase, position: index + 1 })),
+      id: serviceRef.id, tenantId: tenant.id, name: data.name, price: data.price,
+      bufferAfterMin: data.bufferAfterMin, phases: data.phases.map((phase, index) => ({ ...phase, position: index + 1 })),
       active: true, sort: Date.now(), archivedAt: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     });
     revalidatePath(`/app/${tenantSlug}/servicios`);
@@ -48,11 +49,12 @@ export async function createService(tenantSlug: string, _prevState: ServiceActio
 export async function updateService(tenantSlug: string, serviceId: string, _prevState: ServiceActionState, formData: FormData): Promise<ServiceActionState> {
   const input = parseService(formData);
   if (!("data" in input)) return { error: input.error };
+  const data = input.data!;
   try {
     const { tenant } = await authenticatedTenant(tenantSlug);
     const ref = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc(serviceId);
     if (!(await ref.get()).exists) return { error: "El servicio no existe" };
-    await ref.update({ name: input.data.name, price: input.data.price, bufferAfterMin: input.data.bufferAfterMin, phases: input.data.phases.map((phase, index) => ({ ...phase, position: index + 1 })), updatedAt: FieldValue.serverTimestamp() });
+    await ref.update({ name: data.name, price: data.price, bufferAfterMin: data.bufferAfterMin, phases: data.phases.map((phase, index) => ({ ...phase, position: index + 1 })), updatedAt: FieldValue.serverTimestamp() });
     revalidatePath(`/app/${tenantSlug}/servicios`); revalidatePath(`/app/${tenantSlug}/servicios/${serviceId}`);
     return { error: null };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo actualizar el servicio" }; }
