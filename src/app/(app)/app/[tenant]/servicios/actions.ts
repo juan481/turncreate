@@ -1,168 +1,73 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { FieldValue } from "firebase-admin/firestore";
 import { createServiceSchema } from "@/lib/schemas/service";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
+import { requireTenantAccess } from "@/server/firebase/tenants";
 
 export type ServiceActionState = { error: string | null };
 
-export async function createService(
-  tenantSlug: string,
-  _prevState: ServiceActionState,
-  formData: FormData,
-): Promise<ServiceActionState> {
-  const phasesRaw = formData.get("phases");
+function parseService(formData: FormData) {
   let phases: unknown = [];
   try {
-    phases = JSON.parse(typeof phasesRaw === "string" ? phasesRaw : "[]");
+    phases = JSON.parse(typeof formData.get("phases") === "string" ? String(formData.get("phases")) : "[]");
   } catch {
-    return { error: "Las fases no se pudieron leer, probá de nuevo" };
+    return { error: "Las fases no se pudieron leer, probá de nuevo" } as const;
   }
-
   const parsed = createServiceSchema.safeParse({
-    name: formData.get("name"),
-    price: formData.get("price"),
-    bufferAfterMin: formData.get("bufferAfterMin") || 0,
-    phases,
+    name: formData.get("name"), price: formData.get("price"),
+    bufferAfterMin: formData.get("bufferAfterMin") || 0, phases,
   });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
-  }
-
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-
-  const { data: service, error: serviceError } = await supabase
-    .from("services")
-    .insert({
-      tenant_id: tenant.id,
-      name: parsed.data.name,
-      price: parsed.data.price,
-      buffer_after_min: parsed.data.bufferAfterMin,
-    })
-    .select("id")
-    .single();
-
-  if (serviceError) {
-    return { error: serviceError.message };
-  }
-
-  const { error: phaseError } = await supabase.from("service_phases").insert(
-    parsed.data.phases.map((phase, index) => ({
-      service_id: service.id,
-      position: index + 1,
-      kind: phase.kind,
-      minutes: phase.minutes,
-    })),
-  );
-
-  if (phaseError) {
-    // Sin esto, un fallo acá deja un servicio sin fases (duración 0,
-    // invisible para el motor de disponibilidad pero visible en la lista).
-    await supabase.from("services").delete().eq("id", service.id);
-    return { error: phaseError.message };
-  }
-
-  revalidatePath(`/app/${tenantSlug}/servicios`);
-  return { error: null };
+  return parsed.success ? { data: parsed.data } : { error: parsed.error.issues[0]?.message ?? "Datos inválidos" } as const;
 }
 
-export async function updateService(
-  tenantSlug: string,
-  serviceId: string,
-  _prevState: ServiceActionState,
-  formData: FormData,
-): Promise<ServiceActionState> {
-  const phasesRaw = formData.get("phases");
-  let phases: unknown = [];
+async function authenticatedTenant(tenantSlug: string) {
+  const user = await getCurrentFirebaseUser();
+  if (!user) throw new Error("Tu sesión venció. Volvé a iniciar sesión.");
+  return requireTenantAccess(user.uid, tenantSlug);
+}
+
+export async function createService(tenantSlug: string, _prevState: ServiceActionState, formData: FormData): Promise<ServiceActionState> {
+  const input = parseService(formData);
+  if (!("data" in input)) return { error: input.error };
   try {
-    phases = JSON.parse(typeof phasesRaw === "string" ? phasesRaw : "[]");
-  } catch {
-    return { error: "Las fases no se pudieron leer, probá de nuevo" };
-  }
+    const { tenant } = await authenticatedTenant(tenantSlug);
+    const serviceRef = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc();
+    await serviceRef.create({
+      id: serviceRef.id, tenantId: tenant.id, name: input.data.name, price: input.data.price,
+      bufferAfterMin: input.data.bufferAfterMin, phases: input.data.phases.map((phase, index) => ({ ...phase, position: index + 1 })),
+      active: true, sort: Date.now(), archivedAt: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    revalidatePath(`/app/${tenantSlug}/servicios`);
+    return { error: null };
+  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo crear el servicio" }; }
+}
 
-  const parsed = createServiceSchema.safeParse({
-    name: formData.get("name"),
-    price: formData.get("price"),
-    bufferAfterMin: formData.get("bufferAfterMin") || 0,
-    phases,
-  });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
-  }
-
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-
-  const { error: serviceError } = await supabase
-    .from("services")
-    .update({
-      name: parsed.data.name,
-      price: parsed.data.price,
-      buffer_after_min: parsed.data.bufferAfterMin,
-    })
-    .eq("id", serviceId)
-    .eq("tenant_id", tenant.id);
-
-  if (serviceError) {
-    return { error: serviceError.message };
-  }
-
-  // Simplificación intencional: se pisan todas las fases en vez de
-  // diffear -- un servicio no tiene tantas fases como para que importe,
-  // y así se evita reconciliar altas/bajas/reordenamientos.
-  const { error: deleteError } = await supabase.from("service_phases").delete().eq("service_id", serviceId);
-  if (deleteError) {
-    return { error: deleteError.message };
-  }
-
-  const { error: phaseError } = await supabase.from("service_phases").insert(
-    parsed.data.phases.map((phase, index) => ({
-      service_id: serviceId,
-      position: index + 1,
-      kind: phase.kind,
-      minutes: phase.minutes,
-    })),
-  );
-
-  if (phaseError) {
-    return { error: phaseError.message };
-  }
-
-  revalidatePath(`/app/${tenantSlug}/servicios`);
-  return { error: null };
+export async function updateService(tenantSlug: string, serviceId: string, _prevState: ServiceActionState, formData: FormData): Promise<ServiceActionState> {
+  const input = parseService(formData);
+  if (!("data" in input)) return { error: input.error };
+  try {
+    const { tenant } = await authenticatedTenant(tenantSlug);
+    const ref = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc(serviceId);
+    if (!(await ref.get()).exists) return { error: "El servicio no existe" };
+    await ref.update({ name: input.data.name, price: input.data.price, bufferAfterMin: input.data.bufferAfterMin, phases: input.data.phases.map((phase, index) => ({ ...phase, position: index + 1 })), updatedAt: FieldValue.serverTimestamp() });
+    revalidatePath(`/app/${tenantSlug}/servicios`); revalidatePath(`/app/${tenantSlug}/servicios/${serviceId}`);
+    return { error: null };
+  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo actualizar el servicio" }; }
 }
 
 export async function setServiceActive(tenantSlug: string, serviceId: string, active: boolean) {
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-
-  const { error } = await supabase
-    .from("services")
-    .update({ active })
-    .eq("id", serviceId)
-    .eq("tenant_id", tenant.id);
-
-  if (error) return { error: error.message };
-
-  revalidatePath(`/app/${tenantSlug}/servicios`);
-  return { error: null };
+  try {
+    const { tenant } = await authenticatedTenant(tenantSlug);
+    await firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc(serviceId).update({ active, updatedAt: FieldValue.serverTimestamp() });
+    revalidatePath(`/app/${tenantSlug}/servicios`); return { error: null };
+  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo actualizar el servicio" }; }
 }
 
 export async function archiveService(tenantSlug: string, serviceId: string) {
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-
-  const { error } = await supabase
-    .from("services")
-    .update({ archived_at: new Date().toISOString(), active: false })
-    .eq("id", serviceId)
-    .eq("tenant_id", tenant.id);
-
-  if (error) return { error: error.message };
-
+  const { tenant } = await authenticatedTenant(tenantSlug);
+  await firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc(serviceId).update({ active: false, archivedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   revalidatePath(`/app/${tenantSlug}/servicios`);
 }

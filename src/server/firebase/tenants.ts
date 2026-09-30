@@ -124,3 +124,11 @@ export async function getTenantMember(uid: string, tenantId: string) {
   const member = await db.collection("tenants").doc(tenantId).collection("members").doc(uid).get();
   return member.exists ? member.data() : null;
 }
+
+export async function requireTenantAccess(uid: string, slug: string) {
+  const tenant = await getTenantBySlugFromFirebase(slug);
+  if (!tenant) throw new Error("El local no existe");
+  const member = await getTenantMember(uid, tenant.id);
+  if (!member || member.status !== "active") throw new Error("No tenés acceso a este local");
+  return { tenant, member };
+}
