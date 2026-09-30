@@ -99,3 +99,28 @@ export async function getTenantBySlugFromFirebase(slug: string) {
   if (!tenantSnapshot.exists) return null;
   return tenantSnapshot.data() as TenantRecord & { createdAt?: Timestamp };
 }
+
+export async function getTenantMembershipsForUser(uid: string) {
+  const { db } = firebaseAdmin();
+  const memberships = await db.collection("users").doc(uid).collection("memberships")
+    .where("status", "==", "active")
+    .get();
+
+  const options = await Promise.all(memberships.docs.map(async (membership) => {
+    const data = membership.data();
+    const tenantId = data.tenantId;
+    if (typeof tenantId !== "string") return null;
+    const tenant = await db.collection("tenants").doc(tenantId).get();
+    if (!tenant.exists) return null;
+    const tenantData = tenant.data() as TenantRecord;
+    return { id: tenantId, name: tenantData.name, slug: tenantData.slug, role: data.role as string };
+  }));
+
+  return options.filter((option): option is NonNullable<typeof option> => option !== null);
+}
+
+export async function getTenantMember(uid: string, tenantId: string) {
+  const { db } = firebaseAdmin();
+  const member = await db.collection("tenants").doc(tenantId).collection("members").doc(uid).get();
+  return member.exists ? member.data() : null;
+}

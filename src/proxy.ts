@@ -1,50 +1,21 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED_PREFIXES = ["/app", "/platform"];
+const FIREBASE_SESSION_COOKIE = "turncreate_session";
 
-export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
-        },
-      },
-    },
-  );
-
-  // Refresca la sesión (necesario en cada request: los Server Components
-  // no pueden escribir cookies, así que el refresh vive acá).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isProtected = PROTECTED_PREFIXES.some((prefix) =>
-    pathname.startsWith(prefix),
-  );
+  const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-  if (isProtected && !user) {
+  // La firma y revocaciÃ³n se validan en el layout de servidor. El proxy no
+  // importa Firebase Admin: solo evita cargar rutas privadas sin una sesiÃ³n.
+  if (isProtected && !request.cookies.get(FIREBASE_SESSION_COOKIE)?.value) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  return response;
+  return NextResponse.next({ request });
 }
 
 export const config = {
