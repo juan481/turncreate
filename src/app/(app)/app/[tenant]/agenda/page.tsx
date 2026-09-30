@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
+import { format } from "date-fns";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
 import { timeToMinutes, instantToMinutes } from "@/server/availability";
@@ -22,7 +23,7 @@ export default async function AgendaPage({
   const tenant = await getTenantBySlug(supabase, tenantSlug);
 
   const now = new TZDate(new Date(), tenant.timezone);
-  const todayISO = now.toISOString().slice(0, 10);
+  const todayISO = format(now, "yyyy-MM-dd");
   const dateISO = typeof date === "string" ? date : todayISO;
   const nowMinute = dateISO === todayISO ? now.getHours() * 60 + now.getMinutes() : null;
   const weekday = new TZDate(`${dateISO}T12:00:00`, tenant.timezone).getDay();

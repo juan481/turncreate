@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { format, parseISO, addDays, startOfToday } from "date-fns";
+import { TZDate } from "@date-fns/tz";
+import { format, parseISO, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -36,7 +37,7 @@ export function BookingFlow({
 
   const [selectedService, setSelectedService] = useState<PublicService | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<string>("any");
-  const [selectedDate, setSelectedDate] = useState<string>(startOfToday().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(format(new TZDate(new Date(), timezone), "yyyy-MM-dd"));
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
@@ -214,7 +215,7 @@ export function BookingFlow({
   }
 
   if (step === 3) {
-    const dates = Array.from({ length: 14 }).map((_, i) => addDays(startOfToday(), i));
+    const dates = Array.from({ length: 14 }).map((_, i) => addDays(new TZDate(new Date(), timezone), i));
     return (
       <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
@@ -226,7 +227,7 @@ export function BookingFlow({
 
         <div className="flex gap-2 overflow-x-auto pb-2">
           {dates.map(d => {
-            const dateStr = d.toISOString().split("T")[0];
+            const dateStr = format(d, "yyyy-MM-dd");
             const active = selectedDate === dateStr;
             return (
               <button
@@ -267,7 +268,7 @@ export function BookingFlow({
                     : "border-border bg-surface hover:-translate-y-0.5 hover:bg-surface-muted hover:shadow-card",
                 )}
               >
-                {format(parseISO(slot), "HH:mm")}
+                {format(new TZDate(parseISO(slot), timezone), "HH:mm")}
               </button>
             ))
           )}
@@ -299,7 +300,7 @@ export function BookingFlow({
         <Card className="p-4 space-y-2 bg-surface-muted">
           <div className="font-label-md">{selectedService?.name}</div>
           <div className="text-on-surface-variant text-sm">
-            {format(parseISO(selectedTime!), "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })}
+            {format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })}
           </div>
         </Card>
 
@@ -361,7 +362,7 @@ export function BookingFlow({
           className="mx-auto max-w-[24rem] animate-fade-up font-body-md text-body-md text-on-surface-variant"
           style={{ animationDelay: "200ms" }}
         >
-          Te esperamos el {format(parseISO(selectedTime!), "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es })}.
+          Te esperamos el {format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es })}.
         </p>
         {confirmedData?.token && (
           <Link

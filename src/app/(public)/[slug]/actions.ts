@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/server/supabase/server";
+import { createAdminClient } from "@/server/supabase/admin";
 import {
   getServiceCombo,
   getAvailableSlotsForStaff,
@@ -66,7 +67,10 @@ export async function getAvailableSlots(
   timezone: string,
   allStaffIds: string[]
 ) {
-  const supabase = await createClient();
+  // La disponibilidad necesita consultar horarios y segmentos internos, que
+  // están protegidos por RLS. Esta acción solo devuelve slots calculados y no
+  // expone filas; la RPC de creación vuelve a validar todo en la base.
+  const supabase = createAdminClient();
   const combo = await getServiceCombo(supabase, [serviceId]);
   
   const ids = staffId === "any" ? allStaffIds : [staffId];
@@ -108,7 +112,7 @@ export async function createHold(
   timezone: string,
   rescheduleFrom?: string,
 ): Promise<PublicHold> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const combo = await getServiceCombo(supabase, [serviceId]);
 
   const startMinute = instantToMinutes(startsAtISO, timezone);

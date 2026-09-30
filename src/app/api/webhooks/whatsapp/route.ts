@@ -5,9 +5,20 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const challenge = searchParams.get("hub.challenge");
-  return new NextResponse(challenge ?? "ok");
+  const mode = searchParams.get("hub.mode");
+  const token = searchParams.get("hub.verify_token");
+  if (
+    mode !== "subscribe" ||
+    !challenge ||
+    !process.env.WHATSAPP_VERIFY_TOKEN ||
+    token !== process.env.WHATSAPP_VERIFY_TOKEN
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return new NextResponse(challenge);
 }
 
 export async function POST() {
-  return NextResponse.json({ ok: true }, { status: 200 });
+  // No aceptar eventos hasta implementar la validación HMAC de Meta.
+  return NextResponse.json({ error: "Webhook not configured" }, { status: 501 });
 }

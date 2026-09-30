@@ -35,7 +35,7 @@ export default function MarketingLayout({
     <div className="flex min-h-screen flex-col bg-canvas">
       <header className="fixed inset-x-0 top-0 z-50 px-gutter pt-3 md:px-gutter-desktop">
         <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between gap-gutter rounded-pill border border-border bg-surface-container-lowest/85 px-4 shadow-card backdrop-blur-xl md:h-[72px] md:px-xl">
-          <Link href="/" className="flex shrink-0 items-center gap-2">
+          <Link href="/landing" className="flex shrink-0 items-center gap-2">
             <Logo iconOnly className="h-8 w-auto" />
             <span className="font-headline-sm text-headline-sm tracking-tight text-on-surface">
               TurnCreate

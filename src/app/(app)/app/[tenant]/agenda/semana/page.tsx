@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
-import { addDays, startOfWeek } from "date-fns";
+import { addDays, format, startOfWeek } from "date-fns";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
 import { Card } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { ViewToggle } from "../view-toggle";
 const WEEKDAY_LABEL = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 function toISODate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return format(date, "yyyy-MM-dd");
 }
 
 export default async function AgendaSemanaPage({
@@ -50,7 +50,7 @@ export default async function AgendaSemanaPage({
 
   const countsByDay = new Map<string, Map<string, number>>();
   for (const appointment of appointmentsRes.data) {
-    const dayISO = new TZDate(new Date(appointment.starts_at), tenant.timezone).toISOString().slice(0, 10);
+    const dayISO = format(new TZDate(new Date(appointment.starts_at), tenant.timezone), "yyyy-MM-dd");
     const byStaff = countsByDay.get(dayISO) ?? new Map<string, number>();
     byStaff.set(appointment.staff_id, (byStaff.get(appointment.staff_id) ?? 0) + 1);
     countsByDay.set(dayISO, byStaff);

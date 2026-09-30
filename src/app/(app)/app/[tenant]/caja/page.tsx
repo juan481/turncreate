@@ -1,4 +1,5 @@
 import { TZDate } from "@date-fns/tz";
+import { format } from "date-fns";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
 import { CajaClient } from "./caja-client";
@@ -10,7 +11,7 @@ export default async function CajaPage({
   const supabase = await createClient();
   const tenant = await getTenantBySlug(supabase, tenantSlug);
 
-  const dateISO = new TZDate(new Date(), tenant.timezone).toISOString().slice(0, 10);
+  const dateISO = format(new TZDate(new Date(), tenant.timezone), "yyyy-MM-dd");
   const startUTC = new TZDate(`${dateISO}T00:00:00`, tenant.timezone).toISOString();
   const endUTC = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone).toISOString();
 

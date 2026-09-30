@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
+import { format } from "date-fns";
 import { createClient } from "@/server/supabase/server";
 import { getTenantBySlug } from "@/server/tenant";
 import { Card } from "@/components/ui/card";
@@ -24,7 +25,7 @@ export default async function TenantDashboardPage({
   const tenant = await getTenantBySlug(supabase, tenantSlug);
 
   const now = new TZDate(new Date(), tenant.timezone);
-  const dateISO = now.toISOString().slice(0, 10);
+  const dateISO = format(now, "yyyy-MM-dd");
   const startUTC = new TZDate(`${dateISO}T00:00:00`, tenant.timezone).toISOString();
   const endUTC = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone).toISOString();
 

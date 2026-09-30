@@ -1,4 +1,5 @@
 import { TZDate } from "@date-fns/tz";
+import { format } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   computeAvailableSlots,
@@ -203,7 +204,7 @@ export async function getAvailableSlotsForStaff(
 
   const now = params.now ?? new Date();
   const today = new TZDate(now, params.timezone);
-  const isToday = params.dateISO === today.toISOString().slice(0, 10);
+  const isToday = params.dateISO === format(today, "yyyy-MM-dd");
   const earliestStart = isToday
     ? instantToMinutes(now.toISOString(), params.timezone) + params.minNoticeMin
     : undefined;
