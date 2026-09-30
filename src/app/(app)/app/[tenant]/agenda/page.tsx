@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { timeToMinutes, instantToMinutes } from "@/server/availability";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,8 +19,8 @@ export default async function AgendaPage({
 }: PageProps<"/app/[tenant]/agenda">) {
   const { tenant: tenantSlug } = await params;
   const { date } = await searchParams;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) return null;
 
   const now = new TZDate(new Date(), tenant.timezone);
   const todayISO = format(now, "yyyy-MM-dd");
@@ -33,42 +33,20 @@ export default async function AgendaPage({
     return { startUTC: start.toISOString(), endUTC: end.toISOString() };
   })();
 
-  const [staffRes, appointmentsRes, businessHoursRes, staffServicesRes] = await Promise.all([
-    supabase
-      .from("staff")
-      .select("id, display_name, color, photo_url")
-      .eq("tenant_id", tenant.id)
-      .eq("active", true)
-      .order("display_name"),
-    supabase
-      .from("appointments")
-      .select(
-        "id, staff_id, starts_at, ends_at, status, total, balance, clients(full_name), appointment_items(name)",
-      )
-      .eq("tenant_id", tenant.id)
-      .gte("starts_at", startUTC)
-      .lte("starts_at", endUTC)
+  const { db } = firebaseAdmin();
+  const [staffSnapshot, appointmentsSnapshot] = await Promise.all([
+    db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
+    db.collection("tenants").doc(tenant.id).collection("appointments").where("startsAt", ">=", new Date(startUTC)).where("startsAt", "<=", new Date(endUTC)).get(),
       // Turnos cancelados/vencidos no ocupan lugar visual en la grilla --
       // mueven un turno por drag & drop crea uno nuevo y cancela el
       // viejo (sección 5.3); si se mostrara iría a la vez en su posición
       // vieja (cancelado) y la nueva, como si fueran dos turnos.
-      .in("status", ["pending_payment", "confirmed", "completed", "no_show"])
-      .order("starts_at"),
-    supabase
-      .from("business_hours")
-      .select("opens_at, closes_at")
-      .eq("tenant_id", tenant.id)
-      .eq("weekday", weekday),
-    supabase
-      .from("staff_services")
-      .select("staff_id, services(service_categories(name))")
-      .eq("services.tenant_id", tenant.id),
   ]);
 
-  if (staffRes.error) throw staffRes.error;
-  if (appointmentsRes.error) throw appointmentsRes.error;
-  if (businessHoursRes.error) throw businessHoursRes.error;
-  if (staffServicesRes.error) throw staffServicesRes.error;
+  const staffRes = { data: staffSnapshot.docs.map((doc) => ({ id: doc.id, display_name: doc.data().displayName, color: doc.data().color, photo_url: doc.data().photoUrl })) };
+  const appointmentsRes = { data: appointmentsSnapshot.docs.map((doc) => ({ id: doc.id, staff_id: doc.data().staffId, starts_at: doc.data().startsAt?.toDate?.().toISOString?.() ?? "", ends_at: doc.data().endsAt?.toDate?.().toISOString?.() ?? "", status: doc.data().status, total: doc.data().total, balance: doc.data().balance, clients: { full_name: doc.data().clientName }, appointment_items: doc.data().items ?? [] })) };
+  const businessHoursRes = { data: tenant.businessHours.filter((hour) => hour.weekday === weekday).map((hour) => ({ opens_at: hour.opensAt, closes_at: hour.closesAt })) };
+  const staffServicesRes = { data: [] as { staff_id: string; services?: { service_categories?: { name?: string } } }[] };
 
   // Especialidad mostrada en cada columna: se deriva de las categorías de
   // los servicios que la persona atiende (staff_services), no es un campo
@@ -105,7 +83,7 @@ export default async function AgendaPage({
     endMinute: instantToMinutes(a.ends_at, tenant.timezone),
     status: a.status,
     clientName: a.clients?.full_name ?? "",
-    serviceNames: a.appointment_items.map((i) => i.name).join(", "),
+    serviceNames: a.appointment_items.map((i: { name?: string }) => i.name ?? "").join(", "),
     total: Number(a.total),
     balance: Number(a.balance),
   }));
@@ -154,7 +132,7 @@ export default async function AgendaPage({
           dateISO={dateISO}
           dayStartMinute={opensAt}
           dayEndMinute={closesAt}
-          slotIntervalMin={tenant.tenant_settings?.slot_interval_min ?? 15}
+          slotIntervalMin={tenant.settings.slotIntervalMin ?? 15}
           staff={staff}
           appointments={appointments}
           nowMinute={nowMinute}
