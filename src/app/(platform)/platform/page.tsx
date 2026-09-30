@@ -1,22 +1,11 @@
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { createAdminClient } from "@/server/supabase/admin";
+import { firebaseAdmin } from "@/server/firebase/admin";
 import { TenantsClient } from "./tenants-client";
 
 export default async function PlatformDashboardPage() {
-  const supabase = createAdminClient();
-  
-  // Fetch tenants bypassing RLS
-  const { data: tenants, error } = await supabase
-    .from("tenants")
-    .select("id, name, slug, status, created_at")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching tenants:", error);
-  }
-
-  const tenantsList = tenants || [];
+  const snapshot = await firebaseAdmin().db.collection("tenants").orderBy("createdAt", "desc").get();
+  const tenantsList = snapshot.docs.map((doc) => ({ id: doc.id, name: String(doc.data().name ?? ""), slug: String(doc.data().slug ?? ""), status: String(doc.data().status ?? "trial"), created_at: doc.data().createdAt?.toDate?.().toISOString?.() ?? "" }));
   const activeTenants = tenantsList.filter(t => t.status === "active").length;
   // Simulated MRR: Active tenants * 50
   const mrr = activeTenants * 50;
