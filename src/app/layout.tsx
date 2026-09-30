@@ -8,13 +8,42 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   weight: ["400", "500", "600", "700"],
 });
 
+const SITE_URL = "https://turn.justcreate.com.ar";
+const DESCRIPTION =
+  "Turnos online, CRM de clientes y caja para barberías, salones y centros de estética. Reservá en minutos y gestioná tu local desde un solo lugar.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "TurnCreate",
     template: "%s · TurnCreate",
   },
-  description:
-    "Turnos, CRM y caja para barberías, salones y centros de estética.",
+  description: DESCRIPTION,
+  keywords: [
+    "turnos online",
+    "reserva de turnos",
+    "CRM barbería",
+    "software para peluquerías",
+    "sistema de turnos Argentina",
+    "agenda para salones de belleza",
+  ],
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    url: SITE_URL,
+    siteName: "TurnCreate",
+    title: "TurnCreate — Turnos, CRM y caja para tu local",
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TurnCreate — Turnos, CRM y caja para tu local",
+    description: DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

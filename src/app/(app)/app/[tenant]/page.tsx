@@ -41,7 +41,8 @@ export default async function TenantDashboardPage({
   }).filter((item) => item.status === "confirmed" || item.status === "completed");
   const paymentDocs = await Promise.all(appointmentSnapshot.docs.map((doc) => doc.ref.collection("payments").where("status", "==", "approved").get()));
   const paymentsRes = { data: paymentDocs.flatMap((snapshot) => snapshot.docs.map((doc) => doc.data() as { method: string; amount: number })) };
-  const hasMultipleStaff = staffSnapshot.size > 1;
+  const totalStaff = staffSnapshot.size;
+  const hasMultipleStaff = totalStaff > 1;
 
   const appointments = appointmentsRaw.map((a) => ({
     id: a.id,
@@ -103,6 +104,18 @@ export default async function TenantDashboardPage({
             Hoy en {tenant.name}
           </h1>
           <p className="font-body-sm text-body-sm text-on-surface-variant">{dayLabel}</p>
+          <div className="mt-2 flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant">
+            <Icon name={hasMultipleStaff ? "groups" : "person"} className="text-[16px] text-secondary" />
+            {hasMultipleStaff ? (
+              <span>
+                <strong className="text-on-surface">Local de equipo</strong> ({totalStaff} profesionales) — por eso tu agenda se ve en grilla, con una columna por profesional.
+              </span>
+            ) : (
+              <span>
+                <strong className="text-on-surface">Local individual</strong> — por eso tu agenda se ve como una lista simple, sin columnas por profesional.
+              </span>
+            )}
+          </div>
         </div>
         <Link href={`/app/${tenantSlug}/agenda/nuevo`} className={buttonVariants({ size: "default" })}>
           <Icon name="add" className="text-[18px]" />
