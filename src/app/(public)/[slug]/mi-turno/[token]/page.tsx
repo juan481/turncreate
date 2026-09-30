@@ -1,33 +1,25 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/server/supabase/server";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
 import { cancelAppointmentAction } from "./actions";
-import type { MiTurnoResult } from "../../types";
 
 export default async function MiTurnoPage({
   params,
 }: PageProps<"/[slug]/mi-turno/[token]">) {
   const { slug, token } = await params;
-  const supabase = await createClient();
-
-  const { data, error } = await supabase.rpc("get_appointment_by_token", {
-    p_token: token,
-  });
-
-  if (error || !data) {
-    notFound();
-  }
-
-  const result = data as unknown as MiTurnoResult;
-  const { appointment, client, staff, tenant, items } = result;
-
-  if (tenant.slug !== slug) {
-    notFound();
-  }
+  const tenant = await getTenantBySlugFromFirebase(slug);
+  const result = await firebaseAdmin().db.collectionGroup("appointments").where("token", "==", token).limit(1).get();
+  if (!tenant || result.empty || result.docs[0].data().tenantId !== tenant.id) notFound();
+  const data = result.docs[0].data();
+  const appointment = { id: result.docs[0].id, status: String(data.status), starts_at: data.startsAt?.toDate?.().toISOString?.() ?? "", ends_at: data.endsAt?.toDate?.().toISOString?.() ?? "", total: Number(data.total ?? 0), balance: Number(data.balance ?? 0) };
+  const client = { full_name: String(data.clientName ?? "") };
+  const staff = { display_name: String(data.staffName ?? "") };
+  const items: { id: string; name: string; price: number }[] = (data.items ?? []).map((item: { name?: string; price?: number }, index: number) => ({ id: String(index), name: item.name ?? "Servicio", price: Number(item.price ?? data.total ?? 0) }));
 
   const isFuture = new Date(appointment.starts_at) > new Date();
   const canCancel = isFuture && (appointment.status === "confirmed" || appointment.status === "pending_payment");
