@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
 import { addDays, format, startOfWeek } from "date-fns";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { Card } from "@/components/ui/card";
 import { ViewToggle } from "../view-toggle";
 
@@ -18,41 +18,40 @@ export default async function AgendaSemanaPage({
 }: PageProps<"/app/[tenant]/agenda/semana">) {
   const { tenant: tenantSlug } = await params;
   const { date } = await searchParams;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) return null;
 
   const referenceDate =
     typeof date === "string" ? new Date(`${date}T12:00:00`) : new TZDate(new Date(), tenant.timezone);
   const weekStart = startOfWeek(referenceDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const weekStartUTC = new TZDate(`${toISODate(weekStart)}T00:00:00`, tenant.timezone).toISOString();
-  const weekEndUTC = new TZDate(
-    `${toISODate(addDays(weekStart, 6))}T23:59:59.999`,
-    tenant.timezone,
-  ).toISOString();
+  const weekStartUTC = new Date(new TZDate(`${toISODate(weekStart)}T00:00:00`, tenant.timezone).toISOString());
+  const weekEndUTC = new Date(
+    new TZDate(`${toISODate(addDays(weekStart, 6))}T23:59:59.999`, tenant.timezone).toISOString(),
+  );
 
-  const [staffRes, appointmentsRes] = await Promise.all([
-    supabase.from("staff").select("id, display_name, color").eq("tenant_id", tenant.id).eq("active", true),
-    supabase
-      .from("appointments")
-      .select("id, staff_id, starts_at, status")
-      .eq("tenant_id", tenant.id)
-      .gte("starts_at", weekStartUTC)
-      .lte("starts_at", weekEndUTC)
-      .neq("status", "cancelled"),
+  const { db } = firebaseAdmin();
+  const [staffSnapshot, appointmentsSnapshot] = await Promise.all([
+    db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
+    db
+      .collection("tenants")
+      .doc(tenant.id)
+      .collection("appointments")
+      .where("startsAt", ">=", weekStartUTC)
+      .where("startsAt", "<=", weekEndUTC)
+      .get(),
   ]);
 
-  if (staffRes.error) throw staffRes.error;
-  if (appointmentsRes.error) throw appointmentsRes.error;
-
-  const staffById = new Map(staffRes.data.map((s) => [s.id, s]));
+  const staffById = new Map(staffSnapshot.docs.map((doc) => [doc.id, { displayName: String(doc.data().displayName), color: doc.data().color as string | undefined }]));
 
   const countsByDay = new Map<string, Map<string, number>>();
-  for (const appointment of appointmentsRes.data) {
-    const dayISO = format(new TZDate(new Date(appointment.starts_at), tenant.timezone), "yyyy-MM-dd");
+  for (const doc of appointmentsSnapshot.docs) {
+    const data = doc.data();
+    if (data.status === "cancelled") continue;
+    const dayISO = format(new TZDate(data.startsAt.toDate(), tenant.timezone), "yyyy-MM-dd");
     const byStaff = countsByDay.get(dayISO) ?? new Map<string, number>();
-    byStaff.set(appointment.staff_id, (byStaff.get(appointment.staff_id) ?? 0) + 1);
+    byStaff.set(data.staffId, (byStaff.get(data.staffId) ?? 0) + 1);
     countsByDay.set(dayISO, byStaff);
   }
 
@@ -97,7 +96,7 @@ export default async function AgendaSemanaPage({
                           style={{ backgroundColor: staff?.color ?? "#767582" }}
                         />
                         <span className="font-body-sm text-body-sm text-on-surface-variant">
-                          {staff?.display_name} ({count})
+                          {staff?.displayName} ({count})
                         </span>
                       </div>
                     );

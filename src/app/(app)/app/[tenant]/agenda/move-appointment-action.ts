@@ -1,81 +1,57 @@
 "use server";
 
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
-import { computeSegmentInstants, minutesToInstant } from "@/server/availability";
-import { computeTotalDuration, type Phase } from "@/domain/availability";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { minutesToInstant } from "@/server/availability";
+import { createInternalAppointment } from "@/server/firebase/booking";
 
 export type MoveAppointmentResult = { error: string | null };
 
 /**
  * Mueve un turno por drag & drop en la grilla. Sección 5.3: cambiar el
  * horario de un turno confirmado es una reprogramación (turno nuevo +
- * cancelar el original con historial), no un UPDATE directo de
- * starts_at/staff_id -- reusa exactamente el mismo mecanismo que el
- * botón "Reprogramar" de la ficha de turno.
+ * cancelar el original con historial), no un update directo de
+ * startsAt/staffId -- reusa exactamente el mismo mecanismo (createInternalAppointment
+ * con rescheduledFromId) que el botón "Reprogramar" de la ficha de turno.
  */
 export async function moveAppointment(
   tenantSlug: string,
   params: { appointmentId: string; newStaffId: string; newStartMinute: number; dateISO: string },
 ): Promise<MoveAppointmentResult> {
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) return { error: "El local no existe" };
 
-  const { data: appointment, error: appointmentError } = await supabase
-    .from("appointments")
-    .select("id, client_id, status, appointment_items(service_id, name, price, phases, buffer_min)")
-    .eq("id", params.appointmentId)
-    .eq("tenant_id", tenant.id)
-    .single();
+  const appointmentRef = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("appointments").doc(params.appointmentId);
+  const appointmentDoc = await appointmentRef.get();
+  if (!appointmentDoc.exists) return { error: "El turno no existe" };
+  const appointment = appointmentDoc.data()!;
 
-  if (appointmentError) {
-    return { error: appointmentError.message };
-  }
   if (appointment.status !== "confirmed" && appointment.status !== "pending_payment") {
     return { error: "Solo se pueden mover turnos pendientes o confirmados" };
   }
 
-  const items = appointment.appointment_items;
-  const phases = items.flatMap((i) => i.phases as unknown as Phase[]);
-  const bufferAfterMin = items.reduce((sum, i) => sum + i.buffer_min, 0);
-
-  const segments = computeSegmentInstants({
-    dateISO: params.dateISO,
-    startMinute: params.newStartMinute,
-    combo: { phases, bufferAfterMin, totalPrice: 0, items: [] },
-    timezone: tenant.timezone,
-  });
-
-  if (segments.length === 0) {
-    return { error: "No se pudo calcular el nuevo horario" };
-  }
+  const items = (appointment.items ?? []) as { serviceId: string; name: string; price: number }[];
+  const serviceId = items[0]?.serviceId;
+  if (!serviceId) return { error: "No se pudo determinar el servicio del turno" };
 
   const startsAt = minutesToInstant(params.dateISO, params.newStartMinute, tenant.timezone);
-  const totalDuration = computeTotalDuration(phases, bufferAfterMin);
-  const endsAt = minutesToInstant(params.dateISO, params.newStartMinute + totalDuration, tenant.timezone);
 
-  const { error } = await supabase.rpc("create_staff_appointment", {
-    p_tenant_id: tenant.id,
-    p_staff_id: params.newStaffId,
-    p_client_id: appointment.client_id,
-    p_starts_at: startsAt.toISOString(),
-    p_ends_at: endsAt.toISOString(),
-    p_items: items.map((item) => ({
-      service_id: item.service_id,
-      name: item.name,
-      price: item.price,
-      phases: item.phases,
-      buffer_min: item.buffer_min,
-    })),
-    p_segments: segments.map((s) => ({
-      starts_at: s.startsAt.toISOString(),
-      ends_at: s.endsAt.toISOString(),
-    })),
-    p_rescheduled_from_id: params.appointmentId,
-  });
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await createInternalAppointment({
+      tenantId: tenant.id,
+      tenant,
+      serviceId,
+      staffId: params.newStaffId,
+      startsAtISO: startsAt.toISOString(),
+      clientId: String(appointment.clientId),
+      clientName: String(appointment.clientName),
+      clientPhone: String(appointment.clientPhone),
+      clientEmail: appointment.clientEmail ?? null,
+      depositAmount: Number(appointment.depositPaid ?? 0),
+      rescheduledFromId: params.appointmentId,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo mover el turno" };
   }
 
   return { error: null };

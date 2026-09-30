@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { TZDate } from "@date-fns/tz";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
 import { Avatar } from "@/components/ui/avatar";
@@ -18,8 +19,8 @@ const STATUS_LABEL: Record<string, { label: string; pill: StatusPillStatus }> = 
   expired: { label: "Vencido", pill: "alert" },
 };
 
-function formatHour(instant: string, timezone: string) {
-  const zoned = new TZDate(new Date(instant), timezone);
+function formatHour(instant: Date, timezone: string) {
+  const zoned = new TZDate(instant, timezone);
   return `${zoned.getHours().toString().padStart(2, "0")}:${zoned.getMinutes().toString().padStart(2, "0")}`;
 }
 
@@ -27,36 +28,34 @@ export default async function AppointmentDetailPage({
   params,
 }: PageProps<"/app/[tenant]/agenda/[appointmentId]">) {
   const { tenant: tenantSlug, appointmentId } = await params;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) notFound();
 
-  const { data: appointment, error } = await supabase
-    .from("appointments")
-    .select(
-      `id, status, starts_at, ends_at, total, deposit_paid, balance, cancel_reason,
-       clients(id, full_name, phone_e164), staff(display_name, photo_url),
-       appointment_items(name, price)`,
-    )
-    .eq("id", appointmentId)
-    .eq("tenant_id", tenant.id)
-    .single();
+  const { db } = firebaseAdmin();
+  const appointmentDoc = await db.collection("tenants").doc(tenant.id).collection("appointments").doc(appointmentId).get();
+  if (!appointmentDoc.exists) notFound();
+  const appointment = appointmentDoc.data()!;
 
-  if (error) throw error;
+  const [staffDoc] = await Promise.all([
+    db.collection("tenants").doc(tenant.id).collection("staff").doc(appointment.staffId).get(),
+  ]);
+  const staff = staffDoc.data();
 
-  const dateISO = appointment.starts_at.slice(0, 10);
+  const startsAt: Date = appointment.startsAt.toDate();
+  const endsAt: Date = appointment.endsAt.toDate();
+  const dateISO = new TZDate(startsAt, tenant.timezone).toISOString().slice(0, 10);
   const status = STATUS_LABEL[appointment.status] ?? {
     label: appointment.status,
     pill: "pending" as StatusPillStatus,
   };
-  const clientName = appointment.clients?.full_name ?? "";
-  const phone = appointment.clients?.phone_e164 ?? "";
+  const clientName = String(appointment.clientName ?? "");
+  const phone = String(appointment.clientPhone ?? "");
   const waLink = phone ? `https://wa.me/${phone.replace(/\D/g, "")}` : null;
   const total = Number(appointment.total);
-  const depositPaid = Number(appointment.deposit_paid);
+  const depositPaid = Number(appointment.depositPaid ?? 0);
   const balance = Number(appointment.balance);
-  const durationMin = Math.round(
-    (new Date(appointment.ends_at).getTime() - new Date(appointment.starts_at).getTime()) / 60000,
-  );
+  const durationMin = Math.round((endsAt.getTime() - startsAt.getTime()) / 60000);
+  const items = (appointment.items ?? []) as { name: string }[];
 
   return (
     <div className="mx-auto max-w-[32rem] space-y-lg">
@@ -72,7 +71,7 @@ export default async function AppointmentDetailPage({
         <div className="flex items-center justify-between">
           <div>
             <span className="font-label-sm text-label-sm text-on-surface-variant">
-              {formatHour(appointment.starts_at, tenant.timezone)} - {formatHour(appointment.ends_at, tenant.timezone)} hs
+              {formatHour(startsAt, tenant.timezone)} - {formatHour(endsAt, tenant.timezone)} hs
             </span>
             <h1 className="font-headline-sm text-headline-sm text-on-surface">Detalle de Turno</h1>
           </div>
@@ -94,7 +93,7 @@ export default async function AppointmentDetailPage({
           <div className="flex items-center gap-md">
             <Avatar name={clientName} size="lg" />
             <Link
-              href={`/app/${tenantSlug}/clientes/${appointment.clients?.id}`}
+              href={`/app/${tenantSlug}/clientes/${appointment.clientId}`}
               className="font-headline-sm text-headline-sm text-on-surface hover:underline"
             >
               {clientName}
@@ -125,16 +124,16 @@ export default async function AppointmentDetailPage({
           <div className="flex flex-col gap-1 rounded-inner bg-surface-container-low p-md">
             <span className="font-label-sm text-label-sm text-on-surface-variant">Servicio</span>
             <span className="font-label-lg text-label-lg leading-snug text-on-surface">
-              {appointment.appointment_items.map((i) => i.name).join(", ")}
+              {items.map((i) => i.name).join(", ")}
             </span>
             <span className="mt-1 font-body-sm text-body-sm text-on-surface-variant">{durationMin} min</span>
           </div>
           <div className="flex flex-col gap-1 rounded-inner bg-surface-container-low p-md">
             <span className="font-label-sm text-label-sm text-on-surface-variant">Especialista</span>
             <div className="mt-0.5 flex items-center gap-1.5">
-              <Avatar name={appointment.staff?.display_name ?? ""} src={appointment.staff?.photo_url} size="sm" />
+              <Avatar name={String(staff?.displayName ?? "")} src={staff?.photoUrl ?? null} size="sm" />
               <span className="truncate font-label-lg text-label-lg text-on-surface">
-                {appointment.staff?.display_name}
+                {staff?.displayName}
               </span>
             </div>
           </div>
@@ -168,15 +167,15 @@ export default async function AppointmentDetailPage({
           </div>
         </div>
 
-        {appointment.cancel_reason && (
+        {appointment.cancelReason && (
           <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Motivo: {appointment.cancel_reason}
+            Motivo: {appointment.cancelReason}
           </p>
         )}
 
         <StatusActions
           tenantSlug={tenantSlug}
-          appointmentId={appointment.id}
+          appointmentId={appointmentDoc.id}
           dateISO={dateISO}
           status={appointment.status}
         />
@@ -184,8 +183,8 @@ export default async function AppointmentDetailPage({
         {(appointment.status === "confirmed" || appointment.status === "pending_payment") && (
           <RescheduleButton
             tenantSlug={tenantSlug}
-            appointmentId={appointment.id}
-            clientId={appointment.clients?.id ?? ""}
+            appointmentId={appointmentDoc.id}
+            clientId={String(appointment.clientId ?? "")}
             depositPaid={depositPaid}
           />
         )}

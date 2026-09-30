@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import type { AppNotification } from "@/server/notifications";
+
+type AppNotification = { id: string; icon: string; color: string; title: string; detail: string; at: string };
 
 function timeAgo(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();

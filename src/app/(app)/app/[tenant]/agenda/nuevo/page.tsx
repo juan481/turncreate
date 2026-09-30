@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
-import { getAvailableSlotsForStaff, getServiceCombo, getStaffIdsForService } from "@/server/availability";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { listAvailableStarts } from "@/server/firebase/booking";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ClientField } from "./client-field";
@@ -19,8 +19,8 @@ export default async function NuevoTurnoPage({
 }: PageProps<"/app/[tenant]/agenda/nuevo">) {
   const { tenant: tenantSlug } = await params;
   const sp = await searchParams;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) return null;
 
   const dateISO =
     typeof sp.date === "string" ? sp.date : new TZDate(new Date(), tenant.timezone).toISOString().slice(0, 10);
@@ -29,77 +29,39 @@ export default async function NuevoTurnoPage({
   const rescheduleFrom = typeof sp.rescheduleFrom === "string" ? sp.rescheduleFrom : undefined;
   const keepDeposit = sp.keepDeposit !== "false";
 
-  const [staffRes, servicesRes, clientsRes] = await Promise.all([
-    supabase.from("staff").select("id, display_name").eq("tenant_id", tenant.id).eq("active", true),
-    supabase.from("services").select("id, name, price").eq("tenant_id", tenant.id).eq("active", true),
-    supabase.from("clients").select("id, full_name").eq("tenant_id", tenant.id).is("archived_at", null),
+  const { db } = firebaseAdmin();
+  const [staffSnapshot, servicesSnapshot, clientsSnapshot] = await Promise.all([
+    db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
+    db.collection("tenants").doc(tenant.id).collection("services").where("active", "==", true).get(),
+    db.collection("tenants").doc(tenant.id).collection("clients").where("archivedAt", "==", null).get(),
   ]);
 
-  if (staffRes.error) throw staffRes.error;
-  if (servicesRes.error) throw servicesRes.error;
-  if (clientsRes.error) throw clientsRes.error;
+  const staffList = staffSnapshot.docs.map((doc) => ({ id: doc.id, displayName: String(doc.data().displayName) }));
+  const servicesList = servicesSnapshot.docs
+    .filter((doc) => !doc.data().archivedAt)
+    .map((doc) => ({ id: doc.id, name: String(doc.data().name), price: Number(doc.data().price) }));
+  const clientsList = clientsSnapshot.docs.map((doc) => ({ id: doc.id, full_name: String(doc.data().fullName) }));
 
   // Con un solo profesional activo, preguntar "¿con quién?" es ruido --
   // se asigna directo y el selector ni se muestra.
-  const soloStaffId = staffRes.data.length === 1 ? staffRes.data[0].id : undefined;
+  const soloStaffId = staffList.length === 1 ? staffList[0].id : undefined;
   const staffId = soloStaffId ?? (typeof sp.staffId === "string" ? sp.staffId : undefined);
 
-  const settings = tenant.tenant_settings;
   const slots =
     staffId && serviceId
-      ? await (async () => {
-          const combo = await getServiceCombo(supabase, [serviceId]);
-
-          if (staffId === "any") {
-            const eligibleStaffIds = await getStaffIdsForService(supabase, {
-              tenantId: tenant.id,
-              serviceId,
-            });
-            const allStaffSlots = await Promise.all(
-              eligibleStaffIds.map(async (id) => {
-                const stSlots = await getAvailableSlotsForStaff(supabase, {
-                  tenantId: tenant.id,
-                  staffId: id,
-                  dateISO,
-                  timezone: tenant.timezone,
-                  combo,
-                  slotIntervalMin: settings?.slot_interval_min ?? 15,
-                  minNoticeMin: settings?.min_notice_min ?? 60,
-                });
-                return stSlots;
-              })
-            );
-
-            const uniqueStarts = new Map<string, typeof allStaffSlots[0][0]>();
-            for (const stSlots of allStaffSlots) {
-               for (const slot of stSlots) {
-                  uniqueStarts.set(slot.startsAt.toISOString(), slot);
-               }
-            }
-            return Array.from(uniqueStarts.values()).sort((a,b) => a.startsAt.getTime() - b.startsAt.getTime());
-          }
-
-          return getAvailableSlotsForStaff(supabase, {
-            tenantId: tenant.id,
-            staffId,
-            dateISO,
-            timezone: tenant.timezone,
-            combo,
-            slotIntervalMin: settings?.slot_interval_min ?? 15,
-            minNoticeMin: settings?.min_notice_min ?? 60,
-          });
-        })()
+      ? await listAvailableStarts({ tenantId: tenant.id, tenant, serviceId, staffId, dateISO, timezone: tenant.timezone })
       : [];
 
-  const selectedService = servicesRes.data.find((s) => s.id === serviceId);
+  const selectedService = servicesList.find((s) => s.id === serviceId);
+  const settings = tenant.settings;
   const suggestedDeposit = (() => {
     if (!selectedService) return 0;
-    const price = Number(selectedService.price);
-    if (settings?.deposit_type === "percent") {
-      return Math.max(Math.round((price * settings.deposit_value) / 100), settings.deposit_min);
+    const price = selectedService.price;
+    if (settings?.depositType === "percent") {
+      return Math.max(Math.round((price * settings.depositValue) / 100), settings.depositMin);
     }
-    if (settings?.deposit_type === "fixed") {
-      return Math.max(settings.deposit_value, settings.deposit_min);
+    if (settings?.depositType === "fixed") {
+      return Math.max(settings.depositValue, settings.depositMin);
     }
     return 0;
   })();
@@ -142,7 +104,7 @@ export default async function NuevoTurnoPage({
           )}
           {soloStaffId && <input type="hidden" name="staffId" value={soloStaffId} />}
 
-          <ClientField tenantSlug={tenantSlug} clients={clientsRes.data} defaultClientId={clientId} />
+          <ClientField tenantSlug={tenantSlug} clients={clientsList} defaultClientId={clientId} />
 
           {!soloStaffId && (
             <div className="space-y-1.5">
@@ -157,9 +119,9 @@ export default async function NuevoTurnoPage({
                   Elegir…
                 </option>
                 <option value="any">Cualquiera</option>
-                {staffRes.data.map((s) => (
+                {staffList.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.display_name}
+                    {s.displayName}
                   </option>
                 ))}
               </select>
@@ -177,7 +139,7 @@ export default async function NuevoTurnoPage({
               <option value="" disabled>
                 Elegir…
               </option>
-              {servicesRes.data.map((s) => (
+              {servicesList.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -207,9 +169,9 @@ export default async function NuevoTurnoPage({
             clientId={clientId}
             serviceId={serviceId}
             dateISO={dateISO}
-            slots={slots.map((slot) => ({
-              startsAtISO: slot.startsAt.toISOString(),
-              label: formatHour(slot.startsAt, tenant.timezone),
+            slots={slots.map((startsAt) => ({
+              startsAtISO: startsAt.toISOString(),
+              label: formatHour(startsAt, tenant.timezone),
             }))}
             suggestedDeposit={suggestedDeposit}
             rescheduleFrom={rescheduleFrom}

@@ -1,7 +1,7 @@
 /**
  * Cálculo de seña de un turno (plan maestro, sección 5.4).
  * Seña = deposit_value (% o fijo), nunca menor a deposit_min.
- * No importa Next ni Supabase: función pura, testeable sin infraestructura.
+ * No importa Next ni la base de datos: función pura, testeable sin infraestructura.
  */
 export type DepositPolicy =
   | { type: "none" }

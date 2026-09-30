@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { getMonthData } from "@/server/agenda-month";
 import { ViewToggle } from "../view-toggle";
 import { RealtimeAgendaRefresh } from "../realtime-refresh";
@@ -16,14 +15,14 @@ export default async function AgendaMonthPage({
 }: PageProps<"/app/[tenant]/agenda/mes">) {
   const { tenant: tenantSlug } = await params;
   const { date } = await searchParams;
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
+  if (!tenant) return null;
 
   const now = new TZDate(new Date(), tenant.timezone);
   const todayISO = format(now, "yyyy-MM-dd");
   const dateISO = typeof date === "string" ? date : todayISO;
 
-  const initialMonth = await getMonthData(supabase, {
+  const initialMonth = await getMonthData({
     tenantId: tenant.id,
     timezone: tenant.timezone,
     monthISO: dateISO,

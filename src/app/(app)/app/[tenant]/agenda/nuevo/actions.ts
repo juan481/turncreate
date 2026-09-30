@@ -1,17 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/server/supabase/server";
-import { getTenantBySlug } from "@/server/tenant";
+import { FieldValue } from "firebase-admin/firestore";
+import { firebaseAdmin } from "@/server/firebase/admin";
+import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
+import { getTenantBySlugFromFirebase, requireTenantAccess } from "@/server/firebase/tenants";
+import { createInternalAppointment } from "@/server/firebase/booking";
 import { sendAppointmentConfirmation } from "@/server/email";
-import {
-  computeSegmentInstants,
-  getServiceCombo,
-  getStaffIdsForService,
-  instantToMinutes,
-  assignAnyStaffForSlot,
-} from "@/server/availability";
-import { computeTotalDuration } from "@/domain/availability";
 import { createClientSchema } from "@/lib/schemas/client";
 
 export type ConfirmAppointmentState = { error: string | null };
@@ -32,27 +27,38 @@ export async function createClientQuick(
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
+  try {
+    const user = await getCurrentFirebaseUser();
+    if (!user) return { error: "Tu sesión venció. Volvé a iniciar sesión." };
+    const { tenant } = await requireTenantAccess(user.uid, tenantSlug);
+    const { db } = firebaseAdmin();
+    const clientRef = db.collection("tenants").doc(tenant.id).collection("clients").doc();
+    const phoneRef = db.collection("tenantClientPhones").doc(`${tenant.id}_${parsed.data.phoneE164.replace(/[^0-9]/g, "")}`);
 
-  const { data: inserted, error } = await supabase
-    .from("clients")
-    .insert({
-      tenant_id: tenant.id,
-      full_name: parsed.data.fullName,
-      phone_e164: parsed.data.phoneE164,
-      email: parsed.data.email || null,
-    })
-    .select("id")
-    .single();
+    await db.runTransaction(async (transaction) => {
+      if ((await transaction.get(phoneRef)).exists) throw new Error("Ya existe un cliente con ese teléfono");
+      transaction.create(clientRef, {
+        id: clientRef.id,
+        tenantId: tenant.id,
+        fullName: parsed.data.fullName,
+        fullNameNormalized: parsed.data.fullName.toLocaleLowerCase("es-AR"),
+        phoneE164: parsed.data.phoneE164,
+        email: parsed.data.email || null,
+        noShowCount: 0,
+        appointmentsCount: 0,
+        totalSpent: 0,
+        lastVisitAt: null,
+        archivedAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.create(phoneRef, { tenantId: tenant.id, clientId: clientRef.id, createdAt: FieldValue.serverTimestamp() });
+    });
 
-  if (error) {
-    return {
-      error: error.code === "23505" ? "Ya existe un cliente con ese teléfono" : error.message,
-    };
+    return { id: clientRef.id };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo crear el cliente" };
   }
-
-  return { id: inserted.id };
 }
 
 export async function confirmAppointment(
@@ -66,11 +72,12 @@ export async function confirmAppointment(
   const dateISO = formData.get("date");
   const startsAtISO = formData.get("startsAt");
   const rescheduleFrom = formData.get("rescheduleFrom");
-  const keepDeposit = formData.get("keepDeposit");
+  const keepDeposit = formData.get("keepDeposit") !== "false";
   const depositAmountRaw = formData.get("depositAmount");
-  const depositMethod = formData.get("depositMethod");
+  const depositMethodRaw = formData.get("depositMethod");
   const depositAmount =
     typeof depositAmountRaw === "string" && depositAmountRaw ? Number(depositAmountRaw) : 0;
+  const depositMethod = depositMethodRaw === "cash" || depositMethodRaw === "mercadopago" ? depositMethodRaw : undefined;
 
   if (
     typeof staffId !== "string" ||
@@ -82,126 +89,69 @@ export async function confirmAppointment(
     return { error: "Faltan datos para confirmar el turno" };
   }
 
-  const supabase = await createClient();
-  const tenant = await getTenantBySlug(supabase, tenantSlug);
-  const combo = await getServiceCombo(supabase, [serviceId]);
+  const user = await getCurrentFirebaseUser();
+  if (!user) return { error: "Tu sesión venció. Volvé a iniciar sesión." };
 
-  const startMinute = instantToMinutes(startsAtISO, tenant.timezone);
+  let tenant;
+  try {
+    ({ tenant } = await requireTenantAccess(user.uid, tenantSlug));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No tenés acceso a este local" };
+  }
 
-  let finalStaffId = staffId;
-  if (staffId === "any") {
-    const eligibleStaffIds = await getStaffIdsForService(supabase, {
+  const { db } = firebaseAdmin();
+  const clientDoc = await db.collection("tenants").doc(tenant.id).collection("clients").doc(clientId).get();
+  if (!clientDoc.exists) return { error: "El cliente no existe" };
+  const client = clientDoc.data()!;
+
+  const rescheduledFromId = typeof rescheduleFrom === "string" && rescheduleFrom ? rescheduleFrom : undefined;
+  let keptDeposit = 0;
+  if (rescheduledFromId && keepDeposit) {
+    const oldDoc = await db.collection("tenants").doc(tenant.id).collection("appointments").doc(rescheduledFromId).get();
+    keptDeposit = Number(oldDoc.data()?.depositPaid ?? 0);
+  }
+
+  let created;
+  try {
+    created = await createInternalAppointment({
       tenantId: tenant.id,
+      tenant,
       serviceId,
+      staffId,
+      startsAtISO,
+      clientId,
+      clientName: String(client.fullName),
+      clientPhone: String(client.phoneE164),
+      clientEmail: client.email ?? null,
+      depositAmount: depositAmount > 0 ? depositAmount : keptDeposit,
+      depositMethod: depositAmount > 0 ? depositMethod : undefined,
+      rescheduledFromId,
     });
-    if (eligibleStaffIds.length === 0) {
-      return { error: "Ningún profesional activo tiene este servicio asignado." };
-    }
-    const assigned = await assignAnyStaffForSlot(supabase, {
-      tenantId: tenant.id,
-      dateISO,
-      timezone: tenant.timezone,
-      combo,
-      startMinute,
-      staffIds: eligibleStaffIds,
-    });
-    if (!assigned) {
-      return { error: "No hay profesionales disponibles en este horario." };
-    }
-    finalStaffId = assigned;
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo confirmar el turno" };
   }
 
-  const segments = computeSegmentInstants({ dateISO, startMinute, combo, timezone: tenant.timezone });
-
-  const startsAt = new Date(startsAtISO);
-  const totalDuration = computeTotalDuration(combo.phases, combo.bufferAfterMin);
-  const endsAt = new Date(startsAt.getTime() + totalDuration * 60_000);
-
-  const { data: created, error } = await supabase.rpc("create_staff_appointment", {
-    p_tenant_id: tenant.id,
-    p_staff_id: finalStaffId,
-    p_client_id: clientId,
-    p_starts_at: startsAt.toISOString(),
-    p_ends_at: endsAt.toISOString(),
-    p_items: [
-      {
-        service_id: serviceId,
-        name: combo.items[0].name,
-        price: combo.items[0].price,
-        phases: combo.items[0].phases,
-        buffer_min: combo.items[0].bufferAfterMin,
-      },
-    ],
-    p_segments: segments.map((s) => ({
-      starts_at: s.startsAt.toISOString(),
-      ends_at: s.endsAt.toISOString(),
-    })),
-    p_rescheduled_from_id:
-      typeof rescheduleFrom === "string" && rescheduleFrom ? rescheduleFrom : undefined,
-    p_keep_deposit: keepDeposit !== "false",
-  });
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  // Send confirmation email (fire and forget — never block the redirect on it)
+  // Envío de confirmación por mail (fire and forget -- nunca bloquea el redirect).
   void (async () => {
     try {
-      const { data: appt } = await supabase
-        .from("appointments")
-        .select("starts_at, clients(full_name, email), appointment_items(name), tenants(name, address, whatsapp_number)")
-        .eq("id", created.id)
-        .maybeSingle();
-      const clientRow = appt?.clients as { full_name: string; email?: string | null } | null;
-      const clientEmail = clientRow?.email;
-      if (appt && clientEmail) {
-        const startsAtDate = new Date(appt.starts_at);
-        const date = startsAtDate.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", timeZone: tenant.timezone });
-        const time = startsAtDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: tenant.timezone });
-        const tenantData = appt.tenants as { name: string; address?: string | null; whatsapp_number?: string | null } | null;
-        await sendAppointmentConfirmation(clientEmail, {
-          clientName: clientRow.full_name,
-          businessName: tenantData?.name ?? tenant.name,
-          serviceName: (appt.appointment_items as { name: string }[])[0]?.name ?? "Turno",
-          date,
-          time,
-          address: tenantData?.address ?? undefined,
-          whatsapp: tenantData?.whatsapp_number ?? undefined,
-        });
-      }
+      if (!client.email) return;
+      const startsAtDate = new Date(startsAtISO);
+      const date = startsAtDate.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", timeZone: tenant.timezone });
+      const time = startsAtDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: tenant.timezone });
+      const serviceDoc = await db.collection("tenants").doc(tenant.id).collection("services").doc(serviceId).get();
+      await sendAppointmentConfirmation(client.email, {
+        clientName: String(client.fullName),
+        businessName: tenant.name,
+        serviceName: String(serviceDoc.data()?.name ?? "Turno"),
+        date,
+        time,
+        address: (tenant as typeof tenant & { address?: string | null }).address ?? undefined,
+        whatsapp: (tenant as typeof tenant & { whatsappNumber?: string | null }).whatsappNumber ?? undefined,
+      });
     } catch (e) {
       console.error("[email] confirmation failed:", e);
     }
   })();
-
-  if (depositAmount > 0 && (depositMethod === "cash" || depositMethod === "mercadopago")) {
-    let cashSessionId: string | null = null;
-    if (depositMethod === "cash") {
-      const { data: session } = await supabase
-        .from("cash_sessions")
-        .select("id")
-        .eq("tenant_id", tenant.id)
-        .is("closed_at", null)
-        .maybeSingle();
-      cashSessionId = session?.id ?? null;
-    }
-
-    const { error: depositError } = await supabase.rpc("register_appointment_deposit", {
-      p_appointment_id: created.id,
-      p_amount: depositAmount,
-      p_method: depositMethod,
-      p_cash_session_id: cashSessionId ?? undefined,
-    });
-
-    if (depositError) {
-      // El turno ya se creó -- no lo perdemos por un error al cobrar la
-      // seña, solo avisamos para que se cobre después desde el detalle.
-      redirect(
-        `/app/${tenantSlug}/agenda/${created.id}?depositError=${encodeURIComponent(depositError.message)}`,
-      );
-    }
-  }
 
   redirect(`/app/${tenantSlug}/agenda?date=${dateISO}`);
 }
