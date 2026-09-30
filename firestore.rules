@@ -1,0 +1,12 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // El acceso de producción se realizará exclusivamente desde el backend
+    // autenticado con Firebase Admin. Ningún cliente puede leer credenciales
+    // de tenants ni modificar reservas directamente.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
