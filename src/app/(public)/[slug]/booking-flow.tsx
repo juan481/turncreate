@@ -97,7 +97,6 @@ export function BookingFlow({
         selectedTime,
         selectedDate,
         timezone,
-        rescheduleFrom,
       );
       setHold(h);
       setStep(4);
