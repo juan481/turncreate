@@ -33,6 +33,26 @@ Agenda interna y turnero público usan el mismo modelo Firestore:
 - Dependencias `@supabase/ssr`, `@supabase/supabase-js`, `supabase` (CLI) de
   `package.json`, y el script `db:types`.
 
+## Despliegue: el build tiene que correr en el VPS
+
+Next 16 + Turbopack resuelve los paquetes externos (como `firebase-admin`)
+con un nombre de módulo "hasheado" que depende de cómo quedó armado
+`node_modules` en la máquina donde se compiló. Si se compila en Windows y
+después se copia el `.next` a un `node_modules` instalado por separado en
+el VPS, el hash no coincide y el server tira en runtime:
+
+```
+Error: Failed to load external module firebase-admin-<hash>/firestore:
+ERR_MODULE_NOT_FOUND
+```
+
+(esto fue exactamente el "A server error occurred" que vio un usuario real
+al loguearse el 2026-09-30). La solución: `npm install` (completo, con
+devDependencies) y `npm run build` **en el propio VPS** antes de cada
+`pm2 restart turncreate`, nunca copiar un `.next` compilado en otra
+máquina. El VPS tiene recursos ajustados pero swap de sobra para
+absorberlo (`NODE_OPTIONS=--max-old-space-size=1024 npm run build`).
+
 ## Criterio de despliegue
 
 `rg -l "supabase|Supabase" src` no lista nada. `npm run typecheck`, `npm test`
