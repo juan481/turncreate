@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 type ClientRow = {
   id: string;
   full_name: string;
+  photo_url: string | null;
   phone_e164: string;
   email: string | null;
   no_show_count: number;
@@ -88,7 +89,7 @@ export function ClientsList({ tenantSlug, clients }: { tenantSlug: string; clien
             href={`/app/${tenantSlug}/clientes/${client.id}`}
             className="flex items-center gap-3 px-lg py-3 transition-colors hover:bg-surface-container-low"
           >
-            <Avatar name={client.full_name} size="md" />
+            <Avatar name={client.full_name} src={client.photo_url} size="md" />
             <div className="min-w-0 flex-1">
               <p className="truncate font-label-lg text-label-lg text-on-surface">{client.full_name}</p>
               <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
