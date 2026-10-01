@@ -64,8 +64,8 @@ async function ensureTenant(ownerUid, { name, slug, businessTypeId, businessHour
   const existing = await slugRef.get();
   if (existing.exists) {
     const tenantId = existing.data().tenantId;
-    console.log(`Tenant "${slug}" ya existía (${tenantId})`);
-    return tenantId;
+    console.log(`Tenant "${slug}" ya existía (${tenantId}) -- no se re-seedea`);
+    return { tenantId, created: false };
   }
 
   const tenantRef = db.collection("tenants").doc();
@@ -90,13 +90,13 @@ async function ensureTenant(ownerUid, { name, slug, businessTypeId, businessHour
   });
 
   console.log(`Tenant "${slug}" creado (${tenantRef.id})`);
-  return tenantRef.id;
+  return { tenantId: tenantRef.id, created: true };
 }
 
-async function createStaff(tenantId, { displayName, color, serviceIds }) {
+async function createStaff(tenantId, { displayName, color, serviceIds, photoUrl }) {
   const ref = db.collection("tenants").doc(tenantId).collection("staff").doc();
   await ref.set({
-    id: ref.id, tenantId, displayName, active: true, color, photoUrl: null,
+    id: ref.id, tenantId, displayName, active: true, color, photoUrl: photoUrl ?? null,
     serviceIds, schedules: [], commission: null,
     createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
   });
@@ -163,18 +163,19 @@ async function createAppointment(tenantId, { staffId, client, service, startsAt,
 const BUSINESS_HOURS_LUN_SAB = [1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opensAt: "09:00", closesAt: "19:00" }));
 
 async function seedIndividual(ownerUid, dates) {
-  const tenantId = await ensureTenant(ownerUid, {
+  const { tenantId, created } = await ensureTenant(ownerUid, {
     name: "Barbería Demo Solo",
     slug: "demo-individual",
     businessTypeId: "barberia",
     businessHours: BUSINESS_HOURS_LUN_SAB,
   });
+  if (!created) return;
 
   const corte = await createService(tenantId, { name: "Corte clásico", price: 8000, bufferAfterMin: 5, minutes: 30 });
   const corteBarba = await createService(tenantId, { name: "Corte + Barba", price: 12000, bufferAfterMin: 10, minutes: 45 });
   const afeitado = await createService(tenantId, { name: "Afeitado clásico", price: 6000, bufferAfterMin: 5, minutes: 20 });
 
-  const staffId = await createStaff(tenantId, { displayName: "Tomás Ibarra", color: "#7069E8", serviceIds: [corte.id, corteBarba.id, afeitado.id] });
+  const staffId = await createStaff(tenantId, { displayName: "Tomás Ibarra", color: "#7069E8", serviceIds: [corte.id, corteBarba.id, afeitado.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-tomas" });
 
   const clientNames = [
     ["Lucas Medina", "+5491122330001"],
@@ -215,21 +216,22 @@ async function seedIndividual(ownerUid, dates) {
 }
 
 async function seedEquipo(ownerUid, dates) {
-  const tenantId = await ensureTenant(ownerUid, {
+  const { tenantId, created } = await ensureTenant(ownerUid, {
     name: "Estudio Demo Equipo",
     slug: "demo-equipo",
     businessTypeId: "peluqueria",
     businessHours: BUSINESS_HOURS_LUN_SAB,
   });
+  if (!created) return;
 
   const corteS = await createService(tenantId, { name: "Corte", price: 9000, bufferAfterMin: 5, minutes: 40 });
   const color = await createService(tenantId, { name: "Color", price: 25000, bufferAfterMin: 15, minutes: 90 });
   const brushing = await createService(tenantId, { name: "Brushing", price: 7000, bufferAfterMin: 5, minutes: 30 });
   const tratamiento = await createService(tenantId, { name: "Tratamiento capilar", price: 15000, bufferAfterMin: 10, minutes: 60 });
 
-  const valentinaId = await createStaff(tenantId, { displayName: "Valentina Gómez", color: "#EC4899", serviceIds: [corteS.id, color.id, brushing.id, tratamiento.id] });
-  const martinaId = await createStaff(tenantId, { displayName: "Martina Ruiz", color: "#22C55E", serviceIds: [corteS.id, brushing.id] });
-  const sofiaId = await createStaff(tenantId, { displayName: "Sofía Fernández", color: "#F59E0B", serviceIds: [corteS.id, color.id, tratamiento.id] });
+  const valentinaId = await createStaff(tenantId, { displayName: "Valentina Gómez", color: "#EC4899", serviceIds: [corteS.id, color.id, brushing.id, tratamiento.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-valentina" });
+  const martinaId = await createStaff(tenantId, { displayName: "Martina Ruiz", color: "#22C55E", serviceIds: [corteS.id, brushing.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-martina" });
+  const sofiaId = await createStaff(tenantId, { displayName: "Sofía Fernández", color: "#F59E0B", serviceIds: [corteS.id, color.id, tratamiento.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-sofia" });
 
   const clientNames = [
     ["Camila Ortiz", "+5491122340001"],

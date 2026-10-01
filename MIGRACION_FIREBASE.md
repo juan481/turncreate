@@ -33,13 +33,22 @@ Agenda interna y turnero público usan el mismo modelo Firestore:
 - Dependencias `@supabase/ssr`, `@supabase/supabase-js`, `supabase` (CLI) de
   `package.json`, y el script `db:types`.
 
-## Despliegue: el build tiene que correr en el VPS
+## Despliegue: CI construye, el VPS solo recibe el resultado
 
-Next 16 + Turbopack resuelve los paquetes externos (como `firebase-admin`)
-con un nombre de módulo "hasheado" que depende de cómo quedó armado
-`node_modules` en la máquina donde se compiló. Si se compila en Windows y
-después se copia el `.next` a un `node_modules` instalado por separado en
-el VPS, el hash no coincide y el server tira en runtime:
+**Desde el 2026-10-01, el deploy es automático vía GitHub Actions**
+(`.github/workflows/ci.yml`, job `deploy`): cada push a `main` que pasa
+lint/typecheck/test dispara un build en el runner de GitHub (Ubuntu, Node
+22 -- mismo SO que el VPS) y lo sube por `rsync` a `/root/turncreate`,
+reiniciando `pm2` al final. **El VPS ya no vuelve a correr `next build`**
+-- eso era lo que le disparaba el uso de RAM/CPU y competía con los otros
+5 sitios que corren en la misma máquina.
+
+Por qué el build no puede hacerse en una máquina y el `node_modules` en
+otra: Next 16 + Turbopack resuelve los paquetes externos (como
+`firebase-admin`) con un nombre de módulo "hasheado" que depende de cómo
+quedó armado `node_modules` en la máquina donde se compiló. Si se compila
+en Windows y después se copia el `.next` a un `node_modules` instalado por
+separado en el VPS, el hash no coincide y el server tira en runtime:
 
 ```
 Error: Failed to load external module firebase-admin-<hash>/firestore:
@@ -47,11 +56,28 @@ ERR_MODULE_NOT_FOUND
 ```
 
 (esto fue exactamente el "A server error occurred" que vio un usuario real
-al loguearse el 2026-09-30). La solución: `npm install` (completo, con
-devDependencies) y `npm run build` **en el propio VPS** antes de cada
-`pm2 restart turncreate`, nunca copiar un `.next` compilado en otra
-máquina. El VPS tiene recursos ajustados pero swap de sobra para
-absorberlo (`NODE_OPTIONS=--max-old-space-size=1024 npm run build`).
+al loguearse el 2026-09-30). El workflow de CI lo evita sin necesidad de
+buildear en el VPS: instala completo (`npm ci`) y buildea en el runner,
+después poda devDependencies **del mismo árbol ya resuelto** con
+`npm prune --omit=dev` (prune borra nodos del lockfile, no vuelve a
+resolver nada) y sube ESE `node_modules` + `.next` juntos por rsync -- el
+VPS termina con exactamente el mismo árbol de paquetes que compiló
+Turbopack, nunca uno instalado por separado.
+
+**Secrets de GitHub que hacen falta en el repo** (Settings → Secrets and
+variables → Actions, en `juan481/turncreate`): `VPS_SSH_KEY` (contenido de
+la private key `~/.ssh/portfolio_deploy`, la misma que ya usa
+`just-create-web`), `VPS_HOST` (`5.161.65.111`), `VPS_USER` (`root`). Sin
+esos 3 secrets el job `deploy` falla al conectarse -- Claude no tiene
+forma de cargarlos por su cuenta (no hay `gh` CLI disponible), hay que
+agregarlos a mano una vez.
+
+Fallback manual si hiciera falta (CI caído, o un hotfix urgente sin
+esperar el pipeline): `npm install` (completo) + `npm run build`
+**directamente en el VPS**, con `NODE_OPTIONS=--max-old-space-size=1024`
+para no competir por RAM con los otros sitios -- es el mismo mecanismo
+que usaba el deploy manual anterior, sigue funcionando, pero ya no debería
+hacer falta en el uso normal.
 
 ## Criterio de despliegue
 

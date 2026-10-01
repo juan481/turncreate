@@ -13,6 +13,7 @@ export type TenantOption = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
+  owner: "Propietario/a",
   admin: "Admin",
   receptionist: "Recepción",
   professional: "Profesional",

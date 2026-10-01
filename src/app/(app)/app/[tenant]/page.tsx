@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { TenantTypeInfoButton } from "./tenant-type-info";
 
 function formatHour(instant: string, timezone: string) {
   const zoned = new TZDate(new Date(instant), timezone);
@@ -115,6 +116,7 @@ export default async function TenantDashboardPage({
                 <strong className="text-on-surface">Local individual</strong> — por eso tu agenda se ve como una lista simple, sin columnas por profesional.
               </span>
             )}
+            <TenantTypeInfoButton />
           </div>
         </div>
         <Link href={`/app/${tenantSlug}/agenda/nuevo`} className={buttonVariants({ size: "default" })}>

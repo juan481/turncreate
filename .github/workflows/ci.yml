@@ -20,3 +20,42 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
+
+  deploy:
+    name: Build y deploy a producción
+    needs: app
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Build e instalación completos en el runner de GitHub (Linux, mismo
+      # SO que el VPS) -- nunca en el VPS: evita que un build pesado le
+      # saque RAM a los otros 5 sitios que corren en la misma máquina.
+      - run: npm ci
+      - run: npm run build
+      # Node_modules de producción recortado DEL MISMO árbol que compiló
+      # (prune solo borra nodos del lockfile ya resuelto, no vuelve a
+      # resolver nada) -- así el runtime usa exactamente la misma
+      # resolución de paquetes externos (firebase-admin, etc.) que usó
+      # Turbopack al generar .next/server, que es justo lo que se rompía
+      # cuando el build y el `npm install` del VPS se hacían por separado.
+      - run: npm prune --omit=dev
+      - name: Deploy por rsync + restart de PM2
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az --delete \
+            --exclude='.env' --exclude='.git' --exclude='.next/cache' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ "$VPS_USER@$VPS_HOST:/root/turncreate/"
+          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" "pm2 restart turncreate"

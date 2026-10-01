@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { FieldValue } from "firebase-admin/firestore";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
-import { getTenantBySlugFromFirebase, requireTenantAccess } from "@/server/firebase/tenants";
+import { requireTenantAccess } from "@/server/firebase/tenants";
 import { createInternalAppointment } from "@/server/firebase/booking";
 import { sendAppointmentConfirmation } from "@/server/email";
 import { createClientSchema } from "@/lib/schemas/client";
@@ -111,9 +111,8 @@ export async function confirmAppointment(
     keptDeposit = Number(oldDoc.data()?.depositPaid ?? 0);
   }
 
-  let created;
   try {
-    created = await createInternalAppointment({
+    await createInternalAppointment({
       tenantId: tenant.id,
       tenant,
       serviceId,
