@@ -50,14 +50,16 @@ export async function login(
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
+  let tenantSlug: string | null;
   try {
     const authenticated = await signInWithFirebasePassword(parsed.data.email, parsed.data.password);
     await persistSession(authenticated.idToken);
-    const tenantSlug = await firstTenantSlug(authenticated.localId);
-    redirect(tenantSlug ? `/app/${tenantSlug}` : "/onboarding");
+    tenantSlug = await firstTenantSlug(authenticated.localId);
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Email o contraseña incorrectos" };
   }
+
+  redirect(tenantSlug ? `/app/${tenantSlug}` : "/onboarding");
 }
 
 export async function signUp(
