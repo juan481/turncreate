@@ -28,6 +28,7 @@ export type PublicCategory = {
 export type PublicStaffMember = {
   id: string;
   name: string;
+  photo_url: string | null;
 };
 
 export type PublicHold = {

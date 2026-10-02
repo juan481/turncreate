@@ -6,6 +6,7 @@ import { TZDate } from "@date-fns/tz";
 import { format, parseISO, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
+import { Avatar } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -199,9 +200,7 @@ export function BookingFlow({
                 setStep(3);
               }}
             >
-              <div className="w-12 h-12 rounded-full bg-surface-muted flex items-center justify-center">
-                <Icon name="person" />
-              </div>
+              <Avatar name={staff.name} src={staff.photo_url} size="lg" />
               <div>
                 <h3 className="font-label-lg text-label-lg">{staff.name}</h3>
               </div>

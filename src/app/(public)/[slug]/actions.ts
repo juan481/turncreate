@@ -44,7 +44,7 @@ export async function getPublicCatalog(tenantId: string): Promise<PublicCategory
 
 export async function getPublicStaff(tenantId: string): Promise<PublicStaffMember[]> {
   const docs = await firebaseAdmin().db.collection("tenants").doc(tenantId).collection("staff").where("active", "==", true).get();
-  return docs.docs.map((doc) => ({ id: doc.id, name: String(doc.data().displayName) }));
+  return docs.docs.map((doc) => ({ id: doc.id, name: String(doc.data().displayName), photo_url: (doc.data().photoUrl as string | null) ?? null }));
 }
 
 export async function getPublicStaffForService(tenantId: string, serviceId: string): Promise<PublicStaffMember[]> {
