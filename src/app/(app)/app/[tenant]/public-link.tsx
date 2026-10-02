@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 
-export function PublicLink({ url }: { url: string }) {
+export function PublicLink({ url, hint }: { url: string; hint?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -23,6 +23,7 @@ export function PublicLink({ url }: { url: string }) {
       <div className="min-w-0">
         <p className="font-label-sm text-label-sm text-on-surface-variant">Tu turnero público</p>
         <p className="truncate font-label-md text-label-md text-on-surface">{url}</p>
+        {hint && <p className="mt-1 font-body-sm text-body-sm text-on-surface-variant">{hint}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
         <Button type="button" variant="secondary" size="sm" onClick={handleCopy}>

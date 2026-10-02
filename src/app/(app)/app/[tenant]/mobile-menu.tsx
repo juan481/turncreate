@@ -29,7 +29,7 @@ export function MobileMenuButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface transition-colors hover:bg-surface-container lg:hidden"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface transition-colors hover:bg-surface-container xl:hidden"
         aria-label="Abrir menú"
       >
         <Icon name="menu" className="text-[22px]" />

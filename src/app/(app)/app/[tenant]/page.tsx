@@ -12,7 +12,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TenantTypeInfoButton } from "./tenant-type-info";
 import { DemoTour } from "./demo-tour";
+import { PublicLink } from "./public-link";
 import { iconForService } from "@/lib/service-icon";
+import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
+import { DEMO_USER_EMAIL } from "@/lib/demo";
 
 function formatHour(instant: string, timezone: string) {
   const zoned = new TZDate(new Date(instant), timezone);
@@ -35,10 +38,13 @@ export default async function TenantDashboardPage({
 
   const { db } = firebaseAdmin();
   const tenantRef = db.collection("tenants").doc(tenant.id);
-  const [appointmentSnapshot, staffSnapshot] = await Promise.all([
+  const [appointmentSnapshot, staffSnapshot, currentUser] = await Promise.all([
     tenantRef.collection("appointments").where("startsAt", ">=", new Date(startUTC)).where("startsAt", "<=", new Date(endUTC)).orderBy("startsAt").get(),
     tenantRef.collection("staff").where("active", "==", true).get(),
+    getCurrentFirebaseUser(),
   ]);
+  const isDemoUser = currentUser?.email === DEMO_USER_EMAIL;
+  const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://turn.justcreate.com.ar"}/${tenantSlug}`;
   const appointmentsRaw = appointmentSnapshot.docs.map((doc) => {
     const item = doc.data();
     return { id: doc.id, starts_at: item.startsAt?.toDate?.().toISOString?.() ?? "", status: item.status, total: Number(item.total ?? 0), balance: Number(item.balance ?? 0), clients: { full_name: item.clientName ?? "" }, staff: { display_name: item.staffName ?? "", photo_url: item.staffPhoto ?? null }, appointment_items: Array.isArray(item.items) ? item.items : [] };
@@ -130,6 +136,15 @@ export default async function TenantDashboardPage({
           Nuevo turno
         </Link>
       </div>
+
+      <PublicLink
+        url={publicUrl}
+        hint={
+          isDemoUser
+            ? "Este es el link para que los clientes saquen turno solos. Probá reservar uno vos mismo/a ahí -- lo vas a ver reflejado acá al toque."
+            : "Compartilo con tus clientes para que reserven solos. Lo que saquen por acá aparece directo en tu agenda."
+        }
+      />
 
       {/* Ingresos hero strip */}
       <Card className="flex flex-col gap-md p-lg md:flex-row md:items-center md:justify-between">

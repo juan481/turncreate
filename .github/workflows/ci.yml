@@ -27,8 +27,30 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      # Si los 3 secrets todavía no se cargaron, el resto de los pasos se
+      # saltea y el job queda en VERDE (no rojo) -- antes, sin secrets,
+      # este job fallaba en cada push y le mandaba un mail de "CI falló" a
+      # cada rato aunque TurnCreate siguiera andando bien (el deploy real
+      # se estaba haciendo a mano). Una vez cargados VPS_SSH_KEY, VPS_HOST
+      # y VPS_USER en Settings > Secrets and variables > Actions, el
+      # deploy automático arranca solo, sin tocar nada más acá.
+      - name: Chequear si los secrets de deploy están cargados
+        id: check
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deploy automático todavía no configurado (faltan VPS_SSH_KEY / VPS_HOST / VPS_USER) -- se omite, no es un error. El deploy se está haciendo a mano mientras tanto."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.check.outputs.configured == 'true'
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.configured == 'true'
         with:
           node-version: 22
           cache: npm
@@ -36,7 +58,9 @@ jobs:
       # SO que el VPS) -- nunca en el VPS: evita que un build pesado le
       # saque RAM a los otros 5 sitios que corren en la misma máquina.
       - run: npm ci
+        if: steps.check.outputs.configured == 'true'
       - run: npm run build
+        if: steps.check.outputs.configured == 'true'
       # Node_modules de producción recortado DEL MISMO árbol que compiló
       # (prune solo borra nodos del lockfile ya resuelto, no vuelve a
       # resolver nada) -- así el runtime usa exactamente la misma
@@ -44,19 +68,15 @@ jobs:
       # Turbopack al generar .next/server, que es justo lo que se rompía
       # cuando el build y el `npm install` del VPS se hacían por separado.
       - run: npm prune --omit=dev
+        if: steps.check.outputs.configured == 'true'
       - name: Deploy por rsync + restart de PM2
+        if: steps.check.outputs.configured == 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           set -euo pipefail
-
-          # Secrets vacíos: fallar acá con un mensaje claro en vez de que
-          # ssh/rsync tiren un error genérico más abajo sin explicar por qué.
-          : "${SSH_PRIVATE_KEY:?Falta el secret VPS_SSH_KEY en Settings > Secrets and variables > Actions}"
-          : "${VPS_HOST:?Falta el secret VPS_HOST (ej: 5.161.65.111)}"
-          : "${VPS_USER:?Falta el secret VPS_USER (ej: root)}"
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh

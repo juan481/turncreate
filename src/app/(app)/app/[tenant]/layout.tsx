@@ -23,7 +23,7 @@ const NAV = [
   { href: "staff", label: "Staff", icon: "badge" },
   { href: "caja", label: "Caja", icon: "point_of_sale" },
   { href: "reportes", label: "Reportes", icon: "monitoring" },
-  { href: "bot", label: "IA · Bot", icon: "smart_toy" },
+  { href: "bot", label: "IA", icon: "smart_toy" },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -72,7 +72,7 @@ export default async function TenantAppLayout({
           <div className="flex shrink-0 items-center gap-lg">
             <Link href={`/app/${tenantSlug}`} className="flex items-center gap-2">
               <Logo iconOnly className="h-8 w-auto" />
-              <span className="font-headline-sm text-headline-sm tracking-tight text-on-surface">TurnCreate</span>
+              <span className="hidden font-headline-sm text-headline-sm tracking-tight text-on-surface 2xl:inline">TurnCreate</span>
             </Link>
             <span className="hidden h-4 w-px bg-outline-variant/50 xl:block" />
             <TenantSwitcher current={currentTenantOption} options={tenantOptions.length ? tenantOptions : [currentTenantOption]} />
@@ -84,13 +84,13 @@ export default async function TenantAppLayout({
             </Link>
             <NotificationsButton notifications={[]} />
             <div className="hidden items-center gap-2 pl-1 sm:flex">
-              <div className="text-right leading-tight">
+              <div className="hidden text-right leading-tight 2xl:block">
                 <div className="font-label-md text-label-md text-on-surface">{displayName}</div>
                 <div className="font-label-sm text-label-sm text-on-surface-variant">{roleLabel}</div>
               </div>
               <Avatar name={displayName} src={avatarUrl} size="sm" ring />
             </div>
-            <form action={signOut} className="hidden lg:block">
+            <form action={signOut} className="hidden xl:block">
               <button type="submit" className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface" aria-label="Cerrar sesión">
                 <Icon name="logout" className="text-[18px]" />
               </button>

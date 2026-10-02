@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { StatusPill } from "@/components/ui/status-pill";
 import { buttonVariants } from "@/components/ui/button";
 import { BusinessInfoForm } from "./business-info-form";
-import { PublicLink } from "./public-link";
+import { PublicLink } from "../public-link";
 import { BusinessHoursForm } from "./business-hours-form";
 import { DepositSettingsForm } from "./deposit-settings-form";
 
