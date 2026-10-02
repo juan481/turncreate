@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "seed:demo": "node scripts/seed-demo-data.cjs",
+    "seed:demo:estetica": "node scripts/reset-demo-estetica.cjs",
     "seed:demo:enrich": "node scripts/enrich-demo-presentation.cjs"
   },
   "dependencies": {

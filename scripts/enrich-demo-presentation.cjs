@@ -7,6 +7,17 @@ const TIMEZONE = "America/Argentina/Buenos_Aires";
 const BATCH = "presentation-2026-10";
 const SLOT_MINUTES = 15;
 
+// Fotos curadas a mano (verificadas visualmente, no el `?u=<seed>` de
+// pravatar que es un hash sin relación con el género -- así fue como
+// Martina/Valentina terminaron con foto de hombre la vez pasada).
+const CURATED_PHOTO_BY_NAME = {
+  "Lucas Medina": 7, "Facundo Torres": 8, "Bruno Acosta": 11,
+  "Iván Sosa": 12, "Gonzalo Díaz": 13, "Nicolás Vera": 14,
+  "Camila Ortiz": 16, "Valeria Paz": 19, "Agustina Rey": 20,
+  "Milagros Luna": 21, "Rocío Benítez": 23, "Julieta Campos": 25,
+  "Florencia Aguirre": 26, "Antonella Ríos": 27,
+};
+
 initializeApp({ credential: applicationDefault() });
 const db = getFirestore();
 
@@ -49,10 +60,13 @@ async function enrichTenant(slug) {
   ]);
 
   const clients = clientsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  const clientUpdates = clients.map((client, index) => ({
-    ref: tenantRef.collection("clients").doc(client.id),
-    data: { photoUrl: `https://i.pravatar.cc/300?u=turncreate-${slug}-client-${index + 1}`, updatedAt: FieldValue.serverTimestamp() },
-  }));
+  const clientUpdates = clients.map((client, index) => {
+    const curated = CURATED_PHOTO_BY_NAME[client.fullName];
+    const photoUrl = curated
+      ? `https://i.pravatar.cc/300?img=${curated}`
+      : `https://i.pravatar.cc/300?u=turncreate-${slug}-client-${index + 1}`;
+    return { ref: tenantRef.collection("clients").doc(client.id), data: { photoUrl, updatedAt: FieldValue.serverTimestamp() } };
+  });
   for (const group of chunk(clientUpdates, 400)) {
     const batch = db.batch();
     group.forEach(({ ref, data }) => batch.set(ref, data, { merge: true }));

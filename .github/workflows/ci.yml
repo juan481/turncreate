@@ -50,12 +50,35 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
+          set -euo pipefail
+
+          # Secrets vacíos: fallar acá con un mensaje claro en vez de que
+          # ssh/rsync tiren un error genérico más abajo sin explicar por qué.
+          : "${SSH_PRIVATE_KEY:?Falta el secret VPS_SSH_KEY en Settings > Secrets and variables > Actions}"
+          : "${VPS_HOST:?Falta el secret VPS_HOST (ej: 5.161.65.111)}"
+          : "${VPS_USER:?Falta el secret VPS_USER (ej: root)}"
+
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          echo "Verificando formato de la clave privada..."
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null || { echo "::error::VPS_SSH_KEY no es una clave privada SSH válida (¿se pegó completa, con BEGIN/END?)"; exit 1; }
+
+          echo "Agregando $VPS_HOST a known_hosts..."
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>&1 | tee /tmp/keyscan.log
+          [ -s ~/.ssh/known_hosts ] || { echo "::error::ssh-keyscan no devolvió nada -- revisá que VPS_HOST sea correcto y el puerto 22 esté abierto"; exit 1; }
+
+          echo "Probando conexión SSH..."
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=10 "$VPS_USER@$VPS_HOST" "echo conexión OK desde GitHub Actions" \
+            || { echo "::error::No se pudo conectar por SSH -- revisá que la clave pública de VPS_SSH_KEY esté en ~/.ssh/authorized_keys de $VPS_USER@$VPS_HOST"; exit 1; }
+
+          echo "Sincronizando archivos..."
           rsync -az --delete \
             --exclude='.env' --exclude='.git' --exclude='.next/cache' \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ "$VPS_USER@$VPS_HOST:/root/turncreate/"
+
+          echo "Reiniciando PM2..."
           ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" "pm2 restart turncreate"

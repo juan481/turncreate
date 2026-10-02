@@ -11,6 +11,15 @@
  * en vez de fallar (no duplica nada), pero no borra turnos ya creados en
  * una corrida anterior -- para arrancar de cero hay que borrar a mano los
  * tenants/usuario en la consola de Firebase primero.
+ *
+ * NOTA (2026-10-02): el catálogo de servicios de acá abajo (barbería/
+ * peluquería) quedó desactualizado -- los 2 tenants demo en producción
+ * pasaron a rubro estética. Como este script es idempotente, no los va a
+ * tocar de nuevo salvo que se borren los tenants primero. El estado real
+ * del catálogo se gestiona con `reset-demo-estetica.cjs` (rubro + 83
+ * servicios de estética) y `enrich-demo-presentation.cjs` (agenda
+ * histórica/futura + fotos). Si algún día hace falta recrear el demo de
+ * cero, correr este script y DESPUÉS esos dos, en ese orden.
  */
 const { initializeApp, applicationDefault, getApps } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -175,7 +184,7 @@ async function seedIndividual(ownerUid, dates) {
   const corteBarba = await createService(tenantId, { name: "Corte + Barba", price: 12000, bufferAfterMin: 10, minutes: 45 });
   const afeitado = await createService(tenantId, { name: "Afeitado clásico", price: 6000, bufferAfterMin: 5, minutes: 20 });
 
-  const staffId = await createStaff(tenantId, { displayName: "Tomás Ibarra", color: "#7069E8", serviceIds: [corte.id, corteBarba.id, afeitado.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-tomas" });
+  const staffId = await createStaff(tenantId, { displayName: "Tomás Ibarra", color: "#7069E8", serviceIds: [corte.id, corteBarba.id, afeitado.id], photoUrl: "https://i.pravatar.cc/300?img=3" });
 
   const clientNames = [
     ["Lucas Medina", "+5491122330001"],
@@ -229,9 +238,9 @@ async function seedEquipo(ownerUid, dates) {
   const brushing = await createService(tenantId, { name: "Brushing", price: 7000, bufferAfterMin: 5, minutes: 30 });
   const tratamiento = await createService(tenantId, { name: "Tratamiento capilar", price: 15000, bufferAfterMin: 10, minutes: 60 });
 
-  const valentinaId = await createStaff(tenantId, { displayName: "Valentina Gómez", color: "#EC4899", serviceIds: [corteS.id, color.id, brushing.id, tratamiento.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-valentina" });
-  const martinaId = await createStaff(tenantId, { displayName: "Martina Ruiz", color: "#22C55E", serviceIds: [corteS.id, brushing.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-martina" });
-  const sofiaId = await createStaff(tenantId, { displayName: "Sofía Fernández", color: "#F59E0B", serviceIds: [corteS.id, color.id, tratamiento.id], photoUrl: "https://i.pravatar.cc/300?u=turncreate-demo-sofia" });
+  const valentinaId = await createStaff(tenantId, { displayName: "Valentina Gómez", color: "#EC4899", serviceIds: [corteS.id, color.id, brushing.id, tratamiento.id], photoUrl: "https://i.pravatar.cc/300?img=10" });
+  const martinaId = await createStaff(tenantId, { displayName: "Martina Ruiz", color: "#22C55E", serviceIds: [corteS.id, brushing.id], photoUrl: "https://i.pravatar.cc/300?img=5" });
+  const sofiaId = await createStaff(tenantId, { displayName: "Sofía Fernández", color: "#F59E0B", serviceIds: [corteS.id, color.id, tratamiento.id], photoUrl: "https://i.pravatar.cc/300?img=9" });
 
   const clientNames = [
     ["Camila Ortiz", "+5491122340001"],

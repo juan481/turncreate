@@ -11,7 +11,8 @@ import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TenantTypeInfoButton } from "./tenant-type-info";
-import { DemoTutorialModal } from "./demo-tutorial-modal";
+import { DemoTour } from "./demo-tour";
+import { iconForService } from "@/lib/service-icon";
 
 function formatHour(instant: string, timezone: string) {
   const zoned = new TZDate(new Date(instant), timezone);
@@ -102,7 +103,7 @@ export default async function TenantDashboardPage({
   return (
     <div className="space-y-lg">
       <Suspense fallback={null}>
-        <DemoTutorialModal />
+        <DemoTour />
       </Suspense>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -287,7 +288,7 @@ export default async function TenantDashboardPage({
 
         <Card hoverLift={false} className="flex flex-col gap-md p-lg">
           <p className="flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant">
-            <Icon name="content_cut" className="text-[16px]" />
+            <Icon name={topService ? iconForService(topService[0]) : "content_cut"} className="text-[16px]" />
             Servicio más pedido hoy
           </p>
           {topService ? (

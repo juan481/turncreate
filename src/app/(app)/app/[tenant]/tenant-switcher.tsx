@@ -53,6 +53,7 @@ export function TenantSwitcher({
     <div ref={ref} className="relative hidden xl:block">
       <button
         type="button"
+        data-tour="tenant-switcher"
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "flex items-center gap-1.5 rounded-pill border px-3 py-1.5 font-label-sm text-label-sm transition-all",

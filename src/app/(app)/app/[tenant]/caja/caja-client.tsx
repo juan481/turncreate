@@ -40,6 +40,13 @@ type LastClosedSession = {
 const initialCajaState: CajaActionState = { error: null };
 const initialChargeState: ChargeActionState = { error: null };
 
+const METHOD_LABEL: Record<string, { label: string; icon: string }> = {
+  cash: { label: "Efectivo", icon: "payments" },
+  card_posnet: { label: "Posnet", icon: "credit_card" },
+  transfer: { label: "Transferencia", icon: "swap_horiz" },
+  mercadopago: { label: "Mercado Pago", icon: "account_balance_wallet" },
+};
+
 function formatHour(instant: string, timezone: string) {
   const zoned = new TZDate(new Date(instant), timezone);
   return `${zoned.getHours().toString().padStart(2, "0")}:${zoned.getMinutes().toString().padStart(2, "0")}`;
@@ -260,6 +267,7 @@ export function CajaClient({
   products,
   movements,
   lastClosedSession,
+  paymentsByMethod,
 }: {
   tenantSlug: string;
   timezone: string;
@@ -268,6 +276,7 @@ export function CajaClient({
   products: Product[];
   movements: Movement[];
   lastClosedSession: LastClosedSession;
+  paymentsByMethod: Record<string, number>;
 }) {
   const [chargingId, setChargingId] = useState<string | null>(null);
   const [addingMovement, setAddingMovement] = useState(false);
@@ -325,6 +334,26 @@ export function CajaClient({
           <p className="font-headline-sm text-headline-sm text-primary">${expected.toLocaleString("es-AR")}</p>
         </Card>
       </div>
+
+      {Object.keys(paymentsByMethod).length > 0 && (
+        <Card hoverLift={false} className="space-y-2 p-lg">
+          <p className="font-label-md text-label-md text-on-surface-variant">Cobrado hoy por método</p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(paymentsByMethod).map(([method, amount]) => {
+              const info = METHOD_LABEL[method] ?? { label: method, icon: "payments" };
+              return (
+                <span
+                  key={method}
+                  className="flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface"
+                >
+                  <Icon name={info.icon} className="text-[14px] text-on-surface-variant" />
+                  {info.label}: ${amount.toLocaleString("es-AR")}
+                </span>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       <Card hoverLift={false} className="space-y-3 p-lg">
         <h2 className="font-headline-sm text-headline-sm text-on-surface">Turnos confirmados de hoy</h2>

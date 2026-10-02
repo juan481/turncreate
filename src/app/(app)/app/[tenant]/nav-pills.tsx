@@ -24,6 +24,7 @@ export function NavPills({
           <Link
             key={item.label}
             href={href}
+            data-tour={item.href || "inicio"}
             className={cn(
               "rounded-pill px-4 py-2 font-label-md text-label-md transition-all duration-200",
               active
