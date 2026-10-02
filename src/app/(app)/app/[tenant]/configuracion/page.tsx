@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { StatusPill } from "@/components/ui/status-pill";
 import { buttonVariants } from "@/components/ui/button";
 import { BusinessInfoForm } from "./business-info-form";
+import { PublicLink } from "./public-link";
 import { BusinessHoursForm } from "./business-hours-form";
 import { DepositSettingsForm } from "./deposit-settings-form";
 
@@ -54,6 +55,7 @@ export default async function ConfiguracionPage({
       </div>
 
       <SectionCard icon="storefront" title="Datos del negocio" description="Lo que ve el cliente en tu turnero público.">
+        <PublicLink url={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://turn.justcreate.com.ar"}/${tenantSlug}`} />
         <BusinessInfoForm
           tenantSlug={tenantSlug}
           tenant={{

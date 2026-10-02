@@ -23,6 +23,7 @@ const NAV = [
   { href: "staff", label: "Staff", icon: "badge" },
   { href: "caja", label: "Caja", icon: "point_of_sale" },
   { href: "reportes", label: "Reportes", icon: "monitoring" },
+  { href: "bot", label: "IA · Bot", icon: "smart_toy" },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
