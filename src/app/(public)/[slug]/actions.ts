@@ -106,12 +106,17 @@ export async function confirmHold(holdId: string, client: ClientFormData): Promi
     const latest = await transaction.get(holdRef);
     if (!latest.exists || latest.data()!.expiresAt.toDate() < new Date()) throw new Error("La reserva venció");
     const service = await transaction.get(tenantRef.collection("services").doc(hold.serviceId));
+    // El home del panel y Caja leen staffName/staffPhoto del propio turno
+    // (no hacen join en vivo con staff), hay que denormalizarlos acá.
+    const staffDoc = await transaction.get(tenantRef.collection("staff").doc(hold.staffId));
 
     transaction.create(appointmentRef, {
       id: appointmentRef.id,
       token: appointmentToken,
       tenantId: hold.tenantId,
       staffId: hold.staffId,
+      staffName: staffDoc.data()?.displayName ?? "",
+      staffPhoto: staffDoc.data()?.photoUrl ?? null,
       clientName: client.full_name,
       clientPhone: client.phone_e164,
       clientEmail: client.email || null,

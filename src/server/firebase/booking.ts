@@ -233,6 +233,13 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
     }
     if (!selected) throw new Error("Ese horario ya no está disponible");
 
+    // El home ("Hoy en...") y Caja leen staffName/staffPhoto del propio
+    // turno (no hacen join en vivo con staff), así que hay que
+    // denormalizarlos acá -- si no, se ven turnos sin nombre ni foto del
+    // profesional ahí (la vista /agenda sí hace join, por eso ahí se ve bien).
+    const staffSnapshot = await transaction.get(tenantRef.collection("staff").doc(selected));
+    const staffData = staffSnapshot.data();
+
     for (const instant of occupancySlotInstants(startsAt, service.durationMin)) {
       transaction.set(tenantRef.collection("occupancy").doc(occupancyDocId(selected, instant)), {
         appointmentId: appointmentRef.id,
@@ -244,6 +251,8 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
       id: appointmentRef.id,
       tenantId: input.tenantId,
       staffId: selected,
+      staffName: staffData?.displayName ?? "",
+      staffPhoto: staffData?.photoUrl ?? null,
       clientId: input.clientId,
       clientName: input.clientName,
       clientPhone: input.clientPhone,
