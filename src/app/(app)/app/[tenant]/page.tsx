@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
 import { firebaseAdmin } from "@/server/firebase/admin";
@@ -10,6 +11,7 @@ import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TenantTypeInfoButton } from "./tenant-type-info";
+import { DemoTutorialModal } from "./demo-tutorial-modal";
 
 function formatHour(instant: string, timezone: string) {
   const zoned = new TZDate(new Date(instant), timezone);
@@ -99,6 +101,9 @@ export default async function TenantDashboardPage({
 
   return (
     <div className="space-y-lg">
+      <Suspense fallback={null}>
+        <DemoTutorialModal />
+      </Suspense>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface md:font-headline-lg md:text-headline-lg">

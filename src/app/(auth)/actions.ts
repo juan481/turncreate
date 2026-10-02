@@ -7,6 +7,7 @@ import { loginSchema, signUpSchema } from "@/lib/schemas/auth";
 import { signInWithFirebasePassword, signUpWithFirebasePassword } from "@/server/firebase/auth";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { createFirebaseSession, FIREBASE_SESSION_COOKIE, firebaseSessionMaxAge } from "@/server/firebase/session";
+import { DEMO_USER_EMAIL } from "@/lib/demo";
 
 export type AuthActionState = {
   error: string | null;
@@ -51,15 +52,21 @@ export async function login(
   }
 
   let tenantSlug: string | null;
+  let isDemoUser = false;
   try {
     const authenticated = await signInWithFirebasePassword(parsed.data.email, parsed.data.password);
     await persistSession(authenticated.idToken);
     tenantSlug = await firstTenantSlug(authenticated.localId);
+    isDemoUser = authenticated.email === DEMO_USER_EMAIL;
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Email o contraseña incorrectos" };
   }
 
-  redirect(tenantSlug ? `/app/${tenantSlug}` : "/onboarding");
+  if (!tenantSlug) redirect("/onboarding");
+  // El usuario demo es compartido -- distintas personas lo prueban, así
+  // que el tutorial se dispara en cada login (vía query param), no una
+  // sola vez por navegador.
+  redirect(isDemoUser ? `/app/${tenantSlug}?demoTutorial=1` : `/app/${tenantSlug}`);
 }
 
 export async function signUp(
