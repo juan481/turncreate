@@ -1,9 +1,10 @@
 /**
- * Convierte los 2 tenants demo (demo-individual, demo-equipo) a rubro
- * estética (uñas/pestañas/cejas/skin care), reemplazando el catálogo de
- * servicios de barbería/peluquería por el pedido por el cliente. Borra
- * servicios, turnos y ocupación viejos; crea el catálogo nuevo completo,
- * reparte servicios entre el staff y genera una agenda nueva.
+ * OBSOLETO (2026-10-02): esto dejaba los 2 tenants demo como estética
+ * (uno individual, uno de equipo). Después se pidió un 3er local y que el
+ * individual volviera a ser de otro rubro con clientela coherente -- ver
+ * `rebuild-3-tenants.cjs`, que es el que refleja el estado real actual
+ * (OSSADA Express, OSSADA Beauty Studio, Barbería Dandy). Se deja este
+ * archivo como referencia histórica, no se re-ejecuta.
  *
  * Uso: GOOGLE_APPLICATION_CREDENTIALS="<ruta al json>" node reset-demo-estetica.cjs
  */

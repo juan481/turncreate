@@ -61,6 +61,7 @@ export default async function ConfiguracionPage({
             address: (tenant as typeof tenant & { address?: string | null }).address ?? null,
             instagramUrl: (tenant as typeof tenant & { instagramUrl?: string | null }).instagramUrl ?? null,
             whatsappNumber: (tenant as typeof tenant & { whatsappNumber?: string | null }).whatsappNumber ?? null,
+            logoUrl: (tenant as typeof tenant & { logoUrl?: string | null }).logoUrl ?? null,
           }}
         />
       </SectionCard>

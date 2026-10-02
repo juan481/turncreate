@@ -11,11 +11,16 @@ const SLOT_MINUTES = 15;
 // pravatar que es un hash sin relación con el género -- así fue como
 // Martina/Valentina terminaron con foto de hombre la vez pasada).
 const CURATED_PHOTO_BY_NAME = {
+  // Barbería Dandy (hombres)
   "Lucas Medina": 7, "Facundo Torres": 8, "Bruno Acosta": 11,
-  "Iván Sosa": 12, "Gonzalo Díaz": 13, "Nicolás Vera": 14,
+  "Iván Sosa": 12, "Gonzalo Díaz": 13, "Nicolás Vera": 14, "Tomás Ibarra": 3,
+  // OSSADA Beauty Studio (mujeres)
   "Camila Ortiz": 16, "Valeria Paz": 19, "Agustina Rey": 20,
   "Milagros Luna": 21, "Rocío Benítez": 23, "Julieta Campos": 25,
   "Florencia Aguirre": 26, "Antonella Ríos": 27,
+  // OSSADA Express (mujeres)
+  "Delfina Suárez": 29, "Catalina Funes": 30, "Abril Castro": 31,
+  "Zoe Navarro": 32, "Pilar Romero": 34, "Josefina Acuña": 35, "Lucía Herrera": 28,
 };
 
 initializeApp({ credential: applicationDefault() });
@@ -189,5 +194,6 @@ async function enrichTenant(slug) {
 (async () => {
   await enrichTenant("demo-individual");
   await enrichTenant("demo-equipo");
+  await enrichTenant("demo-barberia");
   console.log("Presentación demo enriquecida.");
 })().catch((error) => { console.error(error); process.exit(1); });

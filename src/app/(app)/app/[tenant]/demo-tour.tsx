@@ -12,8 +12,8 @@ const STEPS: Step[] = [
   {
     selector: '[data-tour="tenant-switcher"]',
     icon: "storefront",
-    title: "Este demo tiene 2 locales",
-    body: "Acá arriba elegís con cuál trabajar. \"Estética Demo Solo\" tiene un solo profesional; \"Estudio Demo Equipo\" tiene tres. Cambiá de uno a otro cuando quieras para comparar las dos vistas.",
+    title: "Este demo tiene 3 locales",
+    body: "Acá arriba elegís con cuál trabajar. \"OSSADA Express\" y \"Barbería Dandy\" tienen un solo profesional (agenda en lista); \"OSSADA Beauty Studio\" tiene tres (agenda en grilla). Cambiá de uno a otro cuando quieras para comparar.",
   },
   {
     selector: '[data-tour="inicio"]',

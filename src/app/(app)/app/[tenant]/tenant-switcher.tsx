@@ -10,6 +10,7 @@ export type TenantOption = {
   name: string;
   slug: string;
   role: string;
+  logoUrl?: string | null;
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -43,7 +44,12 @@ export function TenantSwitcher({
   if (options.length <= 1) {
     return (
       <div className="hidden items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant xl:flex">
-        <span className="h-1.5 w-1.5 rounded-full bg-status-confirmed-dot" />
+        {current.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- logo elegido por el dueño del local, URL externa
+          <img src={current.logoUrl} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span className="h-1.5 w-1.5 rounded-full bg-status-confirmed-dot" />
+        )}
         {current.name}
       </div>
     );
@@ -62,7 +68,12 @@ export function TenantSwitcher({
             : "border-transparent bg-surface-container-low text-on-surface-variant hover:border-outline-variant hover:bg-surface-container",
         )}
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-status-confirmed-dot" />
+        {current.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- logo elegido por el dueño del local, URL externa
+          <img src={current.logoUrl} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span className="h-1.5 w-1.5 rounded-full bg-status-confirmed-dot" />
+        )}
         <span className="max-w-[12rem] truncate">{current.name}</span>
         <Icon
           name="expand_more"
@@ -92,16 +103,21 @@ export function TenantSwitcher({
                       : "text-on-surface hover:bg-surface-container-low",
                   )}
                 >
-                  <span
-                    className={cn(
-                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-inner text-[11px] font-semibold",
-                      isActive
-                        ? "bg-primary text-on-primary"
-                        : "bg-surface-container text-on-surface-variant",
-                    )}
-                  >
-                    {opt.name.slice(0, 2).toUpperCase()}
-                  </span>
+                  {opt.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- logo elegido por el dueño del local, URL externa
+                    <img src={opt.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-inner object-cover" />
+                  ) : (
+                    <span
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-inner text-[11px] font-semibold",
+                        isActive
+                          ? "bg-primary text-on-primary"
+                          : "bg-surface-container text-on-surface-variant",
+                      )}
+                    >
+                      {opt.name.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-label-sm text-label-sm">{opt.name}</p>
                     <p className="font-label-xs text-label-xs text-on-surface-variant">
@@ -147,14 +163,17 @@ export function TenantSwitcherMobile({
                 : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface",
             )}
           >
-            <span
+            {opt.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- logo elegido por el dueño del local, URL externa
+              <img src={opt.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-inner object-cover" />
+            ) : <span
               className={cn(
                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-inner text-[11px] font-semibold",
                 isActive ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant",
               )}
             >
               {opt.name.slice(0, 2).toUpperCase()}
-            </span>
+            </span>}
             <span className="flex-1 truncate">{opt.name}</span>
             {isActive && <Icon name="check" className="text-[16px]" />}
           </Link>

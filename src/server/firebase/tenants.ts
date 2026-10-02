@@ -112,8 +112,8 @@ export async function getTenantMembershipsForUser(uid: string) {
     if (typeof tenantId !== "string") return null;
     const tenant = await db.collection("tenants").doc(tenantId).get();
     if (!tenant.exists) return null;
-    const tenantData = tenant.data() as TenantRecord;
-    return { id: tenantId, name: tenantData.name, slug: tenantData.slug, role: data.role as string };
+    const tenantData = tenant.data() as TenantRecord & { logoUrl?: string | null };
+    return { id: tenantId, name: tenantData.name, slug: tenantData.slug, role: data.role as string, logoUrl: tenantData.logoUrl ?? null };
   }));
 
   return options.filter((option): option is NonNullable<typeof option> => option !== null);

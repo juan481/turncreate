@@ -57,6 +57,7 @@ export default async function TenantAppLayout({
     name: tenant.name,
     slug: tenant.slug,
     role: typeof member.role === "string" ? member.role : "professional",
+    logoUrl: (tenant as typeof tenant & { logoUrl?: string | null }).logoUrl ?? null,
   };
   const displayName = (profile.data()?.fullName as string | undefined) || user.name || user.email || "Usuario";
   const avatarUrl = (profile.data()?.avatarUrl as string | undefined) ?? null;
