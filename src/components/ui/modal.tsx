@@ -18,6 +18,7 @@ export function Modal({
   title,
   variant = "center",
   maxWidth = "32rem",
+  closeOnBack = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,6 +26,8 @@ export function Modal({
   title?: string;
   variant?: "center" | "sheet";
   maxWidth?: string;
+  /** El botón/gesto de "atrás" del celular cierra el modal en vez de dejar la pantalla. Default: true. */
+  closeOnBack?: boolean;
 }) {
   // `open` arranca en false y solo pasa a true por interacción del
   // usuario (después de hidratar) -- nunca hace falta un gate de
@@ -37,6 +40,31 @@ export function Modal({
       document.body.style.overflow = prevOverflow;
     };
   }, [open]);
+
+  // Sin esto, el botón de atrás del teléfono (o el gesto de borde en
+  // iOS) sale directo de la pantalla de atrás, abandonando el modal
+  // abierto -- nunca lo cierra. Pusheamos una entrada de historial al
+  // abrir; si el back la consume (popstate), cerramos el modal en vez de
+  // dejar que el navegador siga para atrás. Si se cierra por otro medio
+  // (click afuera, botón Cancelar), hay que sacar esa entrada nosotros
+  // -- si no, el PRÓXIMO back del usuario "no hace nada" porque cae en
+  // una entrada fantasma que ya no corresponde a ningún estado visible.
+  useEffect(() => {
+    if (!open || !closeOnBack) return;
+    let closedByBack = false;
+    history.pushState({ turncreateModal: true }, "");
+    const handlePopState = () => {
+      closedByBack = true;
+      onClose();
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      if (!closedByBack && (history.state as { turncreateModal?: boolean } | null)?.turncreateModal) {
+        history.back();
+      }
+    };
+  }, [open, closeOnBack, onClose]);
 
   if (!open) return null;
 
@@ -54,7 +82,7 @@ export function Modal({
           onClick={onClose}
           className="absolute inset-0 animate-scrim-in bg-on-surface/40 backdrop-blur-sm"
         />
-        <div className="relative z-10 max-h-[85vh] w-full animate-sheet-up overflow-y-auto rounded-t-[28px] border border-border bg-surface-container-lowest/90 p-lg pb-8 shadow-card-hover backdrop-blur-xl">
+        <div className="relative z-10 max-h-[85vh] w-full animate-sheet-up overflow-y-auto rounded-t-[28px] border border-border bg-surface-container-lowest/90 p-lg shadow-card-hover backdrop-blur-xl [padding-bottom:calc(2rem+var(--safe-b))]">
           <div className="mx-auto mb-md h-1.5 w-10 rounded-full bg-border" />
           {title && (
             <div className="mb-md flex items-center justify-between">
