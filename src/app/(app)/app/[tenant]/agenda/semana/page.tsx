@@ -1,16 +1,11 @@
 import Link from "next/link";
-import { TZDate } from "@date-fns/tz";
-import { addDays, format, startOfWeek } from "date-fns";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { Card } from "@/components/ui/card";
 import { ViewToggle } from "../view-toggle";
+import { addDaysISO, dayMonthLabel, isDateISO, toDateISOInTz, todayISO, weekRange } from "@/lib/dates";
 
 const WEEKDAY_LABEL = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-
-function toISODate(date: Date) {
-  return format(date, "yyyy-MM-dd");
-}
 
 export default async function AgendaSemanaPage({
   params,
@@ -21,15 +16,9 @@ export default async function AgendaSemanaPage({
   const tenant = await getTenantBySlugFromFirebase(tenantSlug);
   if (!tenant) return null;
 
-  const referenceDate =
-    typeof date === "string" ? new Date(`${date}T12:00:00`) : new TZDate(new Date(), tenant.timezone);
-  const weekStart = startOfWeek(referenceDate, { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  const weekStartUTC = new Date(new TZDate(`${toISODate(weekStart)}T00:00:00`, tenant.timezone).toISOString());
-  const weekEndUTC = new Date(
-    new TZDate(`${toISODate(addDays(weekStart, 6))}T23:59:59.999`, tenant.timezone).toISOString(),
-  );
+  const referenceISO = typeof date === "string" && isDateISO(date) ? date : todayISO(tenant.timezone);
+  const { startISO: weekStartISO, start, end } = weekRange(referenceISO, tenant.timezone);
+  const days = Array.from({ length: 7 }, (_, i) => addDaysISO(weekStartISO, i));
 
   const { db } = firebaseAdmin();
   const [staffSnapshot, appointmentsSnapshot] = await Promise.all([
@@ -38,8 +27,8 @@ export default async function AgendaSemanaPage({
       .collection("tenants")
       .doc(tenant.id)
       .collection("appointments")
-      .where("startsAt", ">=", weekStartUTC)
-      .where("startsAt", "<=", weekEndUTC)
+      .where("startsAt", ">=", start)
+      .where("startsAt", "<", end)
       .get(),
   ]);
 
@@ -48,8 +37,8 @@ export default async function AgendaSemanaPage({
   const countsByDay = new Map<string, Map<string, number>>();
   for (const doc of appointmentsSnapshot.docs) {
     const data = doc.data();
-    if (data.status === "cancelled") continue;
-    const dayISO = format(new TZDate(data.startsAt.toDate(), tenant.timezone), "yyyy-MM-dd");
+    if (data.status === "cancelled" || data.status === "expired" || !data.startsAt?.toDate) continue;
+    const dayISO = toDateISOInTz(data.startsAt.toDate(), tenant.timezone);
     const byStaff = countsByDay.get(dayISO) ?? new Map<string, number>();
     byStaff.set(data.staffId, (byStaff.get(data.staffId) ?? 0) + 1);
     countsByDay.set(dayISO, byStaff);
@@ -63,15 +52,14 @@ export default async function AgendaSemanaPage({
             Agenda
           </h1>
           <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Semana del {toISODate(weekStart)}
+            Semana del {dayMonthLabel(weekStartISO)} al {dayMonthLabel(days[6])}
           </p>
         </div>
-        <ViewToggle tenantSlug={tenantSlug} dateISO={toISODate(referenceDate)} active="week" />
+        <ViewToggle tenantSlug={tenantSlug} dateISO={referenceISO} active="week" />
       </div>
 
       <div className="grid gap-md sm:grid-cols-2 lg:grid-cols-7">
-        {days.map((day, i) => {
-          const dayISO = toISODate(day);
+        {days.map((dayISO, i) => {
           const byStaff = countsByDay.get(dayISO) ?? new Map<string, number>();
           const total = Array.from(byStaff.values()).reduce((sum, n) => sum + n, 0);
 
@@ -80,7 +68,7 @@ export default async function AgendaSemanaPage({
               <Card className="h-full space-y-2 p-lg">
                 <div className="flex items-baseline justify-between">
                   <span className="font-label-lg text-label-lg text-on-surface">
-                    {WEEKDAY_LABEL[i]} {day.getDate()}
+                    {WEEKDAY_LABEL[i]} {Number(dayISO.slice(8, 10))}
                   </span>
                   <span className="font-label-sm text-label-sm text-on-surface-variant">
                     {total} turno{total === 1 ? "" : "s"}

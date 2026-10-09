@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { formatInTz } from "@/lib/dates";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -51,14 +52,17 @@ export default async function MiTurnoPage({
       break;
   }
 
+  // Formateado en la zona del local, no la del servidor (el VPS corre en
+  // UTC) ni la del navegador -- sin `timeZone` explícito se le mostraba al
+  // cliente una hora distinta a la que realmente tiene el turno.
   const startsAt = new Date(appointment.starts_at);
-  const formattedDate = startsAt.toLocaleDateString("es-AR", {
+  const formattedDate = formatInTz(startsAt, tenant.timezone, {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
   });
-  const formattedTime = startsAt.toLocaleTimeString("es-AR", {
+  const formattedTime = formatInTz(startsAt, tenant.timezone, {
     hour: "2-digit",
     minute: "2-digit",
   });

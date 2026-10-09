@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { TZDate } from "@date-fns/tz";
-import { format } from "date-fns";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { timeToMinutes, instantToMinutes } from "@/server/availability";
+import { dayRange, isDateISO, minutesOfDayInTz, todayISO, weekdayOf } from "@/lib/dates";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -22,21 +21,16 @@ export default async function AgendaPage({
   const tenant = await getTenantBySlugFromFirebase(tenantSlug);
   if (!tenant) return null;
 
-  const now = new TZDate(new Date(), tenant.timezone);
-  const todayISO = format(now, "yyyy-MM-dd");
-  const dateISO = typeof date === "string" ? date : todayISO;
-  const nowMinute = dateISO === todayISO ? now.getHours() * 60 + now.getMinutes() : null;
-  const weekday = new TZDate(`${dateISO}T12:00:00`, tenant.timezone).getDay();
-  const { startUTC, endUTC } = (() => {
-    const start = new TZDate(`${dateISO}T00:00:00`, tenant.timezone);
-    const end = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone);
-    return { startUTC: start.toISOString(), endUTC: end.toISOString() };
-  })();
+  const todayStr = todayISO(tenant.timezone);
+  const dateISO = typeof date === "string" && isDateISO(date) ? date : todayStr;
+  const nowMinute = dateISO === todayStr ? minutesOfDayInTz(new Date(), tenant.timezone) : null;
+  const weekday = weekdayOf(dateISO);
+  const { start, end } = dayRange(dateISO, tenant.timezone);
 
   const { db } = firebaseAdmin();
   const [staffSnapshot, appointmentsSnapshot] = await Promise.all([
     db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
-    db.collection("tenants").doc(tenant.id).collection("appointments").where("startsAt", ">=", new Date(startUTC)).where("startsAt", "<=", new Date(endUTC)).get(),
+    db.collection("tenants").doc(tenant.id).collection("appointments").where("startsAt", ">=", start).where("startsAt", "<", end).get(),
       // Turnos cancelados/vencidos no ocupan lugar visual en la grilla --
       // mueven un turno por drag & drop crea uno nuevo y cancela el
       // viejo (sección 5.3); si se mostrara iría a la vez en su posición

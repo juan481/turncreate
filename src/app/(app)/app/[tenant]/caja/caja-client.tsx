@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TZDate } from "@date-fns/tz";
+import { formatInTz, formatTimeInTz } from "@/lib/dates";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,8 +48,7 @@ const METHOD_LABEL: Record<string, { label: string; icon: string }> = {
 };
 
 function formatHour(instant: string, timezone: string) {
-  const zoned = new TZDate(new Date(instant), timezone);
-  return `${zoned.getHours().toString().padStart(2, "0")}:${zoned.getMinutes().toString().padStart(2, "0")}`;
+  return formatTimeInTz(instant, timezone);
 }
 
 function OpenCashForm({
@@ -124,7 +123,7 @@ function OpenCashForm({
           <div>
             <p className="font-label-md text-label-md text-on-surface">Último cierre</p>
             <p className="font-body-sm text-body-sm text-on-surface-variant">
-              {new Date(lastClosedSession.closedAt).toLocaleDateString("es-AR")} · esperado $
+              {formatInTz(lastClosedSession.closedAt, timezone, { dateStyle: "short" })} · esperado $
               {lastClosedSession.expectedAmount.toLocaleString("es-AR")}
             </p>
           </div>

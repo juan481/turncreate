@@ -1,13 +1,12 @@
-import { TZDate } from "@date-fns/tz";
-import { format } from "date-fns";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { dayRange, todayISO } from "@/lib/dates";
 import { CajaClient } from "./caja-client";
 
 export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja">) {
   const { tenant: tenantSlug } = await params; const tenant = await getTenantBySlugFromFirebase(tenantSlug); if (!tenant) return null;
-  const { db } = firebaseAdmin(); const ref = db.collection("tenants").doc(tenant.id); const today = format(new TZDate(new Date(), tenant.timezone), "yyyy-MM-dd"); const start = new TZDate(`${today}T00:00:00`, tenant.timezone); const end = new TZDate(`${today}T23:59:59.999`, tenant.timezone);
-  const [sessions, appointments, products] = await Promise.all([ref.collection("cashSessions").orderBy("openedAt", "desc").get(), ref.collection("appointments").where("startsAt", ">=", start).where("startsAt", "<=", end).orderBy("startsAt").get(), ref.collection("products").where("active", "==", true).get()]);
+  const { db } = firebaseAdmin(); const ref = db.collection("tenants").doc(tenant.id); const { start, end } = dayRange(todayISO(tenant.timezone), tenant.timezone);
+  const [sessions, appointments, products] = await Promise.all([ref.collection("cashSessions").orderBy("openedAt", "desc").get(), ref.collection("appointments").where("startsAt", ">=", start).where("startsAt", "<", end).orderBy("startsAt").get(), ref.collection("products").where("active", "==", true).get()]);
   const open = sessions.docs.find((doc) => !doc.data().closedAt); const movements = open ? await open.ref.collection("movements").orderBy("createdAt", "desc").get() : null; const lastClosed = sessions.docs.find((doc) => doc.data().closedAt)?.data();
   // Desglose por método de todo lo cobrado hoy (incluye turnos ya
   // completados antes de abrir la caja) -- "Esperado" en efectivo sale de

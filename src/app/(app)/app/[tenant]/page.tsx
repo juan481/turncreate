@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { TZDate } from "@date-fns/tz";
-import { format } from "date-fns";
+import { dayRange, formatTimeInTz, todayISO } from "@/lib/dates";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { Card } from "@/components/ui/card";
@@ -18,8 +18,7 @@ import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { DEMO_USER_EMAIL } from "@/lib/demo";
 
 function formatHour(instant: string, timezone: string) {
-  const zoned = new TZDate(new Date(instant), timezone);
-  return `${zoned.getHours().toString().padStart(2, "0")}:${zoned.getMinutes().toString().padStart(2, "0")}`;
+  return formatTimeInTz(instant, timezone);
 }
 
 const WEEKDAY_LABEL = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
@@ -32,14 +31,13 @@ export default async function TenantDashboardPage({
   if (!tenant) return null;
 
   const now = new TZDate(new Date(), tenant.timezone);
-  const dateISO = format(now, "yyyy-MM-dd");
-  const startUTC = new TZDate(`${dateISO}T00:00:00`, tenant.timezone).toISOString();
-  const endUTC = new TZDate(`${dateISO}T23:59:59.999`, tenant.timezone).toISOString();
+  const dateISO = todayISO(tenant.timezone);
+  const { start, end } = dayRange(dateISO, tenant.timezone);
 
   const { db } = firebaseAdmin();
   const tenantRef = db.collection("tenants").doc(tenant.id);
   const [appointmentSnapshot, staffSnapshot, currentUser] = await Promise.all([
-    tenantRef.collection("appointments").where("startsAt", ">=", new Date(startUTC)).where("startsAt", "<=", new Date(endUTC)).orderBy("startsAt").get(),
+    tenantRef.collection("appointments").where("startsAt", ">=", start).where("startsAt", "<", end).orderBy("startsAt").get(),
     tenantRef.collection("staff").where("active", "==", true).get(),
     getCurrentFirebaseUser(),
   ]);
@@ -72,8 +70,12 @@ export default async function TenantDashboardPage({
   const cobradoHoy = ingresosHoy - pendienteHoy;
   const ticketPromedio = turnosHoy > 0 ? ingresosHoy / turnosHoy : 0;
 
-  const nowInstant = now.toISOString();
-  const proximo = appointments.find((a) => a.status === "confirmed" && a.startsAt >= nowInstant);
+  // Comparación por instante real (epoch), no por string: `now.toISOString()`
+  // en un TZDate devuelve con offset ("...-03:00", no "...Z"), así que
+  // compararlo como texto contra `startsAt` (guardado en UTC con "Z")
+  // daba turnos ya pasados como "próximos" en ciertos rangos horarios.
+  const nowMs = now.getTime();
+  const proximo = appointments.find((a) => a.status === "confirmed" && new Date(a.startsAt).getTime() >= nowMs);
   const resto = appointments.filter((a) => a.id !== proximo?.id);
 
   const weekdayLabel = WEEKDAY_LABEL[now.getDay()];
