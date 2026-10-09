@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { Logo } from "@/components/ui/logo";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { PageTransition } from "@/components/ui/page-transition";
+import { ToastProvider } from "@/components/ui/toast";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { getTenantBySlugFromFirebase, getTenantMember, getTenantMembershipsForUser } from "@/server/firebase/tenants";
@@ -11,6 +13,7 @@ import { signOut } from "./actions";
 import { NavPills } from "./nav-pills";
 import { MobileMenuButton } from "./mobile-menu";
 import { MobileBottomNav } from "./mobile-bottom-nav";
+import { MobilePageHeader } from "./mobile-page-header";
 import { NewAppointmentFab } from "./new-appointment-fab";
 import { NotificationsButton } from "./notifications-button";
 import { TenantSwitcher, type TenantOption } from "./tenant-switcher";
@@ -66,42 +69,53 @@ export default async function TenantAppLayout({
   const nav = NAV.filter((item) => item.href !== "staff" || staffSnapshot.size > 1);
 
   return (
-    <div className="min-h-screen bg-canvas">
-      <header className="fixed inset-x-0 top-0 z-50 px-gutter pt-3 md:px-gutter-desktop">
-        <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between gap-gutter rounded-pill border border-border bg-surface-container-lowest/90 px-4 shadow-card backdrop-blur-xl md:h-[72px] md:px-xl">
-          <div className="flex shrink-0 items-center gap-lg">
-            <Link href={`/app/${tenantSlug}`} className="flex items-center gap-2">
-              <Logo iconOnly className="h-8 w-auto" />
-              <span className="hidden font-headline-sm text-headline-sm tracking-tight text-on-surface 2xl:inline">TurnCreate</span>
-            </Link>
-            <span className="hidden h-4 w-px bg-outline-variant/50 xl:block" />
-            <TenantSwitcher current={currentTenantOption} options={tenantOptions.length ? tenantOptions : [currentTenantOption]} />
-          </div>
-          <NavPills tenantSlug={tenantSlug} items={nav} />
-          <div className="flex shrink-0 items-center gap-2 md:gap-3">
-            <Link href={`/app/${tenantSlug}/configuracion`} className="hidden h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface sm:flex" aria-label="Configuración" title="Configuración">
-              <Icon name="settings" className="text-[20px]" />
-            </Link>
-            <NotificationsButton notifications={[]} />
-            <div className="hidden items-center gap-2 pl-1 sm:flex">
-              <div className="hidden text-right leading-tight 2xl:block">
-                <div className="font-label-md text-label-md text-on-surface">{displayName}</div>
-                <div className="font-label-sm text-label-sm text-on-surface-variant">{roleLabel}</div>
-              </div>
-              <Avatar name={displayName} src={avatarUrl} size="sm" ring />
+    <ToastProvider>
+      <div className="min-h-screen bg-canvas">
+        {/* Header-pill flotante: solo desktop/tablet ancho (lg+). En mobile
+            lo reemplaza MobilePageHeader (sticky, violeta, con ‹Volver +
+            título de la sección -- lo que pedía el rediseño) para no
+            competir por los mismos ~56px de alto con dos headers a la vez. */}
+        <header className="fixed inset-x-0 top-0 z-50 hidden px-gutter-desktop pt-3 lg:block">
+          <div className="mx-auto flex h-[72px] w-full max-w-[1440px] items-center justify-between gap-gutter rounded-pill border border-border bg-surface-container-lowest/90 px-xl shadow-card backdrop-blur-xl">
+            <div className="flex shrink-0 items-center gap-lg">
+              <Link href={`/app/${tenantSlug}`} className="flex items-center gap-2">
+                <Logo iconOnly className="h-8 w-auto" />
+                <span className="hidden font-headline-sm text-headline-sm tracking-tight text-on-surface 2xl:inline">TurnCreate</span>
+              </Link>
+              <span className="hidden h-4 w-px bg-outline-variant/50 xl:block" />
+              <TenantSwitcher current={currentTenantOption} options={tenantOptions.length ? tenantOptions : [currentTenantOption]} />
             </div>
-            <form action={signOut} className="hidden xl:block">
-              <button type="submit" className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface" aria-label="Cerrar sesión">
-                <Icon name="logout" className="text-[18px]" />
-              </button>
-            </form>
-            <MobileMenuButton tenantSlug={tenantSlug} items={[...nav, { href: "configuracion", label: "Configuración", icon: "settings" }]} signOutAction={signOut} tenantOptions={tenantOptions.length ? tenantOptions : undefined} currentTenant={currentTenantOption} />
+            <NavPills tenantSlug={tenantSlug} items={nav} />
+            <div className="flex shrink-0 items-center gap-3">
+              <Link href={`/app/${tenantSlug}/configuracion`} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface" aria-label="Configuración" title="Configuración">
+                <Icon name="settings" className="text-[20px]" />
+              </Link>
+              <NotificationsButton notifications={[]} />
+              <div className="flex items-center gap-2 pl-1">
+                <div className="hidden text-right leading-tight 2xl:block">
+                  <div className="font-label-md text-label-md text-on-surface">{displayName}</div>
+                  <div className="font-label-sm text-label-sm text-on-surface-variant">{roleLabel}</div>
+                </div>
+                <Avatar name={displayName} src={avatarUrl} size="sm" ring />
+              </div>
+              <form action={signOut} className="hidden xl:block">
+                <button type="submit" className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface" aria-label="Cerrar sesión">
+                  <Icon name="logout" className="text-[18px]" />
+                </button>
+              </form>
+              <MobileMenuButton tenantSlug={tenantSlug} items={[...nav, { href: "configuracion", label: "Configuración", icon: "settings" }]} signOutAction={signOut} tenantOptions={tenantOptions.length ? tenantOptions : undefined} currentTenant={currentTenantOption} />
+            </div>
           </div>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-[1440px] px-gutter pb-28 pt-24 md:px-gutter-desktop md:pb-2xl md:pt-28"><PageTransition>{children}</PageTransition></main>
-      <MobileBottomNav tenantSlug={tenantSlug} />
-      <NewAppointmentFab tenantSlug={tenantSlug} />
-    </div>
+        </header>
+        <MobilePageHeader tenantSlug={tenantSlug} tenantName={tenant.name} />
+        <main className="mx-auto w-full max-w-[1440px] px-gutter pb-24 lg:px-gutter-desktop lg:pb-2xl lg:pt-28">
+          <PageTransition>{children}</PageTransition>
+        </main>
+        <Suspense fallback={null}>
+          <MobileBottomNav tenantSlug={tenantSlug} />
+        </Suspense>
+        <NewAppointmentFab tenantSlug={tenantSlug} />
+      </div>
+    </ToastProvider>
   );
 }

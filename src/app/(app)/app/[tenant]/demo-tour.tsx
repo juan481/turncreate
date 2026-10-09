@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Step = { selector: string; icon: string; title: string; body: string };
 
@@ -57,6 +58,18 @@ const PAD = 10;
 
 type Rect = { top: number; left: number; width: number; height: number };
 
+/**
+ * Sus únicos objetivos (`data-tour="..."`) viven en NavPills y
+ * TenantSwitcher, que están ocultos por debajo de 1280px (xl) -- por
+ * eso en mobile/tablet SIEMPRE caía en el overlay de pantalla completa
+ * ("sin target"), que tapaba el header/bottom-nav/modales enteros y
+ * dejaba los botones Saltar/Atrás/Siguiente apretados o fuera de
+ * pantalla. Correrlo solo en pantallas anchas evita el problema de
+ * raíz en vez de intentar parchear un tooltip de escritorio para caber
+ * en 360px.
+ */
+const WIDE_QUERY = "(min-width: 1280px)";
+
 export function DemoTour() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,12 +78,22 @@ export function DemoTour() {
   const [rect, setRect] = useState<Rect | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [mounted, setMounted] = useState(false);
+  const [isWide, setIsWide] = useState(false);
 
   // Gate de montado: createPortal(..., document.body) no puede correr en
   // el servidor (document no existe ahí), así que el portal recién se
   // habilita una vez hidratado en el cliente.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_QUERY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza con una media query externa, no con props/estado de React
+    setIsWide(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsWide(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   useEffect(() => {
     if (searchParams.get("demoTutorial") !== "1") return;
@@ -111,7 +134,7 @@ export function DemoTour() {
     };
   }, [active, measure]);
 
-  if (!mounted || !active || !step) return null;
+  if (!mounted || !active || !step || !isWide) return null;
 
   const isLast = stepIndex === STEPS.length - 1;
   const hasTarget = rect !== null && viewport.width > 0;
@@ -131,13 +154,14 @@ export function DemoTour() {
       }
     : { position: "fixed", inset: 0, background: "rgba(10, 8, 20, 0.78)", zIndex: 300 };
 
-  let tooltipStyle: React.CSSProperties = {
-    position: "fixed",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    zIndex: 301,
-  };
+  // Sin target: se centra con un wrapper flex (inset:0 + items/justify
+  // center), no con `transform: translate(-50%,-50%)` -- un elemento con
+  // `animate-pop-in` (animación CSS que también anima `transform`, con
+  // fill-mode "both") hace que el navegador descarte cualquier otro
+  // valor de `transform` mientras la animación esté activa/aplicada, así
+  // que ese translate de centrado se perdía y el tooltip quedaba con su
+  // esquina superior izquierda (no su centro) en el medio de la pantalla.
+  let tooltipStyle: React.CSSProperties = { position: "fixed", zIndex: 301 };
   if (hasTarget) {
     const tooltipWidth = Math.min(360, viewport.width - 32);
     const spaceBelow = viewport.height - (rect!.top + rect!.height + PAD);
@@ -151,45 +175,56 @@ export function DemoTour() {
     setStepIndex(index);
   }
 
+  const tooltip = (
+    <div
+      style={hasTarget ? tooltipStyle : undefined}
+      className={cn(
+        "animate-pop-in space-y-md rounded-card border border-border bg-surface-container-lowest p-lg shadow-card-hover",
+        !hasTarget && "w-full max-w-[22.5rem]",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary/15 text-secondary">
+          <Icon name={step.icon} className="text-[18px]" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-label-sm text-label-sm text-on-surface-variant">
+            Paso {stepIndex + 1} de {STEPS.length}
+          </p>
+          <p className="font-headline-sm text-headline-sm text-on-surface">{step.title}</p>
+        </div>
+      </div>
+      <p className="font-body-sm text-body-sm text-on-surface-variant">{step.body}</p>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setActive(false)}
+          className="font-label-sm text-label-sm text-on-surface-variant transition-colors hover:text-on-surface"
+        >
+          Saltar
+        </button>
+        <div className="flex gap-2">
+          {stepIndex > 0 && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => goTo(stepIndex - 1)}>
+              Atrás
+            </Button>
+          )}
+          <Button type="button" size="sm" onClick={() => (isLast ? setActive(false) : goTo(stepIndex + 1))}>
+            {isLast ? "Entendido, empezar" : "Siguiente"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   return createPortal(
     <>
       <div style={highlightStyle} />
-      <div
-        style={tooltipStyle}
-        className="animate-pop-in space-y-md rounded-card border border-border bg-surface-container-lowest p-lg shadow-card-hover"
-      >
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary/15 text-secondary">
-            <Icon name={step.icon} className="text-[18px]" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-label-sm text-label-sm text-on-surface-variant">
-              Paso {stepIndex + 1} de {STEPS.length}
-            </p>
-            <p className="font-headline-sm text-headline-sm text-on-surface">{step.title}</p>
-          </div>
+      {hasTarget ? tooltip : (
+        <div style={{ zIndex: 301 }} className="fixed inset-0 flex items-center justify-center p-4">
+          {tooltip}
         </div>
-        <p className="font-body-sm text-body-sm text-on-surface-variant">{step.body}</p>
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => setActive(false)}
-            className="font-label-sm text-label-sm text-on-surface-variant transition-colors hover:text-on-surface"
-          >
-            Saltar
-          </button>
-          <div className="flex gap-2">
-            {stepIndex > 0 && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => goTo(stepIndex - 1)}>
-                Atrás
-              </Button>
-            )}
-            <Button type="button" size="sm" onClick={() => (isLast ? setActive(false) : goTo(stepIndex + 1))}>
-              {isLast ? "Entendido, empezar" : "Siguiente"}
-            </Button>
-          </div>
-        </div>
-      </div>
+      )}
     </>,
     document.body,
   );
