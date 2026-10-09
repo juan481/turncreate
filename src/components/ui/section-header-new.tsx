@@ -23,10 +23,14 @@ export function SectionHeaderNew({
   return (
     <div className="space-y-md">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        {/* El AppBar mobile ya muestra el título de la sección (ver
+            MobilePageHeader) -- este <h1> solo hace falta en desktop,
+            donde el header-pill flotante no tiene título propio. */}
+        <div className="hidden lg:block">
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">{title}</h1>
           {subtitle && <p className="font-body-sm text-body-sm text-on-surface-variant">{subtitle}</p>}
         </div>
+        {subtitle && <p className="font-body-sm text-body-sm text-on-surface-variant lg:hidden">{subtitle}</p>}
         {!open && (
           <Button size="default" onClick={() => setOpen(true)}>
             <Icon name="add" className="text-[18px]" />

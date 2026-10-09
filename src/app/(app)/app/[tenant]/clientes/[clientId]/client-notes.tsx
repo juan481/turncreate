@@ -52,7 +52,7 @@ export function ClientNotes(props: {
                 <span className="font-label-sm text-status-alert bg-status-alert/10 px-2 py-0.5 rounded-full">Clínica</span>
               )}
             </div>
-            <p className="font-body-md text-on-surface whitespace-pre-wrap">{note.body}</p>
+            <p className="font-body-md text-on-surface whitespace-pre-wrap break-words">{note.body}</p>
           </div>
         ))}
         {props.notes.length === 0 && (

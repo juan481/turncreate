@@ -14,7 +14,7 @@ export function NewClientForm({ tenantSlug }: { tenantSlug: string }) {
   );
 
   return (
-    <form action={formAction} className="grid gap-3 sm:grid-cols-[2fr_1.5fr_2fr_auto] sm:items-end">
+    <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1.5fr_2fr_auto] sm:items-end">
       <div className="space-y-1.5">
         <label className="font-label-md text-label-md text-on-surface-variant">
           Nombre completo

@@ -22,7 +22,7 @@ export function NewServiceForm({ tenantSlug }: { tenantSlug: string }) {
     <form action={formAction} className="space-y-md">
       <input type="hidden" name="phases" value={JSON.stringify(phases)} />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <label className="font-label-md text-label-md text-on-surface-variant">Nombre</label>
           <Input name="name" placeholder="Corte de pelo" required />

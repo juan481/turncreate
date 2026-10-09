@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const PALETTE = ["#7069E8", "#22C55E", "#F59E0B", "#EF4444", "#0EA5E9", "#EC4899", "#8B5CF6", "#14B8A6"];
@@ -35,13 +38,19 @@ export function Avatar({
   className?: string;
 }) {
   const sizeClasses = SIZES[size];
+  // Si la URL de la foto falla (ej. un host de avatares de prueba caído),
+  // sin este estado quedaba un ícono de imagen rota en vez de caer a las
+  // iniciales -- el fallback a iniciales de abajo solo corría cuando NO
+  // había `src` en absoluto, nunca cuando `src` existía pero no cargaba.
+  const [failed, setFailed] = useState(false);
 
-  if (src) {
+  if (src && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- avatares de prueba servidos por pravatar.cc, no optimizables por next/image
       <img
         src={src}
         alt={name}
+        onError={() => setFailed(true)}
         className={cn(
           "shrink-0 rounded-full object-cover shadow-sm",
           ring && "ring-2 ring-surface-container-high",

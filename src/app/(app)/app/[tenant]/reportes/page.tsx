@@ -27,20 +27,28 @@ export default async function ReportesPage({ params, searchParams }: { params: P
   ]);
 
   const completed = current.docs.map((doc) => doc.data()).filter((entry) => entry.status === "completed");
-  const payments = await Promise.all(
-    completed.map((entry) => ref.collection("appointments").doc(entry.id as string).collection("payments").where("status", "==", "approved").get()),
-  );
 
-  const services = new Map<string, number>();
+  // Definición única de "ingresos" en toda la pantalla: suma de `total` de
+  // turnos completados (lo mismo que ya usa el gráfico de evolución mensual
+  // de abajo y lo que el resto del sistema llama "facturado"). Antes el KPI
+  // sumaba pagos aprobados y el gráfico sumaba `total` -- dos números que no
+  // tenían por qué coincidir.
+  const income = completed.reduce((sum, entry) => sum + Number(entry.total ?? 0), 0);
+
+  // Servicios más pedidos: keyeado por `serviceId` (antes era por NOMBRE),
+  // así el ranking se puede linkear a /servicios/{serviceId} desde el cliente.
+  const services = new Map<string, { name: string; count: number; income: number }>();
   const people = new Map<string, { count: number; photo: string | null }>();
   for (const entry of completed) {
-    for (const item of (entry.items ?? []) as { name?: string }[]) {
-      services.set(item.name ?? "", (services.get(item.name ?? "") ?? 0) + 1);
+    for (const item of (entry.items ?? []) as { serviceId?: string; name?: string; price?: number }[]) {
+      const id = item.serviceId ?? item.name ?? "";
+      if (!id) continue;
+      const prev = services.get(id) ?? { name: item.name ?? "Servicio", count: 0, income: 0 };
+      services.set(id, { name: item.name ?? prev.name, count: prev.count + 1, income: prev.income + Number(item.price ?? 0) });
     }
     const name = String(entry.staffName ?? "");
     if (name) people.set(name, { count: (people.get(name)?.count ?? 0) + 1, photo: (entry.staffPhoto as string | null) ?? null });
   }
-  const income = payments.flatMap((snapshot) => snapshot.docs).reduce((sum, payment) => sum + Number(payment.data().amount ?? 0), 0);
   const currentClients = new Set(completed.map((entry) => entry.clientId));
   const previousClients = new Set(previousDocs.docs.map((doc) => doc.data()).filter((entry) => entry.status === "completed").map((entry) => entry.clientId));
   const top = [...people.entries()].sort((a, b) => b[1].count - a[1].count)[0];
@@ -69,8 +77,11 @@ export default async function ReportesPage({ params, searchParams }: { params: P
 
   return (
     <div className="space-y-lg">
+      {/* El AppBar mobile ya muestra "Reportes" + volver -- el <h1> de
+          acá solo hace falta en el header-pill de desktop. El mes sigue
+          visible en mobile, es contenido útil, no chrome de navegación. */}
       <div>
-        <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Reportes</h1>
+        <h1 className="hidden font-headline-lg-mobile text-headline-lg-mobile text-on-surface lg:block">Reportes</h1>
         <p className="font-body-sm text-body-sm text-on-surface-variant capitalize">{monthLabel(monthFirstDay)}</p>
       </div>
       <ReportesClient
@@ -88,7 +99,10 @@ export default async function ReportesPage({ params, searchParams }: { params: P
           ingresos: income,
           egresos,
           ticketMasAlto: completed.reduce((max, entry) => Math.max(max, Number(entry.total ?? 0)), 0),
-          serviciosPopulares: [...services.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count })),
+          serviciosPopulares: [...services.entries()]
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 5)
+            .map(([id, data]) => ({ id, name: data.name, count: data.count, income: data.income })),
           evolucionMensual: evolution,
           profesionalDelMes: staff.size > 1 && top ? { name: top[0], count: top[1].count, photo: top[1].photo } : null,
         }}

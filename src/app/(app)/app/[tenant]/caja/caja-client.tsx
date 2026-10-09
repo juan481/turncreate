@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import {
   openCash,
@@ -51,6 +52,23 @@ function formatHour(instant: string, timezone: string) {
   return formatTimeInTz(instant, timezone);
 }
 
+/** Encabezado chico para cada paso del flujo (Cobrar / Cerrar), con el
+ * número en un círculo -- así "Caja" se lee como 3 pasos (Abrir → Cobrar →
+ * Cerrar) en vez de una pila de cards sin jerarquía. */
+function StepHeader({ step, title, hint }: { step: number; title: string; hint?: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary font-label-sm text-label-sm text-on-primary">
+        {step}
+      </span>
+      <div className="min-w-0">
+        <h2 className="font-headline-sm text-headline-sm text-on-surface">{title}</h2>
+        {hint && <p className="font-body-sm text-body-sm text-on-surface-variant">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
 function OpenCashForm({
   tenantSlug,
   appointments,
@@ -77,9 +95,7 @@ function OpenCashForm({
           </div>
           <StatusPill status="alert">Cerrada</StatusPill>
         </div>
-        <p className="font-body-sm text-body-sm text-on-surface-variant">
-          La caja está cerrada. Abrila para empezar a cobrar.
-        </p>
+        <p className="font-body-sm text-body-sm text-on-surface-variant">Abrí la caja para empezar el día.</p>
         <form action={formAction} className="space-y-md">
           <div className="space-y-xs">
             <label htmlFor="openingAmount" className="font-label-sm text-label-sm text-on-surface">
@@ -96,15 +112,15 @@ function OpenCashForm({
 
       {appointments.length > 0 && (
         <Card hoverLift={false} className="space-y-2 p-lg">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="font-label-lg text-label-lg text-on-surface">Te esperan hoy</h3>
-            <span className="rounded-pill bg-secondary-soft px-3 py-0.5 font-label-sm text-label-sm text-secondary">
+            <span className="shrink-0 rounded-pill bg-secondary-soft px-3 py-0.5 font-label-sm text-label-sm tabular-nums text-secondary">
               ${pendingTotal.toLocaleString("es-AR")} por cobrar
             </span>
           </div>
           <div className="space-y-1">
             {appointments.slice(0, 4).map((a) => (
-              <div key={a.id} className="flex items-center gap-2 font-body-sm text-body-sm text-on-surface-variant">
+              <div key={a.id} className="flex min-w-0 items-center gap-2 font-body-sm text-body-sm text-on-surface-variant">
                 <span className="w-12 shrink-0 text-on-surface">{formatHour(a.startsAt, timezone)}</span>
                 <span className="truncate">{a.clientName} · {a.serviceNames}</span>
               </div>
@@ -119,17 +135,17 @@ function OpenCashForm({
       )}
 
       {lastClosedSession && (
-        <Card hoverLift={false} className="flex items-center justify-between p-lg">
-          <div>
+        <Card hoverLift={false} className="flex items-center justify-between gap-2 p-lg">
+          <div className="min-w-0">
             <p className="font-label-md text-label-md text-on-surface">Último cierre</p>
-            <p className="font-body-sm text-body-sm text-on-surface-variant">
-              {formatInTz(lastClosedSession.closedAt, timezone, { dateStyle: "short" })} · esperado $
-              {lastClosedSession.expectedAmount.toLocaleString("es-AR")}
+            <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
+              {formatInTz(lastClosedSession.closedAt, timezone, { dateStyle: "short" })} · esperado{" "}
+              <span className="tabular-nums">${lastClosedSession.expectedAmount.toLocaleString("es-AR")}</span>
             </p>
           </div>
           <span
             className={cn(
-              "rounded-pill px-3 py-1 font-label-sm text-label-sm",
+              "shrink-0 rounded-pill px-3 py-1 font-label-sm text-label-sm tabular-nums",
               lastClosedSession.difference === 0
                 ? "bg-status-confirmed-bg text-status-confirmed"
                 : "bg-status-alert-bg text-status-alert",
@@ -179,7 +195,7 @@ function ChargeForm({
         </>
       )}
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <label className="font-label-sm text-label-sm text-on-surface-variant">Método</label>
           <select
@@ -208,15 +224,15 @@ function ChargeForm({
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="font-label-md text-label-md text-on-surface">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span className="font-label-md text-label-md tabular-nums text-on-surface">
           Total a cobrar: ${total.toLocaleString("es-AR")}
         </span>
         <div className="flex gap-2">
-          <Button type="button" variant="secondary" size="sm" onClick={onDone}>
+          <Button type="button" variant="secondary" size="sm" className="flex-1 sm:flex-none" onClick={onDone}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={pending}>
+          <Button type="submit" size="sm" className="flex-1 sm:flex-none" disabled={pending}>
             {pending ? "Cobrando…" : "Confirmar cobro"}
           </Button>
         </div>
@@ -234,7 +250,7 @@ function AddMovementForm({ tenantSlug, sessionId, onDone }: { tenantSlug: string
 
   return (
     <form action={formAction} className="space-y-2 rounded-inner bg-surface-container-low p-3">
-      <div className="grid gap-2 sm:grid-cols-[auto_1fr_1fr]">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_1fr]">
         <select
           name="type"
           className="h-9 rounded-pill border-0 bg-surface px-3 font-body-sm text-body-sm text-on-surface"
@@ -294,34 +310,47 @@ export function CajaClient({
 
   return (
     <div className="space-y-lg">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface md:font-headline-lg md:text-headline-lg">
-            Caja
-          </h1>
-          <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Abierta a las {formatHour(session.opened_at, timezone)}
-          </p>
-        </div>
+      {/* El AppBar mobile ya muestra "Caja" + volver -- este título solo
+          hace falta en el header-pill de desktop. */}
+      <div className="hidden items-center justify-between lg:flex">
+        <h1 className="font-headline-lg text-headline-lg text-on-surface">Caja</h1>
         <StatusPill status="confirmed">Abierta</StatusPill>
       </div>
+
+      {/* Estado claro, arriba de todo: cuándo se abrió y cuánta plata hay
+          en este momento -- antes esto estaba repartido en un <h1>, un
+          párrafo chico y una StatusPill, sin que nada dijera "hay $X en
+          caja" de forma directa. */}
+      <Card hoverLift={false} className="flex items-center gap-3 p-lg">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-status-confirmed-bg text-status-confirmed">
+          <Icon name="point_of_sale" className="text-[20px]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-headline-sm text-headline-sm text-on-surface">
+            Caja abierta desde {formatHour(session.opened_at, timezone)}
+          </p>
+          <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
+            Hay <span className="tabular-nums">${expected.toLocaleString("es-AR")}</span> en caja ahora mismo
+          </p>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 gap-md md:grid-cols-4">
         <Card hoverLift={false} className="flex flex-col gap-xs p-lg">
           <p className="font-label-sm text-label-sm text-on-surface-variant">Apertura</p>
-          <p className="font-headline-sm text-headline-sm text-on-surface">
+          <p className="font-headline-sm text-headline-sm tabular-nums text-on-surface">
             ${session.opening_amount.toLocaleString("es-AR")}
           </p>
         </Card>
         <Card hoverLift={false} className="flex flex-col gap-xs p-lg">
           <p className="font-label-sm text-label-sm text-on-surface-variant">Entradas</p>
-          <p className="font-headline-sm text-headline-sm text-status-confirmed">
+          <p className="font-headline-sm text-headline-sm tabular-nums text-status-confirmed">
             +${totalIn.toLocaleString("es-AR")}
           </p>
         </Card>
         <Card hoverLift={false} className="flex flex-col gap-xs p-lg">
           <p className="font-label-sm text-label-sm text-on-surface-variant">Salidas</p>
-          <p className="font-headline-sm text-headline-sm text-status-alert">
+          <p className="font-headline-sm text-headline-sm tabular-nums text-status-alert">
             -${totalOut.toLocaleString("es-AR")}
           </p>
         </Card>
@@ -330,7 +359,7 @@ export function CajaClient({
             <Icon name="payments" className="text-[14px]" />
             Esperado
           </p>
-          <p className="font-headline-sm text-headline-sm text-primary">${expected.toLocaleString("es-AR")}</p>
+          <p className="font-headline-sm text-headline-sm tabular-nums text-primary">${expected.toLocaleString("es-AR")}</p>
         </Card>
       </div>
 
@@ -346,7 +375,7 @@ export function CajaClient({
                   className="flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface"
                 >
                   <Icon name={info.icon} className="text-[14px] text-on-surface-variant" />
-                  {info.label}: ${amount.toLocaleString("es-AR")}
+                  {info.label}: <span className="tabular-nums">${amount.toLocaleString("es-AR")}</span>
                 </span>
               );
             })}
@@ -354,53 +383,58 @@ export function CajaClient({
         </Card>
       )}
 
-      <Card hoverLift={false} className="space-y-3 p-lg">
-        <h2 className="font-headline-sm text-headline-sm text-on-surface">Turnos confirmados de hoy</h2>
-        {appointments.map((appointment) => (
-          <div key={appointment.id} className="space-y-2 rounded-inner bg-surface-container-low p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <Avatar name={appointment.clientName} size="sm" />
-                <div>
-                  <p className="font-label-md text-label-md text-on-surface">
-                    {formatHour(appointment.startsAt, timezone)} · {appointment.clientName}
-                  </p>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    {appointment.serviceNames} · {appointment.staffName}
-                  </p>
+      {/* Paso 2: cobrar los turnos de hoy. */}
+      <section className="space-y-sm">
+        <StepHeader step={2} title="Cobrar turnos de hoy" hint="Tocá Cobrar en cada turno cuando el cliente te paga." />
+        <Card hoverLift={false} className="space-y-3 p-lg">
+          {appointments.map((appointment) => (
+            <div key={appointment.id} className="space-y-2 rounded-inner bg-surface-container-low p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={appointment.clientName} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate font-label-md text-label-md text-on-surface">
+                      {formatHour(appointment.startsAt, timezone)} · {appointment.clientName}
+                    </p>
+                    <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
+                      {appointment.serviceNames} · {appointment.staffName}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="font-label-md text-label-md tabular-nums text-on-surface">
+                    ${appointment.balance.toLocaleString("es-AR")}
+                  </span>
+                  {chargingId !== appointment.id && (
+                    <Button size="sm" onClick={() => setChargingId(appointment.id)}>
+                      Cobrar
+                    </Button>
+                  )}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="font-label-md text-label-md text-on-surface">
-                  ${appointment.balance.toLocaleString("es-AR")}
-                </span>
-                {chargingId !== appointment.id && (
-                  <Button size="sm" onClick={() => setChargingId(appointment.id)}>
-                    Cobrar
-                  </Button>
-                )}
-              </div>
+              {chargingId === appointment.id && (
+                <ChargeForm
+                  tenantSlug={tenantSlug}
+                  sessionId={session.id}
+                  appointment={appointment}
+                  products={products}
+                  onDone={() => setChargingId(null)}
+                />
+              )}
             </div>
-            {chargingId === appointment.id && (
-              <ChargeForm
-                tenantSlug={tenantSlug}
-                sessionId={session.id}
-                appointment={appointment}
-                products={products}
-                onDone={() => setChargingId(null)}
-              />
-            )}
-          </div>
-        ))}
-        {appointments.length === 0 && (
-          <p className="font-body-sm text-body-sm text-on-surface-variant">
-            No hay turnos confirmados pendientes de cobro hoy.
-          </p>
-        )}
-      </Card>
+          ))}
+          {appointments.length === 0 && (
+            <EmptyState
+              icon={<Icon name="check_circle" className="text-[24px]" />}
+              title="No tenés turnos pendientes de cobro"
+              description="Los turnos confirmados de hoy van a aparecer acá para que los cobres apenas el cliente pague."
+            />
+          )}
+        </Card>
+      </section>
 
       <Card hoverLift={false} className="space-y-3 p-lg">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="font-headline-sm text-headline-sm text-on-surface">Movimientos de caja</h2>
           {!addingMovement && (
             <Button variant="secondary" size="sm" onClick={() => setAddingMovement(true)}>
@@ -409,6 +443,9 @@ export function CajaClient({
             </Button>
           )}
         </div>
+        <p className="font-body-sm text-body-sm text-on-surface-variant">
+          Entradas y salidas de efectivo que no son el cobro de un turno (retiros, gastos, ingresos sueltos).
+        </p>
         {addingMovement && (
           <AddMovementForm tenantSlug={tenantSlug} sessionId={session.id} onDone={() => setAddingMovement(false)} />
         )}
@@ -417,11 +454,11 @@ export function CajaClient({
             <div key={m.id} className="flex items-center gap-3 py-2">
               <span
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full",
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
                   m.type === "in" ? "bg-status-confirmed-bg text-status-confirmed" : "bg-status-alert-bg text-status-alert",
                 )}
               >
-                <Icon name={m.type === "in" ? "add" : "remove"} className="text-[16px]" />
+                <Icon name={m.type === "in" ? "add" : "trending_down"} className="text-[16px]" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-label-md text-label-md text-on-surface">{m.reason}</p>
@@ -431,7 +468,7 @@ export function CajaClient({
               </div>
               <span
                 className={cn(
-                  "shrink-0 font-label-md text-label-md",
+                  "shrink-0 font-label-md text-label-md tabular-nums",
                   m.type === "in" ? "text-status-confirmed" : "text-status-alert",
                 )}
               >
@@ -447,32 +484,36 @@ export function CajaClient({
         </div>
       </Card>
 
-      <Card hoverLift={false} className="space-y-3 p-lg">
-        <h2 className="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
-          <Icon name="lock" className="text-[18px] text-on-surface-variant" />
-          Cerrar caja (arqueo)
-        </h2>
-        <form action={closeAction} className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="font-label-sm text-label-sm text-on-surface-variant">Efectivo contado</label>
-              <Input name="countedAmount" type="number" min="0" step="0.01" required />
+      {/* Paso 3: cerrar caja (arqueo). */}
+      <section className="space-y-sm">
+        <StepHeader
+          step={3}
+          title="Cerrar caja"
+          hint="Contá el efectivo que tenés en la mano y compáralo con lo que el sistema esperaba -- eso es el arqueo."
+        />
+        <Card hoverLift={false} className="space-y-3 p-lg">
+          <form action={closeAction} className="space-y-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="font-label-sm text-label-sm text-on-surface-variant">Efectivo contado</label>
+                <Input name="countedAmount" type="number" min="0" step="0.01" required />
+              </div>
+              <div className="space-y-1">
+                <label className="font-label-sm text-label-sm text-on-surface-variant">
+                  Motivo (si hay diferencia)
+                </label>
+                <Input name="differenceReason" placeholder="Vuelto de más, error de conteo..." />
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="font-label-sm text-label-sm text-on-surface-variant">
-                Motivo (si hay diferencia)
-              </label>
-              <Input name="differenceReason" placeholder="Vuelto de más, error de conteo..." />
-            </div>
-          </div>
-          <Button type="submit" variant="secondary" disabled={closePending}>
-            {closePending ? "Cerrando…" : "Cerrar caja"}
-          </Button>
-          {closeState.error && (
-            <p className="font-body-sm text-body-sm text-status-alert">{closeState.error}</p>
-          )}
-        </form>
-      </Card>
+            <Button type="submit" variant="secondary" disabled={closePending}>
+              {closePending ? "Cerrando…" : "Cerrar caja"}
+            </Button>
+            {closeState.error && (
+              <p className="font-body-sm text-body-sm text-status-alert">{closeState.error}</p>
+            )}
+          </form>
+        </Card>
+      </section>
     </div>
   );
 }

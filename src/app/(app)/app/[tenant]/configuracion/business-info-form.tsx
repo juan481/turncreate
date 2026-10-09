@@ -22,7 +22,7 @@ export function BusinessInfoForm({
   const [logoUrl, setLogoUrl] = useState(tenant.logoUrl ?? "");
 
   return (
-    <form action={formAction} className="grid gap-3 sm:grid-cols-2">
+    <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div className="sm:col-span-2 flex items-center gap-3">
         <Avatar name={tenant.name} src={logoUrl || null} size="lg" />
         <div className="flex-1 space-y-1.5">

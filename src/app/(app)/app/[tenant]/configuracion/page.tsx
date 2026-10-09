@@ -47,12 +47,17 @@ export default async function ConfiguracionPage({
 
   return (
     <div className="mx-auto max-w-[42rem] space-y-lg">
-      <div>
+      {/* El AppBar mobile ya muestra "Configuración" + volver -- este
+          bloque solo hace falta en el header-pill de desktop. */}
+      <div className="hidden lg:block">
         <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Configuración</h1>
         <p className="font-body-sm text-body-sm text-on-surface-variant">
           Datos del local, horarios, señas e integraciones.
         </p>
       </div>
+      <p className="font-body-sm text-body-sm text-on-surface-variant lg:hidden">
+        Datos del local, horarios, señas e integraciones.
+      </p>
 
       <SectionCard icon="storefront" title="Datos del negocio" description="Lo que ve el cliente en tu turnero público.">
         <PublicLink url={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://turn.justcreate.com.ar"}/${tenantSlug}`} />
