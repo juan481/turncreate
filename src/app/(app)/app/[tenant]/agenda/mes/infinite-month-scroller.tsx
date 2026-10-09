@@ -11,10 +11,12 @@ export function InfiniteMonthScroller({
   tenantSlug,
   initialMonth,
   todayISO,
+  selectedISO,
 }: {
   tenantSlug: string;
   initialMonth: MonthData;
   todayISO: string;
+  selectedISO: string;
 }) {
   const [months, setMonths] = useState<MonthData[]>([initialMonth]);
   const [loading, setLoading] = useState(false);
@@ -99,7 +101,7 @@ export function InfiniteMonthScroller({
           }}
           data-index={idx}
         >
-          <MonthGrid tenantSlug={tenantSlug} month={month} todayISO={todayISO} />
+          <MonthGrid tenantSlug={tenantSlug} month={month} todayISO={todayISO} selectedISO={selectedISO} />
         </div>
       ))}
 

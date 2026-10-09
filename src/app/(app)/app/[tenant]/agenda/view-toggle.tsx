@@ -23,7 +23,9 @@ export function ViewToggle({
           key={tab.key}
           href={tab.href}
           className={cn(
-            "rounded-pill px-4 py-1.5 font-label-md text-label-md",
+            // h-11: todo target tocable necesita >=44px -- con solo
+            // py-1.5 el tab medía ~28px de alto.
+            "flex h-11 items-center rounded-pill px-4 font-label-md text-label-md",
             active === tab.key
               ? "bg-primary text-on-primary"
               : "text-on-surface-variant hover:text-on-surface",

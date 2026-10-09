@@ -8,10 +8,13 @@ export function MonthGrid({
   tenantSlug,
   month,
   todayISO,
+  selectedISO,
 }: {
   tenantSlug: string;
   month: MonthData;
   todayISO: string;
+  /** Día del que se vino a este calendario (el `?date=` de la vista Día). */
+  selectedISO: string;
 }) {
   return (
     <div className="space-y-2">
@@ -28,6 +31,10 @@ export function MonthGrid({
         <div className="grid grid-cols-7 auto-rows-[110px]">
           {month.days.map((day, dayIdx) => {
             const isToday = day.dateISO === todayISO;
+            // Seleccionado (sólido violeta) gana sobre "hoy" (anillo
+            // violeta) cuando son el mismo día -- mismo criterio que la
+            // tira de días de la vista Día.
+            const isSelected = day.dateISO === selectedISO;
             return (
               <Link
                 key={day.dateISO}
@@ -40,8 +47,12 @@ export function MonthGrid({
               >
                 <span
                   className={cn(
-                    "inline-flex h-7 w-7 items-center justify-center rounded-full font-body-sm text-body-sm transition-colors",
-                    isToday ? "bg-primary font-bold text-on-primary" : "text-on-surface group-hover:bg-surface-container-low",
+                    "inline-flex h-7 w-7 items-center justify-center rounded-full font-body-sm text-body-sm font-semibold transition-colors",
+                    isSelected
+                      ? "bg-primary text-on-primary"
+                      : isToday
+                        ? "border-2 border-primary text-primary"
+                        : "text-on-surface group-hover:bg-surface-container-low",
                   )}
                 >
                   {Number(day.dateISO.slice(8, 10))}
@@ -49,7 +60,7 @@ export function MonthGrid({
 
                 {day.count > 0 && (
                   <div className="mt-auto">
-                    <span className="inline-flex w-full items-center justify-center rounded-inner bg-secondary-soft p-1 font-label-sm text-label-sm text-secondary transition-colors group-hover:bg-surface-container-lowest">
+                    <span className="inline-flex w-full items-center justify-center rounded-inner bg-secondary-soft p-1 font-label-sm text-label-sm tabular-nums text-secondary transition-colors group-hover:bg-surface-container-lowest">
                       {day.count} turno{day.count !== 1 && "s"}
                     </span>
                   </div>

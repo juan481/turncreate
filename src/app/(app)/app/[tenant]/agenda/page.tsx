@@ -2,10 +2,11 @@ import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { timeToMinutes, instantToMinutes } from "@/server/availability";
-import { dayRange, isDateISO, minutesOfDayInTz, todayISO, weekdayOf } from "@/lib/dates";
+import { dayMonthLabel, dayRange, isDateISO, longDayLabel, minutesOfDayInTz, todayISO, weekdayOf } from "@/lib/dates";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ViewToggle } from "./view-toggle";
 import { DateNav } from "./date-nav";
 import { RealtimeAgendaRefresh } from "./realtime-refresh";
@@ -31,10 +32,6 @@ export default async function AgendaPage({
   const [staffSnapshot, appointmentsSnapshot] = await Promise.all([
     db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
     db.collection("tenants").doc(tenant.id).collection("appointments").where("startsAt", ">=", start).where("startsAt", "<", end).get(),
-      // Turnos cancelados/vencidos no ocupan lugar visual en la grilla --
-      // mueven un turno por drag & drop crea uno nuevo y cancela el
-      // viejo (sección 5.3); si se mostrara iría a la vez en su posición
-      // vieja (cancelado) y la nueva, como si fueran dos turnos.
   ]);
 
   const staffRes = { data: staffSnapshot.docs.map((doc) => ({ id: doc.id, display_name: doc.data().displayName, color: doc.data().color, photo_url: doc.data().photoUrl })) };
@@ -70,40 +67,59 @@ export default async function AgendaPage({
     specialty: staffRes.data.length > 1 ? specialtyByStaff.get(s.id) ?? null : null,
   }));
 
-  const appointments = appointmentsRes.data.map((a) => ({
-    id: a.id,
-    staffId: a.staff_id,
-    startMinute: instantToMinutes(a.starts_at, tenant.timezone),
-    endMinute: instantToMinutes(a.ends_at, tenant.timezone),
-    status: a.status,
-    clientName: a.clients?.full_name ?? "",
-    serviceNames: a.appointment_items.map((i: { name?: string }) => i.name ?? "").join(", "),
-    total: Number(a.total),
-    balance: Number(a.balance),
-  }));
+  const appointments = appointmentsRes.data
+    .map((a) => ({
+      id: a.id,
+      staffId: a.staff_id,
+      startMinute: instantToMinutes(a.starts_at, tenant.timezone),
+      endMinute: instantToMinutes(a.ends_at, tenant.timezone),
+      status: a.status,
+      clientName: a.clients?.full_name ?? "",
+      serviceNames: a.appointment_items.map((i: { name?: string }) => i.name ?? "").join(", "),
+      total: Number(a.total),
+      balance: Number(a.balance),
+    }))
+    // Un turno cancelado/vencido no ocupa lugar visual -- mover un turno
+    // por drag & drop (o reprogramarlo desde su detalle) crea uno nuevo y
+    // cancela el viejo (sección 5.3); sin este filtro se ven los dos a
+    // la vez, como si fueran turnos distintos.
+    .filter((a) => a.status !== "cancelled" && a.status !== "expired");
+
+  // "Hoy"/"el 10/10": el badge de conteo decía "N turnos hoy" sin
+  // importar qué día se estuviera mirando -- navegar a otro día con la
+  // tira de arriba seguía diciendo "hoy", lo cual es directamente falso.
+  const dayContext = dateISO === todayStr ? "hoy" : `el ${dayMonthLabel(dateISO)}`;
 
   return (
     <div className="space-y-lg">
       <RealtimeAgendaRefresh tenantId={tenant.id} />
+
+      <DateNav tenantId={tenant.id} tenantSlug={tenantSlug} timezone={tenant.timezone} dateISO={dateISO} />
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-sm">
-          <DateNav tenantSlug={tenantSlug} dateISO={dateISO} />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sin `capitalize`: longDayLabel ya devuelve solo la primera
+              letra en mayúscula -- la clase de Tailwind capitaliza TODAS
+              las palabras ("de", "octubre" también), que en español queda
+              mal ("Sábado 10 De Octubre"). */}
+          <h2 className="font-label-lg text-label-lg text-on-surface">{longDayLabel(dateISO)}</h2>
+          <span className="flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant">
+            <Icon name="event" className="text-[14px]" />
+            {appointments.length} turno{appointments.length === 1 ? "" : "s"} {dayContext}
+          </span>
           {staff.length > 1 && (
-            <div className="flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-on-surface-variant">
+            <span className="flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant">
               <span className="h-2 w-2 animate-pulse rounded-full bg-status-confirmed-dot" />
-              {staff.length} profesionales trabajando hoy
-            </div>
+              {staff.length} profesionales
+            </span>
           )}
-          <div className="flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-on-surface-variant">
-            <Icon name="event" className="text-[16px]" />
-            {appointments.length} turno{appointments.length === 1 ? "" : "s"} hoy
-          </div>
         </div>
         <div className="flex items-center gap-3 self-end lg:self-auto">
           <ViewToggle tenantSlug={tenantSlug} dateISO={dateISO} active="day" />
-          {/* En mobile el FAB ya cubre "turno nuevo": con el botón acá la
-              fila mide más que el ancho disponible y self-end empuja el
-              sobrante fuera del borde izquierdo. */}
+          {/* En mobile el FAB (y el botón central de la barra inferior) ya
+              cubren "turno nuevo": con el botón acá la fila mide más que
+              el ancho disponible y self-end empuja el sobrante fuera del
+              borde izquierdo. */}
           <Link
             href={`/app/${tenantSlug}/agenda/nuevo?date=${dateISO}`}
             className={cn(buttonVariants({ size: "default" }), "hidden sm:inline-flex")}
@@ -115,11 +131,13 @@ export default async function AgendaPage({
       </div>
 
       {staff.length === 0 ? (
-        <p className="font-body-sm text-body-sm text-on-surface-variant">
-          Todavía no hay profesionales activos.
-        </p>
+        <EmptyState
+          icon={<Icon name="group" />}
+          title="Todavía no hay profesionales activos"
+          description="Agregá al menos una persona en Staff para empezar a recibir turnos."
+        />
       ) : staff.length === 1 ? (
-        <SimpleAgendaList tenantSlug={tenantSlug} appointments={appointments} />
+        <SimpleAgendaList tenantSlug={tenantSlug} dateISO={dateISO} appointments={appointments} />
       ) : (
         <AgendaDayGrid
           tenantSlug={tenantSlug}

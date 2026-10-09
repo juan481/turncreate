@@ -1,20 +1,9 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
+import { AppointmentRow } from "@/components/ui/appointment-row";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
-
-const STATUS_LABEL: Record<string, { label: string; pill: StatusPillStatus }> = {
-  pending_payment: { label: "Pendiente", pill: "pending" },
-  confirmed: { label: "Confirmado", pill: "confirmed" },
-  completed: { label: "Completado", pill: "confirmed" },
-  no_show: { label: "No vino", pill: "alert" },
-};
-
-function minutesToLabel(minute: number) {
-  const h = Math.floor(minute / 60).toString().padStart(2, "0");
-  const m = (minute % 60).toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
+import { buttonVariants } from "@/components/ui/button";
+import { minutesToLabel, statusToneAndLabel } from "./status-map";
 
 type Appointment = {
   id: string;
@@ -31,53 +20,57 @@ type Appointment = {
  * drop no aporta nada -- no hay entre quién repartir turnos. Una lista
  * simple ordenada por hora es más clara y no se corta en pantallas
  * angostas como pasaba con las tarjetas de ancho fijo del calendario.
+ *
+ * Usa `AppointmentRow` (hora compacta + avatar + nombre protagonista +
+ * servicio + `StatusDot` chico) en vez de la `StatusPill` gigante que
+ * tapaba el nombre y el servicio -- ese es el bug reportado.
  */
 export function SimpleAgendaList({
   tenantSlug,
+  dateISO,
   appointments,
 }: {
   tenantSlug: string;
+  dateISO: string;
   appointments: Appointment[];
 }) {
   if (appointments.length === 0) {
     return (
-      <Card hoverLift={false} className="flex flex-col items-center gap-2 p-xl text-center">
-        <Icon name="event_available" className="text-[28px] text-on-surface-variant" />
-        <p className="font-body-sm text-body-sm text-on-surface-variant">
-          No hay turnos agendados para este día.
-        </p>
-      </Card>
+      <EmptyState
+        icon={<Icon name="event_available" />}
+        title="Sin turnos este día"
+        description="Todavía no hay nada agendado -- agendá el primero."
+        action={
+          <Link
+            href={`/app/${tenantSlug}/agenda/nuevo?date=${dateISO}`}
+            className={buttonVariants({ size: "default" })}
+          >
+            <Icon name="add" className="text-[18px]" />
+            Agendar turno
+          </Link>
+        }
+      />
     );
   }
 
+  const sorted = [...appointments].sort((a, b) => a.startMinute - b.startMinute);
+
   return (
     <div className="space-y-2">
-      {appointments.map((a) => {
-        const status = STATUS_LABEL[a.status] ?? { label: a.status, pill: "pending" as StatusPillStatus };
+      {sorted.map((a) => {
+        const { tone, label } = statusToneAndLabel(a.status);
         return (
-          <Link key={a.id} href={`/app/${tenantSlug}/agenda/${a.id}`}>
-            <Card className="flex items-center gap-4 p-lg">
-              <div className="flex w-16 shrink-0 flex-col items-start">
-                <span className="font-headline-sm text-headline-sm text-on-surface">
-                  {minutesToLabel(a.startMinute)}
-                </span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant">
-                  {minutesToLabel(a.endMinute)}
-                </span>
-              </div>
-              <div className="h-10 w-px bg-border" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-label-lg text-label-lg text-on-surface">{a.clientName}</p>
-                <p className="truncate font-body-sm text-body-sm text-on-surface-variant">{a.serviceNames}</p>
-              </div>
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                <span className="font-label-md text-label-md text-on-surface">
-                  ${a.total.toLocaleString("es-AR")}
-                </span>
-                <StatusPill status={status.pill}>{status.label}</StatusPill>
-              </div>
-            </Card>
-          </Link>
+          <AppointmentRow
+            key={a.id}
+            href={`/app/${tenantSlug}/agenda/${a.id}`}
+            time={minutesToLabel(a.startMinute)}
+            durationLabel={`${a.endMinute - a.startMinute} min`}
+            clientName={a.clientName || "Sin nombre"}
+            serviceName={a.serviceNames || "Sin servicio"}
+            statusTone={tone}
+            statusLabel={label}
+            price={`$${a.total.toLocaleString("es-AR")}`}
+          />
         );
       })}
     </div>

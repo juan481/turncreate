@@ -13,8 +13,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
+import { AppointmentRow } from "@/components/ui/appointment-row";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Icon } from "@/components/ui/icon";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { moveAppointment } from "./move-appointment-action";
+import { minutesToLabel, statusToneAndLabel } from "./status-map";
 
 const PX_PER_MINUTE = 1.5;
 const HEADER_HEIGHT = 68;
@@ -46,12 +51,6 @@ type Staff = {
   specialty: string | null;
 };
 
-function minutesToLabel(minute: number) {
-  const h = Math.floor(minute / 60).toString().padStart(2, "0");
-  const m = (minute % 60).toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
-
 function DraggableAppointment({
   appointment,
   tenantSlug,
@@ -81,7 +80,10 @@ function DraggableAppointment({
         zIndex: isDragging ? 20 : 1,
       }}
       className={cn(
-        "group absolute left-1 right-1 block touch-none overflow-hidden rounded-inner bg-surface-container-low p-2 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover",
+        // Sin touch-none: esto es solo lg+ (desktop/tablet ancho, ver
+        // AgendaDayGrid más abajo), así que ya no compite con el scroll
+        // táctil vertical de la página en mobile.
+        "group absolute left-1 right-1 block overflow-hidden rounded-inner bg-surface-container-low p-2 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover",
         isDragging && "opacity-70 shadow-card-hover",
       )}
       {...listeners}
@@ -136,9 +138,10 @@ function StaffColumn({
   const { setNodeRef, isOver } = useDroppable({ id: staff.id });
 
   return (
-    // 240px por columna deja ver una y media en un celular; a 160 entran
-    // dos completas y el scroll horizontal sigue disponible para el resto.
-    <div className="w-40 shrink-0 border-l border-border sm:w-60">
+    // Esta grilla ya solo se muestra desde lg+ (ver AgendaDayGrid): un
+    // ancho fijo único alcanza, no hace falta la variante angosta que
+    // existía para mobile.
+    <div className="w-60 shrink-0 border-l border-border">
       <div
         className="flex items-center gap-2 border-b border-border px-2"
         style={{ height: HEADER_HEIGHT }}
@@ -175,7 +178,8 @@ function StaffColumn({
   );
 }
 
-export function AgendaDayGrid({
+/** Grilla por columnas con drag & drop -- solo desktop/tablet ancho (lg+). */
+function DesktopStaffGrid({
   tenantSlug,
   dateISO,
   dayStartMinute,
@@ -295,6 +299,162 @@ export function AgendaDayGrid({
           </div>
         </div>
       </DndContext>
+    </div>
+  );
+}
+
+/**
+ * Lista + chips de filtro por profesional -- reemplazo mobile de la
+ * grilla por columnas. La grilla fuerza scroll lateral con columnas de
+ * ancho fijo (lo que el dueño describe como "no se entiende el
+ * calendario"); en mobile no hay espacio para columnas, así que en vez
+ * de eso se elige UN profesional (o "Todos") con chips, arriba de una
+ * lista vertical de `AppointmentRow` -- la misma tarjeta que usa el
+ * local de 1 sola persona, para que ambos casos se vean iguales.
+ */
+function TeamDayMobileList({
+  tenantSlug,
+  dateISO,
+  staff,
+  appointments,
+}: {
+  tenantSlug: string;
+  dateISO: string;
+  staff: Staff[];
+  appointments: Appointment[];
+}) {
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+
+  const countByStaff = new Map<string, number>();
+  for (const a of appointments) {
+    countByStaff.set(a.staffId, (countByStaff.get(a.staffId) ?? 0) + 1);
+  }
+
+  const filtered = selectedStaffId
+    ? appointments.filter((a) => a.staffId === selectedStaffId)
+    : appointments;
+  const sorted = [...filtered].sort((a, b) => a.startMinute - b.startMinute);
+  const staffNameById = new Map(staff.map((s) => [s.id, s.displayName]));
+
+  return (
+    <div className="space-y-3">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <button
+          type="button"
+          onClick={() => setSelectedStaffId(null)}
+          className={cn(
+            "flex h-11 shrink-0 items-center rounded-pill px-4 font-label-sm text-label-sm transition-colors",
+            selectedStaffId === null
+              ? "bg-primary text-on-primary"
+              : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high",
+          )}
+        >
+          Todos ({appointments.length})
+        </button>
+        {staff.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setSelectedStaffId(s.id)}
+            className={cn(
+              "flex h-11 shrink-0 items-center gap-1.5 rounded-pill px-4 font-label-sm text-label-sm transition-colors",
+              selectedStaffId === s.id
+                ? "bg-primary text-on-primary"
+                : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high",
+            )}
+          >
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: selectedStaffId === s.id ? "#ffffff" : s.color ?? "#767582" }}
+            />
+            <span className="max-w-[9rem] truncate">{s.displayName}</span>
+            <span className="tabular-nums">({countByStaff.get(s.id) ?? 0})</span>
+          </button>
+        ))}
+      </div>
+
+      {sorted.length === 0 ? (
+        <EmptyState
+          icon={<Icon name="event_available" />}
+          title="Sin turnos este día"
+          description="Todavía no hay nada agendado para esta selección."
+          action={
+            <Link
+              href={`/app/${tenantSlug}/agenda/nuevo?date=${dateISO}`}
+              className={buttonVariants({ size: "default" })}
+            >
+              <Icon name="add" className="text-[18px]" />
+              Agendar turno
+            </Link>
+          }
+        />
+      ) : (
+        <div className="space-y-2">
+          {sorted.map((a) => {
+            const { tone, label } = statusToneAndLabel(a.status);
+            return (
+              <AppointmentRow
+                key={a.id}
+                href={`/app/${tenantSlug}/agenda/${a.id}`}
+                time={minutesToLabel(a.startMinute)}
+                durationLabel={`${a.endMinute - a.startMinute} min`}
+                clientName={a.clientName || "Sin nombre"}
+                serviceName={a.serviceNames || "Sin servicio"}
+                staffName={selectedStaffId ? undefined : staffNameById.get(a.staffId)}
+                statusTone={tone}
+                statusLabel={label}
+                price={`$${a.total.toLocaleString("es-AR")}`}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Local de equipo (más de 1 profesional). Compone las dos variantes de
+ * arriba y las intercambia por CSS (`hidden`/`lg:hidden`), no por JS: las
+ * dos reciben los mismos datos ya cargados por el Server Component
+ * padre, así no hace falta duplicar la consulta a Firestore.
+ */
+export function AgendaDayGrid({
+  tenantSlug,
+  dateISO,
+  dayStartMinute,
+  dayEndMinute,
+  slotIntervalMin,
+  staff,
+  appointments,
+  nowMinute,
+}: {
+  tenantSlug: string;
+  dateISO: string;
+  dayStartMinute: number;
+  dayEndMinute: number;
+  slotIntervalMin: number;
+  staff: Staff[];
+  appointments: Appointment[];
+  nowMinute?: number | null;
+}) {
+  return (
+    <div>
+      <div className="lg:hidden">
+        <TeamDayMobileList tenantSlug={tenantSlug} dateISO={dateISO} staff={staff} appointments={appointments} />
+      </div>
+      <div className="hidden lg:block">
+        <DesktopStaffGrid
+          tenantSlug={tenantSlug}
+          dateISO={dateISO}
+          dayStartMinute={dayStartMinute}
+          dayEndMinute={dayEndMinute}
+          slotIntervalMin={slotIntervalMin}
+          staff={staff}
+          appointments={appointments}
+          nowMinute={nowMinute}
+        />
+      </div>
     </div>
   );
 }
