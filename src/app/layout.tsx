@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -46,19 +46,23 @@ export const metadata: Metadata = {
   },
 };
 
+// `viewportFit: "cover"` deja que el contenido llegue hasta los bordes
+// reales del teléfono (notch / home indicator) para que los `env(safe-
+// area-inset-*)` de globals.css tengan algo que compensar -- sin esto,
+// Safari/Chrome mobile ya reservan ese margen solos y los paddings de
+// safe-area quedan duplicados. `themeColor` pinta la barra de estado del
+// sistema (y la UI de instalación PWA) con el violeta de marca en vez
+// del blanco/negro por defecto del navegador.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#7069e8",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={`${plusJakartaSans.variable} antialiased`}>
-      <head>
-        {/* Material Symbols no está en el catálogo curado de next/font/google
-            (es una variable icon font con ejes opsz/wght/FILL/GRAD por query
-            string), así que se carga igual que en las pantallas de referencia. */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font -- regla pensada para Pages Router; en App Router un <link> en el root layout es el patrón soportado */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
-        />
-      </head>
       <body className="min-h-screen bg-canvas font-sans text-on-surface">
         {children}
       </body>
