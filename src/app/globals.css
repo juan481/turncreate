@@ -72,6 +72,14 @@
   --text-label-sm--letter-spacing: 0.02em;
   --text-label-sm--font-weight: 600;
 
+  /* No está en el YAML de DESIGN.md -- hace falta para los labels de la
+     barra inferior mobile (Fase 0.4: 4-5 ítems en ~70px de ancho cada
+     uno, label-sm/11px ya no entra sin wrappear en pantallas de 360px). */
+  --text-label-xs: 10px;
+  --text-label-xs--line-height: 12px;
+  --text-label-xs--letter-spacing: 0.01em;
+  --text-label-xs--font-weight: 600;
+
   /* Spacing: gutters, margenes, escala interna.
      Ojo, gotcha de Tailwind v4: estos nombres xs, sm, md, lg, xl, 2xl
      alimentan la escala compartida de padding, gap, width, height y
@@ -119,6 +127,10 @@
   --color-surface-container-low: #f5f2ff;
   --color-surface-container: #efecfb;
   --color-surface-container-high: #e9e6f5;
+  /* Se usaba en agenda-day-grid.tsx y en la ficha de turno sin estar
+     definida acá (quedaba como color inválido, "transparent" de hecho en
+     el navegador) -- valor literal del YAML de DESIGN.md. */
+  --color-surface-container-highest: #e3e1f0;
   --color-outline-variant: #c8c5cb;
 
   --color-on-surface: #1c1930;
@@ -237,6 +249,12 @@
 html {
   color-scheme: light;
   scroll-behavior: smooth;
+  /* Guardia de último recurso: un elemento angosto de más (una tabla, un
+     texto sin truncar, un grid sin grid-cols-1) no debería poder abrir
+     scroll horizontal de la página entera en mobile -- "clip" recorta
+     sin crear un contenedor de scroll propio, así que no rompe los
+     `position: sticky` de los hijos (a diferencia de overflow: hidden). */
+  overflow-x: clip;
 }
 
 /* Anclas de la landing (#beneficios, #como-funciona, ...): sin esto el
@@ -249,6 +267,22 @@ section[id] {
 body {
   background: var(--color-canvas);
   color: var(--color-on-surface);
+  overflow-x: clip;
+}
+
+/*
+  Safe-area insets del dispositivo (notch, cámara, home indicator) --
+  existen porque el layout raíz declara `viewportFit: "cover"`. Se
+  exponen como variables (no como utilidades `.pt-safe` fijas) para que
+  cada componente las combine con su propio padding en el punto de uso,
+  por ejemplo: `pb-[calc(0.75rem+var(--safe-b))]`. El fallback `0px`
+  hace que en navegadores sin soporte (o en desktop) no rompan nada.
+*/
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
 }
 
 ::-webkit-scrollbar {
