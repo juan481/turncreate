@@ -26,6 +26,13 @@ export type DaySummary = {
   porCobrar: number;
 };
 
+export type RangeSummary = {
+  turnos: number;
+  facturado: number;
+  cobrado: number;
+  porCobrar: number;
+};
+
 // Mismos estados en todos lados: cancelado y vencido nunca suman turno,
 // nunca suman plata. Antes cada pantalla (home, Caja, agenda) traía los
 // turnos del día con su propio criterio -- ninguno filtraba por estado,
@@ -81,4 +88,37 @@ export async function getDaySummary(tenantId: string, dateISO: string, timezone:
     cobrado: facturado - porCobrar,
     porCobrar,
   };
+}
+
+/**
+ * Mismo criterio que `getDaySummary` (estados activos, facturado/cobrado/
+ * por cobrar) pero para un rango arbitrario -- pensado para semana/mes de
+ * la home. Pasale `{ start, end }` ya armado con `weekRange`/`monthRange`
+ * de `lib/dates.ts`, nunca fechas sueltas. No devuelve el array de turnos
+ * (en un mes serían cientos): si otra pantalla necesita el detalle turno
+ * por turno de un rango largo, que haga su propia query, esto es solo
+ * para los 2-3 números de un KPI.
+ */
+export async function getRangeSummary(tenantId: string, range: { start: Date; end: Date }): Promise<RangeSummary> {
+  const { db } = firebaseAdmin();
+  const tenantRef = db.collection("tenants").doc(tenantId);
+  const snapshot = await tenantRef
+    .collection("appointments")
+    .where("startsAt", ">=", range.start)
+    .where("startsAt", "<", range.end)
+    .select("status", "total", "balance")
+    .get();
+
+  let turnos = 0;
+  let facturado = 0;
+  let porCobrar = 0;
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!ACTIVE_STATUSES.has(String(data.status ?? ""))) continue;
+    turnos += 1;
+    facturado += Number(data.total ?? 0);
+    porCobrar += Number(data.balance ?? 0);
+  }
+
+  return { turnos, facturado, cobrado: facturado - porCobrar, porCobrar };
 }
