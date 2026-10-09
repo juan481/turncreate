@@ -33,9 +33,12 @@ export function KpiTile({
       </div>
       <div className="font-headline-md text-headline-md tabular-nums text-on-surface">{value}</div>
       {hint && (
+        // Sin truncate: un hint como "+15% vs. mes pasado" cortaba a mitad
+        // de palabra en tarjetas angostas (grilla 2x2 en mobile) -- dos
+        // líneas se lee mejor que un corte feo con "…".
         <div
           className={cn(
-            "truncate font-label-sm text-label-sm",
+            "font-label-sm text-label-sm leading-tight",
             hintTone === "positive" && "text-status-confirmed",
             hintTone === "warning" && "text-status-draft",
             hintTone === "neutral" && "text-on-surface-variant",

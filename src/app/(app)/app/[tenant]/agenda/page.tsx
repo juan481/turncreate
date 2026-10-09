@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { timeToMinutes, instantToMinutes } from "@/server/availability";
@@ -10,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ViewToggle } from "./view-toggle";
 import { DateNav } from "./date-nav";
 import { RealtimeAgendaRefresh } from "./realtime-refresh";
+import { CreatedToast } from "./created-toast";
 import { AgendaDayGrid } from "./agenda-day-grid";
 import { SimpleAgendaList } from "./simple-agenda-list";
 
@@ -93,6 +95,9 @@ export default async function AgendaPage({
   return (
     <div className="space-y-lg">
       <RealtimeAgendaRefresh tenantId={tenant.id} />
+      <Suspense fallback={null}>
+        <CreatedToast />
+      </Suspense>
 
       <DateNav tenantId={tenant.id} tenantSlug={tenantSlug} timezone={tenant.timezone} dateISO={dateISO} />
 

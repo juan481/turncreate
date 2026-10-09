@@ -45,7 +45,10 @@ function KpiCard({ icon, color, label, value, hint }: { icon: string; color: str
         >
           <Icon name={icon} className="text-[16px]" />
         </span>
-        <p className="truncate font-label-sm text-label-sm text-on-surface-variant">{label}</p>
+        {/* Sin truncate: "Turnos realizados"/"Clientes atendidos" cortaban
+            a mitad de palabra ("Turnos realiz…") en la grilla de 2
+            columnas de mobile -- dos líneas se lee mejor que un corte feo. */}
+        <p className="font-label-sm text-label-sm leading-tight text-on-surface-variant">{label}</p>
       </div>
       <p className="font-headline-md text-headline-md tabular-nums text-on-surface">{value}</p>
       {hint && <p className="truncate font-body-sm text-body-sm text-on-surface-variant">{hint}</p>}
