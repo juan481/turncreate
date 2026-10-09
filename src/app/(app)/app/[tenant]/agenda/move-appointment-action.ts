@@ -1,7 +1,8 @@
 "use server";
 
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
+import { requireTenantAccess } from "@/server/firebase/tenants";
 import { minutesToInstant } from "@/server/availability";
 import { createInternalAppointment } from "@/server/firebase/booking";
 
@@ -18,8 +19,19 @@ export async function moveAppointment(
   tenantSlug: string,
   params: { appointmentId: string; newStaffId: string; newStartMinute: number; dateISO: string },
 ): Promise<MoveAppointmentResult> {
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return { error: "El local no existe" };
+  // Bug de seguridad: esta server action no chequeaba sesión ni pertenencia
+  // al tenant -- cualquiera que conociera (o adivinara) un tenantSlug y un
+  // appointmentId podía mover/cancelar turnos de un negocio ajeno sin estar
+  // logueado. Mismo patrón que ya usan nuevo/actions.ts y clientes/actions.ts.
+  const user = await getCurrentFirebaseUser();
+  if (!user) return { error: "No autorizado" };
+
+  let tenant;
+  try {
+    ({ tenant } = await requireTenantAccess(user.uid, tenantSlug));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No tenés acceso a este local" };
+  }
 
   const appointmentRef = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("appointments").doc(params.appointmentId);
   const appointmentDoc = await appointmentRef.get();

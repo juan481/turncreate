@@ -1,10 +1,9 @@
 import "server-only";
-import { TZDate } from "@date-fns/tz";
-import { format } from "date-fns";
-import { FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { intersectRanges, subtractRanges, type TimeRange } from "@/domain/availability";
 import { firebaseAdmin } from "./admin";
 import { dayBoundsUTC, instantToMinutes, minutesToInstant, timeToMinutes } from "@/server/availability";
+import { minutesOfDayInTz, toDateISOInTz, weekdayOf } from "@/lib/dates";
 import type { TenantRecord } from "./tenants";
 
 /**
@@ -86,34 +85,72 @@ async function freeWindowsForStaffDay(params: {
     .where("endsAt", ">", startDate)
     .get();
 
+  // instantToMinutes() siempre devuelve 0-1439 (es el minuto-del-día de un
+  // INSTANTE puntual) -- los Math.max(0,...)/Math.min(24*60,...) que había
+  // antes acá eran no-ops, nunca recortaban nada. El bug real: un bloqueo
+  // que cruza medianoche (p. ej. lunes 15:00 a miércoles 10:00) arma, para
+  // un día completamente adentro del bloqueo (el martes), start=900 (15:00
+  // del lunes) y end=600 (10:00 del miércoles) -- un rango INVERTIDO
+  // (start > end). subtractRanges (domain/availability/ranges.ts) no
+  // detecta esa inversión como "todo el día bloqueado": la resta a la
+  // mitad deja casi todo el día libre. Por eso había que comparar el
+  // inicio/fin real del bloqueo contra los límites del DÍA evaluado
+  // (startDate/endDate, ya calculados arriba con dayBoundsUTC -- los
+  // mismos límites que da dayRange() de src/lib/dates.ts): si el bloqueo
+  // ya corría antes de que empezara el día, el día entero arranca
+  // bloqueado (start=0); si sigue después de que termina, termina
+  // bloqueado (end=24*60).
   const blocked: TimeRange[] = blocksSnapshot.docs
     .map((doc) => doc.data())
     .filter((block) => (!block.staffId || block.staffId === params.staffId) && block.startsAt.toDate() < endDate)
-    .map((block) => ({
-      start: Math.max(0, instantToMinutes(block.startsAt.toDate().toISOString(), params.timezone)),
-      end: Math.min(24 * 60, instantToMinutes(block.endsAt.toDate().toISOString(), params.timezone)),
-    }));
+    .map((block) => {
+      const blockStart: Date = block.startsAt.toDate();
+      const blockEnd: Date = block.endsAt.toDate();
+      return {
+        start: blockStart < startDate ? 0 : instantToMinutes(blockStart.toISOString(), params.timezone),
+        end: blockEnd > endDate ? 24 * 60 : instantToMinutes(blockEnd.toISOString(), params.timezone),
+      };
+    });
 
   return subtractRanges(window, blocked);
 }
 
+/**
+ * ¿Está libre el rango [startsAt, startsAt+durationMin) para `staffId`?
+ *
+ * Si se llama con `transaction`, las lecturas de los documentos de
+ * ocupación se hacen con `transaction.getAll(...)` -- la única forma de
+ * que una lectura adentro de una transacción de Firestore tenga garantías
+ * reales. Antes esta función hacía `Promise.all(refs.map(r => r.get()))`
+ * SIEMPRE, aunque se llamara desde dentro de `db.runTransaction(...)` en
+ * `createInternalAppointment`: esas lecturas directas no quedan
+ * registradas en la transacción, así que Firestore no detecta el
+ * conflicto si otra reserva escribe el mismo slot en el medio -- dos
+ * reservas simultáneas podían leer "libre" las dos y confirmar las dos
+ * (condición de carrera real, no teórica). `listAvailableStarts` solo
+ * lista horarios para MOSTRAR (no reserva nada), así que ahí se sigue
+ * llamando sin `transaction` -- la consistencia fuerte importa en el
+ * momento de confirmar, no en el de listar.
+ */
 async function isRangeFreeOfOccupancy(
   db: Firestore,
   tenantId: string,
   staffId: string,
   startsAt: Date,
   durationMin: number,
-  excludeAppointmentId?: string,
+  options: { excludeAppointmentId?: string; transaction?: Transaction } = {},
 ): Promise<boolean> {
   const slots = occupancySlotInstants(startsAt, durationMin).map((instant) =>
     db.collection("tenants").doc(tenantId).collection("occupancy").doc(occupancyDocId(staffId, instant)),
   );
-  const snapshots = await Promise.all(slots.map((ref) => ref.get()));
+  const snapshots = options.transaction
+    ? await options.transaction.getAll(...slots)
+    : await Promise.all(slots.map((ref) => ref.get()));
   const now = new Date();
   return snapshots.every((snapshot) => {
     if (!snapshot.exists) return true;
     const data = snapshot.data()!;
-    if (excludeAppointmentId && data.appointmentId === excludeAppointmentId) return true;
+    if (options.excludeAppointmentId && data.appointmentId === options.excludeAppointmentId) return true;
     const expiresAt = data.expiresAt?.toDate?.();
     return expiresAt ? expiresAt < now : false;
   });
@@ -134,7 +171,7 @@ export async function listAvailableStarts(params: {
   const eligibleIds = params.staffId === "any" ? await getEligibleStaffIds(params.tenantId, params.serviceId) : [params.staffId];
   if (eligibleIds.length === 0) return [];
 
-  const weekday = new TZDate(`${params.dateISO}T12:00:00`, params.timezone).getDay();
+  const weekday = weekdayOf(params.dateISO);
   const businessHours: TimeRange[] = (params.tenant.businessHours ?? [])
     .filter((h) => h.weekday === weekday)
     .map((h) => ({ start: timeToMinutes(h.opensAt), end: timeToMinutes(h.closesAt) }));
@@ -143,7 +180,7 @@ export async function listAvailableStarts(params: {
   const slotIntervalMin = params.tenant.settings?.slotIntervalMin ?? 15;
   const minNoticeMin = params.tenant.settings?.minNoticeMin ?? 60;
   const now = params.now ?? new Date();
-  const todayISO = format(new TZDate(now, params.timezone), "yyyy-MM-dd");
+  const todayISO = toDateISOInTz(now, params.timezone);
   const earliestStart =
     params.dateISO === todayISO ? instantToMinutes(now.toISOString(), params.timezone) + minNoticeMin : -Infinity;
 
@@ -212,6 +249,17 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
   const candidateIds = input.staffId === "any" ? await getEligibleStaffIds(input.tenantId, input.serviceId) : [input.staffId];
   if (candidateIds.length === 0) throw new Error("No hay profesionales disponibles para este servicio");
 
+  // Para el bug #3 (ver abajo) hace falta saber qué día/horario calendario
+  // es `startsAt` en la zona del tenant -- se deriva una sola vez acá,
+  // fuera de la transacción (no depende de datos que puedan cambiar en el
+  // medio, son puras funciones de fecha).
+  const dateISO = toDateISOInTz(startsAt, input.tenant.timezone);
+  const weekday = weekdayOf(dateISO);
+  const businessHours: TimeRange[] = (input.tenant.businessHours ?? [])
+    .filter((h) => h.weekday === weekday)
+    .map((h) => ({ start: timeToMinutes(h.opensAt), end: timeToMinutes(h.closesAt) }));
+  const requestedStartMinutes = minutesOfDayInTz(startsAt, input.tenant.timezone);
+
   const deposit = Math.max(0, input.depositAmount ?? 0);
   const appointmentRef = tenantRef.collection("appointments").doc();
 
@@ -223,9 +271,54 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
       oldAppointment = await transaction.get(oldAppointmentRef);
     }
 
+    const clientSnapshot = await transaction.get(tenantRef.collection("clients").doc(input.clientId));
+    const clientPhoto = (clientSnapshot.data()?.photoUrl as string | null | undefined) ?? null;
+
     let selected: string | null = null;
     for (const candidate of candidateIds) {
-      const free = await isRangeFreeOfOccupancy(db, input.tenantId, candidate, startsAt, service.durationMin);
+      // Bug #3: antes, cuando staffId === "any", este loop solo chequeaba
+      // OCUPACIÓN (turnos ya agendados) -- nunca repetía el chequeo de
+      // horario propio/bloqueos que `listAvailableStarts` sí hace vía
+      // `freeWindowsForStaffDay` para decidir qué mostrar. Resultado: un
+      // slot que se ve "disponible" porque ALGÚN profesional lo tenía
+      // libre podía terminar asignado, al confirmar, a un profesional que
+      // en realidad no trabaja ese horario (o tiene un bloqueo encima).
+      // Se repite el mismo chequeo de ventana real acá, para cada
+      // candidato, antes de aceptarlo -- así "Cualquiera" nunca asigna a
+      // alguien fuera de su propio horario. Se aplica también cuando el
+      // panel ya manda un profesional puntual (no solo "any"): si llegó
+      // un startsAt desalineado con su horario (p. ej. un slot viejo en
+      // caché), queda igual de protegido.
+      if (businessHours.length === 0) continue;
+      const freeWindows = await freeWindowsForStaffDay({
+        tenantId: input.tenantId,
+        tenant: input.tenant,
+        staffId: candidate,
+        dateISO,
+        timezone: input.tenant.timezone,
+        weekday,
+        businessHours,
+      });
+      const fitsSchedule = freeWindows.some(
+        (w) => requestedStartMinutes >= w.start && requestedStartMinutes + service.durationMin <= w.end,
+      );
+      if (!fitsSchedule) continue;
+
+      // Bug #1: hay que excluir el turno que se está reprogramando de su
+      // propia ocupación vieja -- si no, mover un turno 15-30min (mismo
+      // profesional, rango que se solapa con el de antes) siempre falla
+      // con "Ese horario ya no está disponible" porque choca contra SU
+      // PROPIA ocupación, que todavía no se borró (se borra más abajo,
+      // después de confirmar el turno nuevo). Bug #2: se pasa `transaction`
+      // para que la lectura de los documentos de ocupación cuente como
+      // lectura transaccional de verdad (`transaction.getAll`) y no una
+      // lectura directa sin ninguna garantía -- sin esto, dos reservas
+      // simultáneas para el mismo instante podían leer "libre" las dos y
+      // confirmar las dos (condición de carrera real).
+      const free = await isRangeFreeOfOccupancy(db, input.tenantId, candidate, startsAt, service.durationMin, {
+        excludeAppointmentId: input.rescheduledFromId,
+        transaction,
+      });
       if (free) {
         selected = candidate;
         break;
@@ -240,7 +333,15 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
     const staffSnapshot = await transaction.get(tenantRef.collection("staff").doc(selected));
     const staffData = staffSnapshot.data();
 
-    for (const instant of occupancySlotInstants(startsAt, service.durationMin)) {
+    const newOccupancyInstants = occupancySlotInstants(startsAt, service.durationMin);
+    // Bug #1 (parte 2): el set de IDs de los slots que este turno NUEVO va
+    // a ocupar -- hace falta más abajo para no borrar, al liberar el
+    // turno VIEJO reprogramado, un slot que el turno nuevo acaba de
+    // escribir en esta misma transacción (pasa cuando el rango nuevo y el
+    // viejo se solapan, mismo profesional).
+    const newOccupancyIds = new Set(newOccupancyInstants.map((instant) => occupancyDocId(selected, instant)));
+
+    for (const instant of newOccupancyInstants) {
       transaction.set(tenantRef.collection("occupancy").doc(occupancyDocId(selected, instant)), {
         appointmentId: appointmentRef.id,
         tenantId: input.tenantId,
@@ -255,6 +356,7 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
       staffPhoto: staffData?.photoUrl ?? null,
       clientId: input.clientId,
       clientName: input.clientName,
+      clientPhoto,
       clientPhone: input.clientPhone,
       clientEmail: input.clientEmail || null,
       startsAt: Timestamp.fromDate(startsAt),
@@ -281,8 +383,17 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
 
     if (oldAppointmentRef && oldAppointment?.exists) {
       const oldData = oldAppointment.data()!;
-      for (const instant of occupancySlotInstants(oldData.startsAt.toDate(), Math.round((oldData.endsAt.toDate().getTime() - oldData.startsAt.toDate().getTime()) / 60_000))) {
-        transaction.delete(tenantRef.collection("occupancy").doc(occupancyDocId(oldData.staffId, instant)));
+      const oldDurationMin = Math.round((oldData.endsAt.toDate().getTime() - oldData.startsAt.toDate().getTime()) / 60_000);
+      for (const instant of occupancySlotInstants(oldData.startsAt.toDate(), oldDurationMin)) {
+        const oldSlotId = occupancyDocId(oldData.staffId, instant);
+        // Bug #1 (parte 2): si el turno nuevo y el viejo se solapan en
+        // algún slot de 15min (mismo profesional, reprogramación a un
+        // horario cercano), ese slot ya quedó reescrito más arriba con el
+        // appointmentId del turno NUEVO -- borrarlo acá lo liberaría por
+        // error, dejando ese instante "disponible" mientras el turno
+        // nuevo sigue ocupándolo en teoría.
+        if (newOccupancyIds.has(oldSlotId)) continue;
+        transaction.delete(tenantRef.collection("occupancy").doc(oldSlotId));
       }
       transaction.update(oldAppointmentRef, {
         status: "cancelled",

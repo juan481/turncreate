@@ -10,15 +10,29 @@ export function RescheduleButton({
   tenantSlug,
   appointmentId,
   clientId,
+  serviceId,
+  staffId,
+  dateISO,
   depositPaid,
 }: {
   tenantSlug: string;
   appointmentId: string;
   clientId: string;
+  // Servicio/profesional/día ORIGINALES del turno que se reprograma --
+  // antes no se pasaban, así que "Nuevo turno" siempre arrancaba en
+  // blanco al reprogramar (el usuario tenía que volver a elegir todo).
+  // nuevo/page.tsx ya sabe leer estos mismos query params (serviceId,
+  // staffId, date) como valores iniciales -- no hizo falta tocar nada ahí.
+  serviceId: string;
+  staffId: string;
+  dateISO: string;
   depositPaid: number;
 }) {
   const [asking, setAsking] = useState(false);
-  const baseHref = `/app/${tenantSlug}/agenda/nuevo?rescheduleFrom=${appointmentId}&clientId=${clientId}`;
+  const prefillParams = new URLSearchParams({ rescheduleFrom: appointmentId, clientId, date: dateISO });
+  if (serviceId) prefillParams.set("serviceId", serviceId);
+  if (staffId) prefillParams.set("staffId", staffId);
+  const baseHref = `/app/${tenantSlug}/agenda/nuevo?${prefillParams.toString()}`;
 
   if (depositPaid <= 0) {
     return (

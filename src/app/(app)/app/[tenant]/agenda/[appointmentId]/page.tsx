@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TZDate } from "@date-fns/tz";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { formatTimeInTz, toDateISOInTz } from "@/lib/dates";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { StatusActions } from "./status-actions";
 import { RescheduleButton } from "./reschedule-button";
 
@@ -18,11 +20,6 @@ const STATUS_LABEL: Record<string, { label: string; pill: StatusPillStatus }> = 
   cancelled: { label: "Cancelado", pill: "alert" },
   expired: { label: "Vencido", pill: "alert" },
 };
-
-function formatHour(instant: Date, timezone: string) {
-  const zoned = new TZDate(instant, timezone);
-  return `${zoned.getHours().toString().padStart(2, "0")}:${zoned.getMinutes().toString().padStart(2, "0")}`;
-}
 
 export default async function AppointmentDetailPage({
   params,
@@ -43,25 +40,31 @@ export default async function AppointmentDetailPage({
 
   const startsAt: Date = appointment.startsAt.toDate();
   const endsAt: Date = appointment.endsAt.toDate();
-  const dateISO = new TZDate(startsAt, tenant.timezone).toISOString().slice(0, 10);
+  const dateISO = toDateISOInTz(startsAt, tenant.timezone);
   const status = STATUS_LABEL[appointment.status] ?? {
     label: appointment.status,
     pill: "pending" as StatusPillStatus,
   };
   const clientName = String(appointment.clientName ?? "");
+  const clientPhoto = (appointment.clientPhoto as string | null | undefined) ?? null;
   const phone = String(appointment.clientPhone ?? "");
   const waLink = phone ? `https://wa.me/${phone.replace(/\D/g, "")}` : null;
   const total = Number(appointment.total);
   const depositPaid = Number(appointment.depositPaid ?? 0);
   const balance = Number(appointment.balance);
   const durationMin = Math.round((endsAt.getTime() - startsAt.getTime()) / 60000);
-  const items = (appointment.items ?? []) as { name: string }[];
+  const items = (appointment.items ?? []) as { serviceId?: string; name: string }[];
+  const originalServiceId = String(items[0]?.serviceId ?? "");
+  const canCharge = balance > 0 && (appointment.status === "confirmed" || appointment.status === "pending_payment");
 
   return (
     <div className="mx-auto max-w-[32rem] space-y-lg">
+      {/* En mobile el AppBar del shell ya da "‹ Agenda" -- este back propio
+          (con el ?date= preciso del turno, más útil que el genérico del
+          AppBar) solo hace falta en desktop, donde no hay AppBar. */}
       <Link
         href={`/app/${tenantSlug}/agenda?date=${dateISO}`}
-        className="inline-flex items-center gap-1 font-label-md text-label-md text-on-surface-variant transition-colors hover:text-on-surface"
+        className="hidden items-center gap-1 font-label-md text-label-md text-on-surface-variant transition-colors hover:text-on-surface lg:inline-flex"
       >
         <Icon name="arrow_back" className="text-[16px]" />
         Volver a la agenda
@@ -71,9 +74,12 @@ export default async function AppointmentDetailPage({
         <div className="flex items-center justify-between">
           <div>
             <span className="font-label-sm text-label-sm text-on-surface-variant">
-              {formatHour(startsAt, tenant.timezone)} - {formatHour(endsAt, tenant.timezone)} hs
+              {formatTimeInTz(startsAt, tenant.timezone)} - {formatTimeInTz(endsAt, tenant.timezone)} hs
             </span>
-            <h1 className="font-headline-sm text-headline-sm text-on-surface">Detalle de Turno</h1>
+            {/* Mismo título que ya muestra el AppBar en mobile -- se oculta
+                ahí para no duplicarlo, visible en desktop donde el
+                header-pill no tiene título propio. */}
+            <h1 className="hidden font-headline-sm text-headline-sm text-on-surface lg:block">Detalle de Turno</h1>
           </div>
           {appointment.status === "confirmed" ? (
             <span className="flex items-center gap-1.5 rounded-pill bg-status-confirmed-bg px-3 py-1 font-label-md text-label-md font-semibold text-status-confirmed">
@@ -91,7 +97,7 @@ export default async function AppointmentDetailPage({
         {/* Cliente + contacto */}
         <div className="flex flex-col gap-md rounded-inner bg-surface-container-low p-lg">
           <div className="flex items-center gap-md">
-            <Avatar name={clientName} size="lg" />
+            <Avatar name={clientName} src={clientPhoto} size="lg" />
             <Link
               href={`/app/${tenantSlug}/clientes/${appointment.clientId}`}
               className="font-headline-sm text-headline-sm text-on-surface hover:underline"
@@ -110,7 +116,9 @@ export default async function AppointmentDetailPage({
               href={waLink}
               target="_blank"
               rel="noopener"
-              className="flex items-center justify-center gap-2 rounded-pill bg-surface-container-highest py-2 font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-high"
+              // h-11 (44px), no py-2: py-2 solo + el alto de línea del texto
+              // quedaba debajo del mínimo tocable.
+              className="flex h-11 items-center justify-center gap-2 rounded-pill bg-surface-container-highest font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-high"
             >
               <Icon name="chat" className="text-[18px] text-status-confirmed" />
               Abrir chat WhatsApp
@@ -173,6 +181,21 @@ export default async function AppointmentDetailPage({
           </p>
         )}
 
+        {/* Cobrar: el flujo real de cobro vive en /caja (abre/cierra caja,
+            suma productos, elige método) -- esa pantalla no acepta todavía
+            un appointmentId por query param para abrir directo el cobro de
+            ESTE turno (está fuera de este alcance, vive en caja/**), así
+            que por ahora el botón lleva a la pantalla de Caja a secas. */}
+        {canCharge && (
+          <Link
+            href={`/app/${tenantSlug}/caja`}
+            className={cn(buttonVariants({ size: "default" }), "w-full justify-center")}
+          >
+            <Icon name="payments" className="text-[18px]" />
+            Cobrar ${balance.toLocaleString("es-AR")}
+          </Link>
+        )}
+
         <StatusActions
           tenantSlug={tenantSlug}
           appointmentId={appointmentDoc.id}
@@ -185,6 +208,9 @@ export default async function AppointmentDetailPage({
             tenantSlug={tenantSlug}
             appointmentId={appointmentDoc.id}
             clientId={String(appointment.clientId ?? "")}
+            serviceId={originalServiceId}
+            staffId={String(appointment.staffId ?? "")}
+            dateISO={dateISO}
             depositPaid={depositPaid}
           />
         )}

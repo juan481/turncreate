@@ -1,17 +1,10 @@
 import Link from "next/link";
-import { TZDate } from "@date-fns/tz";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { listAvailableStarts } from "@/server/firebase/booking";
-import { Button } from "@/components/ui/button";
+import { formatTimeInTz, todayISO } from "@/lib/dates";
 import { Icon } from "@/components/ui/icon";
-import { ClientField } from "./client-field";
-import { SlotsAndDeposit } from "./slots-and-deposit";
-
-function formatHour(date: Date, timezone: string) {
-  const zoned = new TZDate(date, timezone);
-  return `${zoned.getHours().toString().padStart(2, "0")}:${zoned.getMinutes().toString().padStart(2, "0")}`;
-}
+import { TurnoForm } from "./turno-form";
 
 export default async function NuevoTurnoPage({
   params,
@@ -22,10 +15,9 @@ export default async function NuevoTurnoPage({
   const tenant = await getTenantBySlugFromFirebase(tenantSlug);
   if (!tenant) return null;
 
-  const dateISO =
-    typeof sp.date === "string" ? sp.date : new TZDate(new Date(), tenant.timezone).toISOString().slice(0, 10);
-  const serviceId = typeof sp.serviceId === "string" ? sp.serviceId : undefined;
-  const clientId = typeof sp.clientId === "string" ? sp.clientId : undefined;
+  const dateISO = typeof sp.date === "string" && sp.date ? sp.date : todayISO(tenant.timezone);
+  const serviceId = typeof sp.serviceId === "string" && sp.serviceId ? sp.serviceId : undefined;
+  const clientId = typeof sp.clientId === "string" && sp.clientId ? sp.clientId : undefined;
   const rescheduleFrom = typeof sp.rescheduleFrom === "string" ? sp.rescheduleFrom : undefined;
   const keepDeposit = sp.keepDeposit !== "false";
 
@@ -36,7 +28,11 @@ export default async function NuevoTurnoPage({
     db.collection("tenants").doc(tenant.id).collection("clients").where("archivedAt", "==", null).get(),
   ]);
 
-  const staffList = staffSnapshot.docs.map((doc) => ({ id: doc.id, displayName: String(doc.data().displayName) }));
+  const staffList = staffSnapshot.docs.map((doc) => ({
+    id: doc.id,
+    displayName: String(doc.data().displayName),
+    photoUrl: (doc.data().photoUrl as string | null) ?? null,
+  }));
   const servicesList = servicesSnapshot.docs
     .filter((doc) => !doc.data().archivedAt)
     .map((doc) => ({ id: doc.id, name: String(doc.data().name), price: Number(doc.data().price) }));
@@ -97,87 +93,25 @@ export default async function NuevoTurnoPage({
           )}
         </div>
 
-        <form className="flex flex-col gap-3" method="GET">
-          {rescheduleFrom && <input type="hidden" name="rescheduleFrom" value={rescheduleFrom} />}
-          {rescheduleFrom && (
-            <input type="hidden" name="keepDeposit" value={keepDeposit ? "true" : "false"} />
-          )}
-          {soloStaffId && <input type="hidden" name="staffId" value={soloStaffId} />}
-
-          <ClientField tenantSlug={tenantSlug} clients={clientsList} defaultClientId={clientId} />
-
-          {!soloStaffId && (
-            <div className="space-y-1.5">
-              <label className="font-label-md text-label-md text-on-surface-variant">Profesional</label>
-              <select
-                name="staffId"
-                defaultValue={staffId}
-                required
-                className="h-11 w-full rounded-pill border-0 bg-surface-muted px-4 font-body-md text-body-md text-on-surface"
-              >
-                <option value="" disabled>
-                  Elegir…
-                </option>
-                <option value="any">Cualquiera</option>
-                {staffList.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <label className="font-label-md text-label-md text-on-surface-variant">Servicio</label>
-            <select
-              name="serviceId"
-              defaultValue={serviceId}
-              required
-              className="h-11 w-full rounded-pill border-0 bg-surface-muted px-4 font-body-md text-body-md text-on-surface"
-            >
-              <option value="" disabled>
-                Elegir…
-              </option>
-              {servicesList.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="font-label-md text-label-md text-on-surface-variant">Fecha</label>
-            <input
-              type="date"
-              name="date"
-              defaultValue={dateISO}
-              className="h-11 w-full rounded-pill border-0 bg-surface-muted px-4 font-body-md text-body-md text-on-surface"
-            />
-          </div>
-
-          <Button type="submit" className="w-full">
-            Ver horarios disponibles
-          </Button>
-        </form>
-
-        {staffId && serviceId && clientId && (
-          <SlotsAndDeposit
-            tenantSlug={tenantSlug}
-            staffId={staffId}
-            clientId={clientId}
-            serviceId={serviceId}
-            dateISO={dateISO}
-            slots={slots.map((startsAt) => ({
-              startsAtISO: startsAt.toISOString(),
-              label: formatHour(startsAt, tenant.timezone),
-            }))}
-            suggestedDeposit={suggestedDeposit}
-            rescheduleFrom={rescheduleFrom}
-            keepDeposit={keepDeposit}
-          />
-        )}
+        <TurnoForm
+          tenantSlug={tenantSlug}
+          timezone={tenant.timezone}
+          staffList={staffList}
+          servicesList={servicesList}
+          clientsList={clientsList}
+          soloStaffId={soloStaffId}
+          initialStaffId={staffId}
+          initialServiceId={serviceId}
+          initialClientId={clientId}
+          initialDateISO={dateISO}
+          slots={slots.map((startsAt) => ({
+            startsAtISO: startsAt.toISOString(),
+            label: formatTimeInTz(startsAt, tenant.timezone),
+          }))}
+          suggestedDeposit={suggestedDeposit}
+          rescheduleFrom={rescheduleFrom}
+          keepDeposit={keepDeposit}
+        />
       </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { requireTenantAccess } from "@/server/firebase/tenants";
 import { createInternalAppointment } from "@/server/firebase/booking";
 import { sendAppointmentConfirmation } from "@/server/email";
 import { createClientSchema } from "@/lib/schemas/client";
+import { formatTimeInTz, longDayLabel } from "@/lib/dates";
 
 export type ConfirmAppointmentState = { error: string | null };
 
@@ -152,5 +153,12 @@ export async function confirmAppointment(
     }
   })();
 
-  redirect(`/app/${tenantSlug}/agenda?date=${dateISO}`);
+  // `creado=1` + `mensaje=` quedan en la URL del redirect para que
+  // agenda/page.tsx (fuera de este alcance -- la están rediseñando en
+  // paralelo) pueda mostrar un toast de éxito con useToast() ahí (un
+  // server action no puede llamar hooks de cliente). El mensaje ya viene
+  // armado del lado del servidor para que esa pantalla solo tenga que
+  // decodificarlo y mostrarlo, sin tener que reconstruir fecha/hora.
+  const successMessage = `Turno agendado para ${longDayLabel(dateISO)} a las ${formatTimeInTz(startsAtISO, tenant.timezone)}`;
+  redirect(`/app/${tenantSlug}/agenda?date=${dateISO}&creado=1&mensaje=${encodeURIComponent(successMessage)}`);
 }

@@ -68,6 +68,16 @@ export function BookingFlow({
     // "stale" del fetch anterior mientras llega el nuevo).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
+    // El horario elegido pertenece a la fecha/profesional/servicio
+    // ANTERIOR -- si no se limpia, el usuario puede elegir una hora,
+    // cambiar de día (o volver y cambiar de profesional) y apretar
+    // "Continuar" sin volver a tocar los horarios: `selectedTime` queda
+    // con el string ISO viejo (fecha vieja, hora vieja) y la reserva se
+    // confirma para ESE instante, no para el día nuevo elegido en
+    // pantalla. Limpiarlo acá (se ejecuta en cada cambio de fecha/staff/
+    // servicio, exactamente cuando los slots dejan de ser válidos) cierra
+    // el hueco por completo, no solo "al cambiar de día".
+    setSelectedTime(null);
     getAvailableSlots(
       tenantId,
       selectedService.id,

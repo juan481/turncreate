@@ -101,6 +101,17 @@ export async function confirmHold(holdId: string, client: ClientFormData): Promi
   const tenantRef = holdRef.parent.parent!;
   const appointmentRef = tenantRef.collection("appointments").doc();
   const appointmentToken = token();
+  // Mismo patrón que addClient/createClientQuick: un cliente por teléfono
+  // normalizado (tenantClientPhones), para que reservar dos veces con el
+  // mismo teléfono desde el turnero público reuse el cliente existente en
+  // vez de crear uno nuevo cada vez. Antes esta función no guardaba
+  // clientId NI items con serviceId -- el turno público quedaba con un
+  // shape distinto al turno interno, y eso rompía dos cosas río abajo: el
+  // link "ver cliente" desde la ficha del turno (iba a /clientes/undefined)
+  // y mover ese turno por drag&drop ("No se pudo determinar el servicio
+  // del turno", porque move-appointment-action.ts busca items[0].serviceId).
+  const normalizedPhone = client.phone_e164.replace(/[^0-9]/g, "");
+  const phoneRef = db.collection("tenantClientPhones").doc(`${hold.tenantId}_${normalizedPhone}`);
 
   await db.runTransaction(async (transaction) => {
     const latest = await transaction.get(holdRef);
@@ -110,6 +121,35 @@ export async function confirmHold(holdId: string, client: ClientFormData): Promi
     // (no hacen join en vivo con staff), hay que denormalizarlos acá.
     const staffDoc = await transaction.get(tenantRef.collection("staff").doc(hold.staffId));
 
+    const phoneSnap = await transaction.get(phoneRef);
+    let clientId: string;
+    let clientPhoto: string | null = null;
+    if (phoneSnap.exists) {
+      clientId = String(phoneSnap.data()!.clientId);
+      const existingClient = await transaction.get(tenantRef.collection("clients").doc(clientId));
+      clientPhoto = (existingClient.data()?.photoUrl as string | null | undefined) ?? null;
+    } else {
+      const clientRef = tenantRef.collection("clients").doc();
+      clientId = clientRef.id;
+      transaction.create(clientRef, {
+        id: clientRef.id,
+        tenantId: hold.tenantId,
+        fullName: client.full_name,
+        fullNameNormalized: client.full_name.toLocaleLowerCase("es-AR"),
+        phoneE164: client.phone_e164,
+        email: client.email || null,
+        noShowCount: 0,
+        appointmentsCount: 0,
+        totalSpent: 0,
+        lastVisitAt: null,
+        archivedAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.create(phoneRef, { tenantId: hold.tenantId, clientId, createdAt: FieldValue.serverTimestamp() });
+    }
+
+    const servicePrice = Number(service.data()?.price ?? 0);
     transaction.create(appointmentRef, {
       id: appointmentRef.id,
       token: appointmentToken,
@@ -117,17 +157,22 @@ export async function confirmHold(holdId: string, client: ClientFormData): Promi
       staffId: hold.staffId,
       staffName: staffDoc.data()?.displayName ?? "",
       staffPhoto: staffDoc.data()?.photoUrl ?? null,
+      clientId,
       clientName: client.full_name,
+      clientPhoto,
       clientPhone: client.phone_e164,
       clientEmail: client.email || null,
       startsAt: hold.startsAt,
       endsAt: hold.endsAt,
       status: "confirmed",
-      total: Number(service.data()?.price ?? 0),
-      balance: Number(service.data()?.price ?? 0),
+      total: servicePrice,
+      balance: servicePrice,
       depositPaid: 0,
-      items: [{ name: service.data()?.name ?? "Servicio" }],
+      items: [{ serviceId: hold.serviceId, name: service.data()?.name ?? "Servicio", price: servicePrice }],
+      rescheduledFromId: null,
+      cancelReason: null,
       createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     // Convierte el hold (temporal, con expiresAt) en ocupación permanente
