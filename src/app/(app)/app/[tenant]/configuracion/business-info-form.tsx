@@ -20,6 +20,14 @@ export function BusinessInfoForm({
     initialState,
   );
   const [logoUrl, setLogoUrl] = useState(tenant.logoUrl ?? "");
+  // Los logos que vienen de los scripts de seed son `data:image/...;base64,...`
+  // de varios miles de caracteres -- metidos tal cual en el <input> se veían
+  // como un bloque de texto ilegible. El avatar de al lado ya muestra la
+  // imagen real; acá alcanza con avisar que hay una cargada y dejar
+  // "Cambiar" para reemplazarla, en vez de mostrar el base64 entero.
+  const isLongDataUri = logoUrl.startsWith("data:") && logoUrl.length > 100;
+  const [replacingLogo, setReplacingLogo] = useState(false);
+  const showLogoPreview = isLongDataUri && !replacingLogo;
 
   return (
     <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -27,13 +35,32 @@ export function BusinessInfoForm({
         <Avatar name={tenant.name} src={logoUrl || null} size="lg" />
         <div className="flex-1 space-y-1.5">
           <label className="font-label-md text-label-md text-on-surface-variant">Logo del local</label>
-          <Input
-            name="logoUrl"
-            type="url"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://..."
-          />
+          {showLogoPreview ? (
+            <>
+              <input type="hidden" name="logoUrl" value={logoUrl} />
+              <div className="flex h-11 items-center justify-between rounded-pill border border-border bg-surface-muted px-4">
+                <span className="font-body-sm text-body-sm text-on-surface-variant">Imagen ya cargada</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplacingLogo(true);
+                    setLogoUrl("");
+                  }}
+                  className="font-label-sm text-label-sm text-secondary"
+                >
+                  Cambiar
+                </button>
+              </div>
+            </>
+          ) : (
+            <Input
+              name="logoUrl"
+              type="url"
+              value={logoUrl}
+              onChange={(e) => setLogoUrl(e.target.value)}
+              placeholder="https://..."
+            />
+          )}
           <p className="font-body-sm text-body-sm text-on-surface-variant">
             Se muestra en el selector de local y en tu turnero público. Pegá el link directo a una imagen.
           </p>
