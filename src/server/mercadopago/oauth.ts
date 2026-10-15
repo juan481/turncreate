@@ -17,7 +17,7 @@ async function oauthToken(body: URLSearchParams): Promise<OAuthTokenResponse> {
     body,
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Mercado Pago rechazÃ³ OAuth (${response.status})`);
+  if (!response.ok) throw new Error(`Mercado Pago rechazó OAuth (${response.status})`);
   return response.json() as Promise<OAuthTokenResponse>;
 }
 

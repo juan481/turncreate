@@ -1,29 +1,16 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { loginSchema, signUpSchema } from "@/lib/schemas/auth";
 import { signInWithFirebasePassword, signUpWithFirebasePassword } from "@/server/firebase/auth";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { createFirebaseSession, FIREBASE_SESSION_COOKIE, firebaseSessionMaxAge } from "@/server/firebase/session";
+import { persistFirebaseSession as persistSession } from "@/server/firebase/session";
 import { DEMO_USER_EMAIL } from "@/lib/demo";
 
 export type AuthActionState = {
   error: string | null;
 };
-
-async function persistSession(idToken: string) {
-  const session = await createFirebaseSession(idToken);
-  const cookieStore = await cookies();
-  cookieStore.set(FIREBASE_SESSION_COOKIE, session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: firebaseSessionMaxAge,
-  });
-}
 
 async function firstTenantSlug(uid: string) {
   const { db } = firebaseAdmin();

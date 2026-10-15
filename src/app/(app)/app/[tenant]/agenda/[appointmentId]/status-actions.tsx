@@ -30,10 +30,10 @@ export function StatusActions({ tenantSlug, appointmentId, dateISO, status, depo
         <select name="method" required className="h-11 w-full rounded-pill border border-border bg-surface px-4 text-base"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="card_posnet">Posnet</option><option value="mercadopago">Mercado Pago</option></select>
       </> : <>
         <label className="font-label-md text-label-md text-on-surface-variant">Motivo de &ldquo;{confirmingOption.label}&rdquo;</label>
-        <Input name="reason" placeholder="Contanos quÃ© pasÃ³" autoFocus />
-        {confirming === "cancelled" && depositPaid > 0 && <><label className="font-label-md text-label-md text-on-surface-variant">QuÃ© hacer con la seÃ±a</label><select name="depositDisposition" required className="h-11 w-full rounded-pill border border-border bg-surface px-4 text-base"><option value="">Elegir</option><option value="retained">Retener seÃ±a</option><option value="refund_required">Devolver</option><option value="credit">Dejar a favor</option></select></>}
+        <Input name="reason" placeholder="Contanos qué pasó" autoFocus />
+        {confirming === "cancelled" && depositPaid > 0 && <><label className="font-label-md text-label-md text-on-surface-variant">Qué hacer con la seña</label><select name="depositDisposition" required className="h-11 w-full rounded-pill border border-border bg-surface px-4 text-base"><option value="">Elegir</option><option value="retained">Retener seña</option><option value="refund_required">Devolver</option><option value="credit">Dejar a favor</option></select></>}
       </>}
-      <Button type="submit" name="toStatus" value={confirming ?? ""} variant="secondary" disabled={pending}>{pending ? "Guardandoâ€¦" : "Confirmar"}</Button>
+      <Button type="submit" name="toStatus" value={confirming ?? ""} variant="secondary" disabled={pending}>{pending ? "Guardando⬦" : "Confirmar"}</Button>
     </div>}
     {state.error && <p className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
   </form>;

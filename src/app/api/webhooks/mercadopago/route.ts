@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     dataId,
     secret,
   })) {
-    return NextResponse.json({ error: "Firma invÃ¡lida" }, { status: 401 });
+    return NextResponse.json({ error: "Firma inválida" }, { status: 401 });
   }
   if (body?.type !== "payment" || !dataId) return NextResponse.json({ ok: true });
 

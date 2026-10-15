@@ -26,16 +26,16 @@ export default async function CheckoutResultPage({ params, searchParams }: PageP
         </div>
         <div>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
-            {approved ? "Â¡Turno confirmado!" : pending ? "Estamos verificando tu pago" : refundRequired ? "Necesitamos revisar tu pago" : "El pago no se completÃ³"}
+            {approved ? "¡Turno confirmado!" : pending ? "Estamos verificando tu pago" : refundRequired ? "Necesitamos revisar tu pago" : "El pago no se completó"}
           </h1>
           <p className="mt-2 font-body-md text-body-md text-on-surface-variant">
             {approved
-              ? `La seÃ±a de ${attempt.serviceName} fue acreditada y el horario quedÃ³ reservado.`
+              ? `La seña de ${attempt.serviceName} fue acreditada y el horario quedó reservado.`
               : pending
-                ? "No cierres esta pantalla. La confirmaciÃ³n suele tardar unos segundos."
+                ? "No cierres esta pantalla. La confirmación suele tardar unos segundos."
                 : refundRequired
-                  ? "El horario se ocupÃ³ antes de que llegara la aprobaciÃ³n. No confirmamos el turno y soporte gestionarÃ¡ la devoluciÃ³n."
-                  : "Tu horario no quedÃ³ bloqueado. PodÃ©s volver e intentarlo nuevamente."}
+                  ? "El horario se ocupó antes de que llegara la aprobación. No confirmamos el turno y soporte gestionará la devolución."
+                  : "Tu horario no quedó bloqueado. Podés volver e intentarlo nuevamente."}
           </p>
         </div>
         {approved && attempt.appointmentToken ? (

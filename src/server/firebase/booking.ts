@@ -404,7 +404,7 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
       }));
       if (input.depositMethod === "cash" && openCashSessionId) {
         const movementRef = tenantRef.collection("cashSessions").doc(openCashSessionId).collection("movements").doc();
-        transaction.create(movementRef, { id: movementRef.id, type: "in", amount: deposit, method: "cash", reason: `SeÃ±a turno Â· ${input.clientName}`, appointmentId: appointmentRef.id, createdAt: FieldValue.serverTimestamp() });
+        transaction.create(movementRef, { id: movementRef.id, type: "in", amount: deposit, method: "cash", reason: `Seña turno · ${input.clientName}`, appointmentId: appointmentRef.id, createdAt: FieldValue.serverTimestamp() });
       }
     }
 

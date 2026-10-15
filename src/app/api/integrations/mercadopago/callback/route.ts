@@ -11,14 +11,14 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const rawState = url.searchParams.get("state");
   const providerError = url.searchParams.get("error");
-  if (providerError) return NextResponse.json({ error: "Mercado Pago no autorizÃ³ la conexiÃ³n" }, { status: 400 });
-  if (!code || !rawState) return NextResponse.json({ error: "Solicitud OAuth invÃ¡lida" }, { status: 400 });
+  if (providerError) return NextResponse.json({ error: "Mercado Pago no autorizó la conexión" }, { status: 400 });
+  if (!code || !rawState) return NextResponse.json({ error: "Solicitud OAuth inválida" }, { status: 400 });
   const stateHash = crypto.createHash("sha256").update(rawState).digest("hex");
   const stateRef = firebaseAdmin().db.collection("mpOAuthStates").doc(stateHash);
   const state = await stateRef.get();
   const data = state.data();
   if (!state.exists || !data || data.consumedAt || data.expiresAt.toMillis() < Date.now()) {
-    return NextResponse.json({ error: "La autorizaciÃ³n venciÃ³ o ya fue utilizada" }, { status: 400 });
+    return NextResponse.json({ error: "La autorización venció o ya fue utilizada" }, { status: 400 });
   }
   await stateRef.update({ consumedAt: FieldValue.serverTimestamp() });
   const env = requireMercadoPagoOAuthEnv();

@@ -27,17 +27,17 @@ export async function changeStatus(slug: string, appointmentId: string, dateISO:
       const snapshot = await transaction.get(appointmentRef);
       if (!snapshot.exists) throw new Error("El turno no existe");
       const data = snapshot.data()!;
-      if (!(ALLOWED[String(data.status)] ?? []).includes(status)) throw new Error("Ese cambio de estado no estÃ¡ permitido");
+      if (!(ALLOWED[String(data.status)] ?? []).includes(status)) throw new Error("Ese cambio de estado no está permitido");
       const update: Record<string, unknown> = { status, cancelReason: String(formData.get("reason") || "") || null, updatedAt: FieldValue.serverTimestamp() };
       if (status === "cancelled" && Number(data.depositPaid ?? 0) > 0) {
         const disposition = String(formData.get("depositDisposition") ?? "");
-        if (!new Set(["retained", "refund_required", "credit"]).has(disposition)) throw new Error("ElegÃ­ quÃ© hacer con la seÃ±a");
+        if (!new Set(["retained", "refund_required", "credit"]).has(disposition)) throw new Error("Elegí qué hacer con la seña");
         update.depositDisposition = disposition;
       }
       if (data.status === "pending_payment" && status === "confirmed") {
         const amount = Number(formData.get("amount") ?? 0);
         const method = String(formData.get("method") ?? "") as PaymentMethod;
-        if (amount <= 0 || !METHODS.has(method)) throw new Error("IngresÃ¡ monto y medio de pago");
+        if (amount <= 0 || !METHODS.has(method)) throw new Error("Ingresá monto y medio de pago");
         const applied = Math.min(amount, Number(data.balance ?? data.total ?? amount));
         const paymentRef = appointmentRef.collection("payments").doc();
         transaction.create(paymentRef, paymentDocument({ id: paymentRef.id, kind: Number(data.depositPaid ?? 0) > 0 ? "balance" : "deposit", method, status: "approved", grossAmount: amount, appliedAmount: applied, feeAmount: 0, surchargeAmount: 0, netAmount: amount, paidAt: new Date(), source: "admin", tenantId: tenant.id, appointmentId }));

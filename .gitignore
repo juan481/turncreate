@@ -27,10 +27,14 @@
 # debug
 npm-debug.log*
 firebase-debug.log
+firestore-debug.log
 pglite-debug.log
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# e2e (Firebase Emulator Suite)
+.e2e-emulator.pid
 
 # env files (can opt-in for committing if needed)
 .env*

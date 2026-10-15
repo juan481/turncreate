@@ -113,7 +113,7 @@ export default async function TenantDashboardPage({
 
       {(servicesCount === 0 || mpConnection?.status !== "connected") && (
         <Card hoverLift={false} className="space-y-3 border-primary/20 bg-primary/5 p-lg">
-          <div><p className="font-headline-sm text-headline-sm text-on-surface">TerminÃ¡ de preparar tu turnero</p><p className="font-body-sm text-body-sm text-on-surface-variant">Dos pasos cortos y ya podÃ©s compartir tu link.</p></div>
+          <div><p className="font-headline-sm text-headline-sm text-on-surface">Terminá de preparar tu turnero</p><p className="font-body-sm text-body-sm text-on-surface-variant">Dos pasos cortos y ya podés compartir tu link.</p></div>
           <div className="grid gap-2 sm:grid-cols-2">
             <Link href={`/app/${tenantSlug}/servicios`} className="flex min-h-11 items-center gap-2 rounded-inner bg-surface px-3 font-label-md text-label-md"><Icon name={servicesCount > 0 ? "check_circle" : "radio_button_unchecked"} className={servicesCount > 0 ? "text-status-confirmed" : "text-primary"} />Cargar servicios</Link>
             <Link href={`/app/${tenantSlug}/configuracion`} className="flex min-h-11 items-center gap-2 rounded-inner bg-surface px-3 font-label-md text-label-md"><Icon name={mpConnection?.status === "connected" ? "check_circle" : "radio_button_unchecked"} className={mpConnection?.status === "connected" ? "text-status-confirmed" : "text-primary"} />Conectar Mercado Pago</Link>

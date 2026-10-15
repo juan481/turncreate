@@ -91,7 +91,7 @@ export async function createHold(tenantId: string, serviceId: string, staffId: s
       transaction.create(holdRef, { id: holdRef.id, tenantId, staffId: selected, serviceId, startsAt: Timestamp.fromDate(start), endsAt: Timestamp.fromDate(end), expiresAt, createdAt: FieldValue.serverTimestamp() });
       break;
     }
-    if (!selected) throw new Error("Ese horario ya no estÃ¡ disponible");
+    if (!selected) throw new Error("Ese horario ya no está disponible");
   });
   const hold = (await holdRef.get()).data()!;
   return { id: holdRef.id, tenant_id: tenantId, staff_id: selected, starts_at: hold.startsAt.toDate().toISOString(), ends_at: hold.endsAt.toDate().toISOString(), expires_at: hold.expiresAt.toDate().toISOString() };

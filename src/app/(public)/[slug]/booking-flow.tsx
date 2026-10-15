@@ -324,26 +324,28 @@ export function BookingFlow({
           </div>
           {quote && (
             <div className="mt-3 space-y-1 border-t border-border pt-3 text-sm">
-              <div className="flex justify-between"><span>SeÃ±a</span><strong>${quote.appliedAmount.toLocaleString("es-AR")}</strong></div>
+              <div className="flex justify-between"><span>Seña</span><strong>${quote.appliedAmount.toLocaleString("es-AR")}</strong></div>
               {quote.surchargeAmount > 0 && <div className="flex justify-between text-on-surface-variant"><span>Cargo de procesamiento</span><span>${quote.surchargeAmount.toLocaleString("es-AR")}</span></div>}
               <div className="flex justify-between font-semibold"><span>Total a pagar ahora</span><span>${quote.grossAmount.toLocaleString("es-AR")}</span></div>
-              <p className="pt-1 text-xs text-on-surface-variant">El turno se confirma cuando Mercado Pago aprueba la seÃ±a.</p>
+              <p className="pt-1 text-xs text-on-surface-variant">El turno se confirma cuando Mercado Pago aprueba la seña.</p>
             </div>
           )}
         </Card>
 
         <form className="space-y-4">
           <div className="space-y-1">
-            <label className="font-label-md text-label-md text-on-surface-variant">Nombre completo</label>
+            <label htmlFor="client_full_name" className="font-label-md text-label-md text-on-surface-variant">Nombre completo</label>
             <Input
+              id="client_full_name"
               required
               value={clientData.full_name}
               onChange={e => setClientData({...clientData, full_name: e.target.value})}
             />
           </div>
           <div className="space-y-1">
-            <label className="font-label-md text-label-md text-on-surface-variant">Teléfono (WhatsApp)</label>
+            <label htmlFor="client_phone" className="font-label-md text-label-md text-on-surface-variant">Teléfono (WhatsApp)</label>
             <Input
+              id="client_phone"
               required
               type="tel"
               placeholder="+5491122334455"
@@ -352,8 +354,9 @@ export function BookingFlow({
             />
           </div>
           <div className="space-y-1">
-            <label className="font-label-md text-label-md text-on-surface-variant">Email (opcional)</label>
+            <label htmlFor="client_email" className="font-label-md text-label-md text-on-surface-variant">Email (opcional)</label>
             <Input
+              id="client_email"
               type="email"
               value={clientData.email}
               onChange={e => setClientData({...clientData, email: e.target.value})}
@@ -363,7 +366,7 @@ export function BookingFlow({
           <div className="pt-4 flex gap-4">
             <Button type="button" variant="ghost" onClick={() => setStep(3)}>Volver</Button>
             <button type="button" onClick={createPreferenceAndRedirect} disabled={loading || !quote} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-pill bg-primary px-5 font-label-lg text-label-lg text-on-primary disabled:opacity-50" data-mp-checkout-cta="checkout-pro" data-mp-marketplace-checkout="checkout-pro">
-              Pagar seÃ±a con Mercado Pago
+              Pagar seña con Mercado Pago
             </button>
           </div>
         </form>

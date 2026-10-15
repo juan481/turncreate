@@ -11,13 +11,13 @@ export type ConfigActionState = { error: string | null; success?: boolean };
 
 async function tenantForUser(slug: string) {
   const user = await getCurrentFirebaseUser();
-  if (!user) throw new Error("Tu sesiÃ³n venciÃ³. VolvÃ© a iniciar sesiÃ³n.");
+  if (!user) throw new Error("Tu sesión venció. Volvé a iniciar sesión.");
   return requireTenantAccess(user.uid, slug);
 }
 
 export async function updateBusinessInfo(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   const name = formData.get("name");
-  if (typeof name !== "string" || name.trim().length < 2) return { error: "IngresÃ¡ un nombre vÃ¡lido para el local" };
+  if (typeof name !== "string" || name.trim().length < 2) return { error: "Ingresá un nombre válido para el local" };
   try {
     const { tenant } = await tenantForUser(tenantSlug);
     await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({
@@ -35,7 +35,7 @@ export async function updateBusinessInfo(tenantSlug: string, _prev: ConfigAction
 export async function updateBusinessHours(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   try {
     const hours = JSON.parse(typeof formData.get("hours") === "string" ? String(formData.get("hours")) : "[]");
-    if (!Array.isArray(hours) || !hours.every((hour) => typeof hour.weekday === "number" && /^\d{2}:\d{2}$/.test(hour.opens_at) && /^\d{2}:\d{2}$/.test(hour.closes_at))) return { error: "Horarios invÃ¡lidos" };
+    if (!Array.isArray(hours) || !hours.every((hour) => typeof hour.weekday === "number" && /^\d{2}:\d{2}$/.test(hour.opens_at) && /^\d{2}:\d{2}$/.test(hour.closes_at))) return { error: "Horarios inválidos" };
     const { tenant } = await tenantForUser(tenantSlug);
     await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ businessHours: hours.map((hour) => ({ weekday: hour.weekday, opensAt: hour.opens_at, closesAt: hour.closes_at })), updatedAt: FieldValue.serverTimestamp() });
     revalidatePath(`/app/${tenantSlug}/configuracion`);
@@ -47,21 +47,21 @@ export async function updateDepositSettings(tenantSlug: string, _prev: ConfigAct
   const depositType = formData.get("depositType");
   const depositValue = Number(formData.get("depositValue") ?? 0);
   const depositMin = Number(formData.get("depositMin") ?? 0);
-  if (depositType !== "none" && depositType !== "percent" && depositType !== "fixed") return { error: "Tipo de seÃ±a invÃ¡lido" };
+  if (depositType !== "none" && depositType !== "percent" && depositType !== "fixed") return { error: "Tipo de seña inválido" };
   try {
     const { tenant } = await tenantForUser(tenantSlug);
     await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ settings: { ...tenant.settings, depositType, depositValue, depositMin }, updatedAt: FieldValue.serverTimestamp() });
     revalidatePath(`/app/${tenantSlug}/configuracion`);
     return { error: null, success: true };
-  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo actualizar la seÃ±a" }; }
+  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo actualizar la seña" }; }
 }
 
 export async function updateMercadoPagoSettings(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   void _prev;
   const feeMode = formData.get("feeMode");
   const feePercent = Number(formData.get("feePercent") ?? 0);
-  if (feeMode !== "absorbed" && feeMode !== "passed_through") return { error: "ElegÃ­ quiÃ©n absorbe el costo" };
-  if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent >= 50) return { error: "IngresÃ¡ un porcentaje vÃ¡lido" };
+  if (feeMode !== "absorbed" && feeMode !== "passed_through") return { error: "Elegí quién absorbe el costo" };
+  if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent >= 50) return { error: "Ingresá un porcentaje válido" };
   try {
     const { tenant } = await tenantForUser(tenantSlug);
     await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ settings: { ...tenant.settings, mpFeeMode: feeMode, mpFeePercent: feePercent }, updatedAt: FieldValue.serverTimestamp() });

@@ -43,7 +43,7 @@ export async function saveMpConnection(tenantId: string, response: {
   public_key?: string;
 }) {
   if (!response.access_token || !response.refresh_token || !response.user_id) {
-    throw new Error("Mercado Pago no devolviÃ³ credenciales completas");
+    throw new Error("Mercado Pago no devolvió credenciales completas");
   }
   const expiresAt = Timestamp.fromMillis(Date.now() + Math.max(60, Number(response.expires_in ?? 21_600)) * 1000);
   const db = firebaseAdmin().db;
@@ -78,7 +78,7 @@ export async function sellerAccessToken(tenantId: string): Promise<string> {
   const ref = integrationRef(tenantId);
   const snapshot = await ref.get();
   if (!snapshot.exists || snapshot.data()?.status !== "connected") {
-    throw new Error("ConectÃ¡ Mercado Pago para habilitar reservas online");
+    throw new Error("Conectá Mercado Pago para habilitar reservas online");
   }
   const data = snapshot.data()!;
   const expiresAt = data.expiresAt?.toMillis?.() ?? 0;
@@ -90,7 +90,7 @@ export async function sellerAccessToken(tenantId: string): Promise<string> {
     await oauthRepository.rotate(tenantId, refreshed);
     return String(refreshed.access_token);
   } catch (error) {
-    await ref.set({ status: "reconnect_required", lastError: "No se pudo renovar la conexiÃ³n", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await ref.set({ status: "reconnect_required", lastError: "No se pudo renovar la conexión", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     throw error;
   }
 }

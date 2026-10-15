@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { checkoutAmounts, grossUp } from "./payment";
 
 describe("grossUp", () => {
-  it("redondea hacia arriba para preservar la seÃ±a neta", () => {
+  it("redondea hacia arriba para preservar la seña neta", () => {
     expect(grossUp(10_000, 0.06)).toBe(10_638.3);
   });
 
   it("rechaza tasas imposibles", () => {
-    expect(() => grossUp(10_000, 1)).toThrow("Tasa invÃ¡lida");
+    expect(() => grossUp(10_000, 1)).toThrow("Tasa inválida");
   });
 });
 

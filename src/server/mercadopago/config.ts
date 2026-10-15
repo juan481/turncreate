@@ -13,7 +13,7 @@ export function mercadoPagoEnv() {
 export function requireMercadoPagoOAuthEnv() {
   const env = mercadoPagoEnv();
   if (!env.appId || !env.clientSecret || !env.redirectUri) {
-    throw new Error("Mercado Pago todavÃ­a no estÃ¡ configurado en TurnCreate");
+    throw new Error("Mercado Pago todavía no está configurado en TurnCreate");
   }
   return { ...env, appId: env.appId, clientSecret: env.clientSecret, redirectUri: env.redirectUri };
 }

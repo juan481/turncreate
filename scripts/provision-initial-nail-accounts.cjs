@@ -1,5 +1,5 @@
 /*
- * Alta idempotente de las cuentas iniciales de estÃ©tica/uÃ±as.
+ * Alta idempotente de las cuentas iniciales de estética/uñas.
  *
  * Dry run:
  *   node scripts/provision-initial-nail-accounts.cjs --dry-run
@@ -33,18 +33,18 @@ const CATEGORIES = [
   { id: "esculpidas", name: "Kapping y esculpidas", order: 30 },
 ];
 const SERVICES = [
-  ["manicuria-sin-esmalte", "ManicurÃ­a sin esmalte", "manos", 6000, 25, 5],
-  ["manicuria-esmalte-comun", "ManicurÃ­a con esmalte comÃºn", "manos", 8500, 35, 5],
-  ["manicuria-semipermanente", "ManicurÃ­a semipermanente", "manos", 13000, 45, 10],
+  ["manicuria-sin-esmalte", "Manicuría sin esmalte", "manos", 6000, 25, 5],
+  ["manicuria-esmalte-comun", "Manicuría con esmalte común", "manos", 8500, 35, 5],
+  ["manicuria-semipermanente", "Manicuría semipermanente", "manos", 13000, 45, 10],
   ["tratamiento-fortalecedor", "Tratamiento fortalecedor", "manos", 12000, 40, 5],
   ["belleza-pies-sin-esmalte", "Belleza de pies sin esmalte", "pies", 7000, 30, 5],
-  ["belleza-pies-esmalte-comun", "Belleza de pies con esmalte comÃºn", "pies", 9500, 40, 5],
+  ["belleza-pies-esmalte-comun", "Belleza de pies con esmalte común", "pies", 9500, 40, 5],
   ["belleza-pies-semipermanente", "Belleza de pies semipermanente", "pies", 14000, 50, 10],
-  ["pedicuria-semipermanente", "PedicurÃ­a semipermanente", "pies", 15500, 55, 10],
-  ["kapping-gel-cortas", "Kapping Gel - uÃ±as cortas", "esculpidas", 17000, 60, 10],
-  ["kapping-gel-largas", "Kapping Gel - uÃ±as largas", "esculpidas", 21000, 75, 10],
+  ["pedicuria-semipermanente", "Pedicuría semipermanente", "pies", 15500, 55, 10],
+  ["kapping-gel-cortas", "Kapping Gel - uñas cortas", "esculpidas", 17000, 60, 10],
+  ["kapping-gel-largas", "Kapping Gel - uñas largas", "esculpidas", 21000, 75, 10],
   ["esculpidas-full-set", "Esculpidas Full Set", "esculpidas", 27000, 90, 15],
-  ["extension-soft-gel", "ExtensiÃ³n Soft Gel", "esculpidas", 26000, 85, 15],
+  ["extension-soft-gel", "Extensión Soft Gel", "esculpidas", 26000, 85, 15],
 ];
 
 function tenantId(slug) {
@@ -95,7 +95,7 @@ async function provision(account) {
 
 async function main() {
   for (const account of ACCOUNTS) await provision(account);
-  console.log(dryRun ? "Dry run terminado; no se escribiÃ³ nada." : "Alta terminada. Las reservas pÃºblicas siguen bloqueadas hasta conectar Mercado Pago.");
+  console.log(dryRun ? "Dry run terminado; no se escribió nada." : "Alta terminada. Las reservas públicas siguen bloqueadas hasta conectar Mercado Pago.");
 }
 
 main().catch((error) => { console.error(error.message); process.exitCode = 1; });

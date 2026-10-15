@@ -90,7 +90,7 @@ export function SlotsAndDeposit({
         )}
       </div>
 
-      <label className="block space-y-1"><span className="font-label-sm text-label-sm text-on-surface-variant">Nota del turno (opcional)</span><textarea value={appointmentNote} onChange={(event) => setAppointmentNote(event.target.value)} rows={3} maxLength={1000} placeholder="QuÃ© se va a realizar, color, diseÃ±o o detalle importante" className="w-full resize-y rounded-inner border border-border bg-surface px-3 py-2 text-base outline-none focus:border-primary" /></label>
+      <label className="block space-y-1"><span className="font-label-sm text-label-sm text-on-surface-variant">Nota del turno (opcional)</span><textarea value={appointmentNote} onChange={(event) => setAppointmentNote(event.target.value)} rows={3} maxLength={1000} placeholder="Qué se va a realizar, color, diseño o detalle importante" className="w-full resize-y rounded-inner border border-border bg-surface px-3 py-2 text-base outline-none focus:border-primary" /></label>
 
       <div className="flex flex-wrap gap-2">
         {slots.map((slot) => (

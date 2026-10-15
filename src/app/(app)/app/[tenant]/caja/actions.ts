@@ -13,7 +13,7 @@ const METHODS = new Set<PaymentMethod>(["cash", "transfer", "card_posnet", "merc
 
 async function access(slug: string) {
   const user = await getCurrentFirebaseUser();
-  if (!user) throw new Error("Tu sesiÃ³n venciÃ³. VolvÃ© a iniciar sesiÃ³n.");
+  if (!user) throw new Error("Tu sesión venció. Volvé a iniciar sesión.");
   return requireTenantAccess(user.uid, slug);
 }
 
@@ -36,7 +36,7 @@ export async function closeCash(tenantSlug: string, sessionId: string, _prev: Ca
     const ref = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId);
     const [movements, sessionSnapshot] = await Promise.all([ref.collection("movements").get(), ref.get()]);
     const session = sessionSnapshot.data();
-    if (!session || session.closedAt) return { error: "La caja no estÃ¡ abierta" };
+    if (!session || session.closedAt) return { error: "La caja no está abierta" };
     const expected = Number(session.openingAmount ?? 0) + movements.docs.reduce((sum, movement) => { const data = movement.data(); return sum + (data.type === "in" ? Number(data.amount) : -Number(data.amount)); }, 0);
     const counted = Number(formData.get("countedAmount") ?? 0);
     await ref.update({ closedAt: FieldValue.serverTimestamp(), expectedAmount: expected, countedAmount: counted, difference: counted - expected, differenceReason: String(formData.get("differenceReason") || "") || null });
@@ -48,7 +48,7 @@ export async function closeCash(tenantSlug: string, sessionId: string, _prev: Ca
 export async function addCashMovement(tenantSlug: string, sessionId: string, _prev: CajaActionState, formData: FormData): Promise<CajaActionState> {
   const type = formData.get("type");
   const amount = Number(formData.get("amount") ?? 0);
-  if ((type !== "in" && type !== "out") || amount <= 0) return { error: "IngresÃ¡ un movimiento vÃ¡lido" };
+  if ((type !== "in" && type !== "out") || amount <= 0) return { error: "Ingresá un movimiento válido" };
   try {
     const { tenant } = await access(tenantSlug);
     const ref = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId).collection("movements").doc();
@@ -72,7 +72,7 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
       const appointment = await transaction.get(appointmentRef);
       if (!appointment.exists) throw new Error("El turno no existe");
       const data = appointment.data()!;
-      if (["cancelled", "no_show", "expired"].includes(String(data.status))) throw new Error("Este turno estÃ¡ cancelado o ausente, no se puede cobrar");
+      if (["cancelled", "no_show", "expired"].includes(String(data.status))) throw new Error("Este turno está cancelado o ausente, no se puede cobrar");
       const currentBalance = Number(data.balance ?? data.total ?? 0);
       if (amount > currentBalance + 0.01) throw new Error("El monto supera el saldo pendiente");
       const balance = Math.max(0, currentBalance - amount);
@@ -82,7 +82,7 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
       if (data.clientId) transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { totalSpent: FieldValue.increment(amount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       if (method === "cash" && typeof sessionId === "string" && sessionId) {
         const movementRef = db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId).collection("movements").doc();
-        transaction.create(movementRef, { id: movementRef.id, type: "in", amount, method, reason: `Cobro turno Â· ${String(data.clientName ?? "")}`.trim(), appointmentId, createdAt: FieldValue.serverTimestamp() });
+        transaction.create(movementRef, { id: movementRef.id, type: "in", amount, method, reason: `Cobro turno · ${String(data.clientName ?? "")}`.trim(), appointmentId, createdAt: FieldValue.serverTimestamp() });
       }
     });
     revalidatePath(`/app/${tenantSlug}/caja`);

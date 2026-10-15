@@ -33,7 +33,7 @@ export type TenantRecord = {
 function normalizedSlug(value: string) {
   const slug = value.trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    throw new Error("La URL del turnero solo puede usar letras, nÃºmeros y guiones");
+    throw new Error("La URL del turnero solo puede usar letras, números y guiones");
   }
   return slug;
 }
@@ -76,7 +76,7 @@ export async function createTenantForOwner(input: {
 
   await db.runTransaction(async (transaction) => {
     if ((await transaction.get(slugRef)).exists) {
-      throw new Error("Esa URL de turnero ya estÃ¡ en uso, probÃ¡ con otra");
+      throw new Error("Esa URL de turnero ya está en uso, probá con otra");
     }
 
     transaction.create(tenantRef, { ...tenant, createdAt: FieldValue.serverTimestamp() });

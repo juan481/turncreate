@@ -7,8 +7,8 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-  // La firma y revocaciÃ³n se validan en el layout de servidor. El proxy no
-  // importa Firebase Admin: solo evita cargar rutas privadas sin una sesiÃ³n.
+  // La firma y revocación se validan en el layout de servidor. El proxy no
+  // importa Firebase Admin: solo evita cargar rutas privadas sin una sesión.
   if (isProtected && !request.cookies.get(FIREBASE_SESSION_COOKIE)?.value) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);

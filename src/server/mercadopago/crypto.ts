@@ -24,7 +24,7 @@ export function encryptSecret(value: string): string {
 
 export function decryptSecret(value: string): string {
   const envelope = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Envelope;
-  if (envelope.v !== 1) throw new Error("VersiÃ³n de cifrado no soportada");
+  if (envelope.v !== 1) throw new Error("Versión de cifrado no soportada");
   const decipher = crypto.createDecipheriv("aes-256-gcm", key(), Buffer.from(envelope.iv, "base64url"));
   decipher.setAuthTag(Buffer.from(envelope.tag, "base64url"));
   return Buffer.concat([

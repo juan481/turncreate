@@ -19,7 +19,7 @@ export default async function PublicBookingPage({
   const rescheduleFrom = typeof sp.rescheduleFrom === "string" ? sp.rescheduleFrom : undefined;
 
   if (!tenant.booking_enabled) {
-    return <Card hoverLift={false} className="mx-auto max-w-[30rem] space-y-4 p-6 text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-container-low text-primary"><Icon name="event_busy" className="text-[26px]" /></span><h1 className="font-headline-lg-mobile text-headline-lg-mobile">Reservas online en preparaciÃ³n</h1><p className="font-body-md text-body-md text-on-surface-variant">{tenant.name} todavÃ­a no habilitÃ³ el pago de la seÃ±a. PodÃ©s comunicarte directamente con el negocio para pedir un turno.</p></Card>;
+    return <Card hoverLift={false} className="mx-auto max-w-[30rem] space-y-4 p-6 text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-container-low text-primary"><Icon name="event_busy" className="text-[26px]" /></span><h1 className="font-headline-lg-mobile text-headline-lg-mobile">Reservas online en preparación</h1><p className="font-body-md text-body-md text-on-surface-variant">{tenant.name} todavía no habilitó el pago de la seña. Podés comunicarte directamente con el negocio para pedir un turno.</p></Card>;
   }
 
   return (

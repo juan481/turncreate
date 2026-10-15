@@ -26,8 +26,8 @@ function cleanClient(client: CheckoutClient) {
   const fullName = client.full_name.trim();
   const phone = client.phone_e164.replace(/[^+\d]/g, "");
   const email = client.email.trim().toLowerCase();
-  if (fullName.length < 2 || phone.replace(/\D/g, "").length < 8) throw new Error("CompletÃ¡ nombre y WhatsApp");
-  if (email && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("El email no es vÃ¡lido");
+  if (fullName.length < 2 || phone.replace(/\D/g, "").length < 8) throw new Error("Completá nombre y WhatsApp");
+  if (email && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("El email no es válido");
   return { fullName, phone, email };
 }
 
@@ -44,7 +44,7 @@ export async function publicCheckoutQuote(tenantId: string, serviceId: string) {
     db.collection("tenants").doc(tenantId).get(),
     db.collection("tenants").doc(tenantId).collection("services").doc(serviceId).get(),
   ]);
-  if (!tenantSnapshot.exists || !serviceSnapshot.exists) throw new Error("No se pudo calcular la seÃ±a");
+  if (!tenantSnapshot.exists || !serviceSnapshot.exists) throw new Error("No se pudo calcular la seña");
   const tenant = tenantSnapshot.data() as TenantRecord;
   const depositAmount = depositFor(tenant, Number(serviceSnapshot.data()!.price ?? 0));
   return checkoutAmounts({
@@ -57,20 +57,20 @@ export async function publicCheckoutQuote(tenantId: string, serviceId: string) {
 export async function createCheckoutPreference(input: { slug: string; holdId: string; client: CheckoutClient }) {
   const client = cleanClient(input.client);
   const tenant = await getTenantBySlugFromFirebase(input.slug);
-  if (!tenant || tenant.status === "suspended") throw new Error("Este turnero no estÃ¡ disponible");
+  if (!tenant || tenant.status === "suspended") throw new Error("Este turnero no está disponible");
   const sellerOauthAccessToken = await sellerAccessToken(tenant.id);
   const db = firebaseAdmin().db;
   const tenantRef = db.collection("tenants").doc(tenant.id);
   const holdRef = tenantRef.collection("holds").doc(input.holdId);
   const holdSnapshot = await holdRef.get();
-  if (!holdSnapshot.exists || holdSnapshot.data()!.expiresAt.toMillis() <= Date.now()) throw new Error("La reserva venciÃ³");
+  if (!holdSnapshot.exists || holdSnapshot.data()!.expiresAt.toMillis() <= Date.now()) throw new Error("La reserva venció");
   const hold = holdSnapshot.data()!;
   const serviceSnapshot = await tenantRef.collection("services").doc(String(hold.serviceId)).get();
-  if (!serviceSnapshot.exists || serviceSnapshot.data()?.active === false) throw new Error("El servicio ya no estÃ¡ disponible");
+  if (!serviceSnapshot.exists || serviceSnapshot.data()?.active === false) throw new Error("El servicio ya no está disponible");
   const service = serviceSnapshot.data()!;
   const servicePrice = Number(service.price ?? 0);
   const depositAmount = depositFor(tenant, servicePrice);
-  if (depositAmount <= 0) throw new Error("La reserva online requiere una seÃ±a configurada");
+  if (depositAmount <= 0) throw new Error("La reserva online requiere una seña configurada");
   const amounts = checkoutAmounts({
     depositAmount,
     feeMode: tenant.settings.mpFeeMode ?? "absorbed",
@@ -102,16 +102,30 @@ export async function createCheckoutPreference(input: { slug: string; holdId: st
   });
 
   const env = mercadoPagoEnv();
+  // Seam de E2E: nunca pega contra Mercado Pago real (no hay HTTPS público ni
+  // seller real en el emulador). El pago real se prueba aparte, a mano, con
+  // usuarios de prueba de MP (ver docs/checklist-cuentas-externas.md).
+  if (process.env.MP_E2E_STUB === "1") {
+    const returnUrl = `${env.appUrl ?? "http://localhost:3000"}/${tenant.slug}/checkout?attempt=${attemptRef.id}`;
+    await attemptRef.update({ preferenceId: `e2e_${attemptRef.id}`, status: "pending", updatedAt: FieldValue.serverTimestamp() });
+    return {
+      attemptId: attemptRef.id,
+      init_point: returnUrl,
+      depositAmount: amounts.appliedAmount,
+      surchargeAmount: amounts.surchargeAmount,
+      totalAmount: amounts.grossAmount,
+    };
+  }
   if (!isPublicHttpsUrl(env.appUrl)) {
     await attemptRef.delete();
-    throw new Error("El checkout requiere NEXT_PUBLIC_APP_URL con HTTPS pÃºblico");
+    throw new Error("El checkout requiere NEXT_PUBLIC_APP_URL con HTTPS público");
   }
   const returnUrl = `${env.appUrl}/${tenant.slug}/checkout?attempt=${attemptRef.id}`;
   try {
     const preferenceBody = {
       items: [{
         id: String(hold.serviceId),
-        title: `SeÃ±a Â· ${String(service.name ?? "Turno")}`,
+        title: `Seña · ${String(service.name ?? "Turno")}`,
         quantity: 1,
         unit_price: amounts.grossAmount,
         currency_id: "ARS",
@@ -135,9 +149,9 @@ export async function createCheckoutPreference(input: { slug: string; holdId: st
       body: JSON.stringify(preferenceBody),
       cache: "no-store",
     });
-    if (!preferenceResponse.ok) throw new Error(`Mercado Pago rechazÃ³ el checkout (${preferenceResponse.status})`);
+    if (!preferenceResponse.ok) throw new Error(`Mercado Pago rechazó el checkout (${preferenceResponse.status})`);
     const result = await preferenceResponse.json() as { id?: string; init_point?: string };
-    if (!result.id || !result.init_point) throw new Error("Mercado Pago no devolviÃ³ un checkout vÃ¡lido");
+    if (!result.id || !result.init_point) throw new Error("Mercado Pago no devolvió un checkout válido");
     await attemptRef.update({ preferenceId: result.id, status: "pending", updatedAt: FieldValue.serverTimestamp() });
     return {
       attemptId: attemptRef.id,
@@ -163,8 +177,8 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
   if (eventSnapshot.data()?.processedAt) return { duplicate: true };
 
   // La referencia externa permite encontrar el tenant sin confiar en el body del webhook.
-  // Primero se obtiene el payment con la conexiÃ³n cuyo sellerId llega como query/body;
-  // el webhook guarda ese sellerId antes de encolar esta reconciliaciÃ³n.
+  // Primero se obtiene el payment con la conexión cuyo sellerId llega como query/body;
+  // el webhook guarda ese sellerId antes de encolar esta reconciliación.
   const sellerId = String(eventSnapshot.data()?.sellerId ?? "");
   const seller = sellerId ? await db.collection("mpSellers").doc(sellerId).get() : null;
   if (!seller?.exists) throw new Error("No se pudo identificar la cuenta vendedora");
@@ -172,7 +186,7 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
   const accessToken = await sellerAccessToken(tenantId);
   const payment = await new Payment(new MercadoPagoConfig({ accessToken })).get({ id: paymentId });
   const externalReference = String(payment.external_reference ?? "");
-  if (!externalReference.startsWith("tc_")) throw new Error("Referencia externa invÃ¡lida");
+  if (!externalReference.startsWith("tc_")) throw new Error("Referencia externa inválida");
   const attemptId = externalReference.slice(3);
   const attemptRef = db.collection("bookingAttempts").doc(attemptId);
   const attemptSnapshot = await attemptRef.get();

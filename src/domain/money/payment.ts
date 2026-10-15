@@ -25,8 +25,8 @@ export function roundMoney(value: number): number {
 
 /** Total a cobrar para que, luego de la tasa, quede exactamente `netAmount`. */
 export function grossUp(netAmount: number, feeRate: number): number {
-  if (!Number.isFinite(netAmount) || netAmount < 0) throw new Error("Monto invÃ¡lido");
-  if (!Number.isFinite(feeRate) || feeRate < 0 || feeRate >= 1) throw new Error("Tasa invÃ¡lida");
+  if (!Number.isFinite(netAmount) || netAmount < 0) throw new Error("Monto inválido");
+  if (!Number.isFinite(feeRate) || feeRate < 0 || feeRate >= 1) throw new Error("Tasa inválida");
   return Math.ceil((netAmount / (1 - feeRate)) * 100) / 100;
 }
 
