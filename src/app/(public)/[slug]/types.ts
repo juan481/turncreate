@@ -18,6 +18,7 @@ export type PublicService = {
   description: string | null;
   price: number;
   duration: number;
+  featured: boolean;
 };
 
 export type PublicCategory = {

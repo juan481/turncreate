@@ -165,19 +165,29 @@ export function BookingFlow({
               {cat.services.map((svc) => (
                 <Card
                   key={svc.id}
-                  className="cursor-pointer p-4 hover:border-primary/30"
+                  className={cn(
+                    "cursor-pointer p-4 hover:border-primary/30",
+                    svc.featured && "border-primary/40 bg-gradient-to-br from-primary/10 to-surface",
+                  )}
                   onClick={() => {
                     setSelectedService(svc);
                     track("bookingStarted");
                     setStep(2);
                   }}
                 >
-                  <div className="flex justify-between items-center">
-                    <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      {svc.featured && (
+                        <span className="mb-1 inline-flex items-center gap-1 rounded-pill bg-primary px-2 py-0.5 font-label-xs text-label-xs text-on-primary">
+                          <Icon name="star" filled className="text-[11px]" />
+                          Destacado
+                        </span>
+                      )}
                       <h3 className="font-label-lg text-label-lg">{svc.name}</h3>
+                      {svc.description && <p className="line-clamp-2 font-body-sm text-body-sm text-on-surface-variant">{svc.description}</p>}
                       <p className="text-on-surface-variant font-body-sm">{svc.duration} min</p>
                     </div>
-                    <div className="font-label-lg">${svc.price}</div>
+                    <div className="shrink-0 font-label-lg tabular-nums">${svc.price.toLocaleString("es-AR")}</div>
                   </div>
                 </Card>
               ))}

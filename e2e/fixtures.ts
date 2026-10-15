@@ -19,6 +19,19 @@ export const ATTEMPT_IDS = {
   pending: "e2e_attempt_pending",
 } as const;
 
+const PROJECT_ORDER = ["pixel-7", "w320", "w360", "w390"];
+
+export function projectIndex(projectName: string) {
+  return Math.max(0, PROJECT_ORDER.indexOf(projectName));
+}
+
+/** YYYY-MM-DD de dentro de `days` días, en la zona horaria del tenant de prueba. */
+export function futureDateISO(days: number) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(
+    new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+  );
+}
+
 export async function loginAsOwner(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(OWNER_EMAIL);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { computeTotalDuration } from "@/domain/availability";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { getService, listServiceCategories } from "@/server/services/catalog";
 import { EditServiceForm } from "./edit-service-form";
@@ -19,9 +20,10 @@ export default async function EditServicePage({ params }: PageProps<"/app/[tenan
 
   return (
     <div className="mx-auto max-w-[42rem] space-y-lg">
+      {/* En mobile el AppBar ya trae el ‹volver; esto queda solo para desktop. */}
       <Link
         href={`/app/${tenantSlug}/servicios`}
-        className="inline-flex min-h-11 items-center gap-2 rounded-pill pr-3 font-label-md text-label-md text-on-surface-variant transition-colors hover:bg-surface-muted hover:text-on-surface"
+        className="hidden min-h-11 items-center gap-2 rounded-pill pr-3 font-label-md text-label-md text-on-surface-variant transition-colors hover:bg-surface-muted hover:text-on-surface lg:inline-flex"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-container-low">
           <Icon name="arrow_back" className="text-[18px]" />
@@ -46,8 +48,9 @@ export default async function EditServicePage({ params }: PageProps<"/app/[tenan
             public: service.public,
             description: service.description,
             categoryId: service.categoryId,
-            bufferAfterMin: service.bufferAfterMin,
-            phases: service.phases,
+            // Servicios viejos con fases/margen: se muestra el tiempo total que
+            // bloqueaban en la agenda, así al guardar no cambia su duración real.
+            durationMin: computeTotalDuration(service.phases, service.bufferAfterMin),
           }}
         />
       </Card>

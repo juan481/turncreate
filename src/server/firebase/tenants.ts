@@ -38,6 +38,11 @@ function normalizedSlug(value: string) {
   return slug;
 }
 
+export async function isTenantSlugTaken(value: string) {
+  const slug = normalizedSlug(value);
+  return (await firebaseAdmin().db.collection("tenantSlugs").doc(slug).get()).exists;
+}
+
 export async function createTenantForOwner(input: {
   ownerUid: string;
   name: string;

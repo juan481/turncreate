@@ -4,13 +4,8 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { getDaySummary, getPaymentSummary, getRangeSummary } from "@/server/firebase/stats";
 import { Card } from "@/components/ui/card";
-import { KpiTile } from "@/components/ui/kpi-tile";
 import { MenuTile } from "@/components/ui/menu-tile";
-import { AppointmentRow } from "@/components/ui/appointment-row";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TenantTypeInfoButton } from "./tenant-type-info";
 import { PublicLink } from "./public-link";
@@ -27,6 +22,20 @@ import { getMpConnection } from "@/server/mercadopago/connections";
 // epoch sin importar la zona del servidor.
 function isUpcoming(startsAtISO: string): boolean {
   return new Date(startsAtISO).getTime() >= Date.now();
+}
+
+function Stat({ label, value, hint, hintTone = "neutral" }: { label: string; value: string | number; hint?: string; hintTone?: "neutral" | "positive" | "warning" }) {
+  return (
+    <div className="min-w-0 bg-surface-container-lowest px-4 py-3">
+      <p className="truncate font-label-xs text-label-xs uppercase tracking-wide text-on-surface-variant">{label}</p>
+      <p className="mt-0.5 truncate font-headline-sm text-headline-sm tabular-nums text-on-surface">{value}</p>
+      {hint && (
+        <p className={cn("truncate font-label-xs text-label-xs", hintTone === "positive" ? "text-status-confirmed" : hintTone === "warning" ? "text-status-draft" : "text-on-surface-variant")}>
+          {hint}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default async function TenantDashboardPage({
@@ -90,10 +99,17 @@ export default async function TenantDashboardPage({
   const servicesCount = servicesSnapshot.docs.filter((doc) => !doc.data().archivedAt).length;
   const openCashSession = openCashSnapshot.docs[0]?.data() ?? null;
 
-  const upcoming = daySummary.appointments.filter((a) => a.status === "confirmed" && isUpcoming(a.startsAt));
-  const proximo = upcoming[0] ?? null;
-  const siguientes = upcoming.slice(1, 5);
+  const upcoming = daySummary.appointments.filter((a) => a.status === "confirmed" && isUpcoming(a.startsAt)).slice(0, 8);
   const atendidosHoy = daySummary.appointments.filter((a) => a.status === "completed").length;
+
+  const logoUrl = (tenant as typeof tenant & { logoUrl?: string | null }).logoUrl ?? null;
+  const mpConnected = mpConnection?.status === "connected";
+  const setupSteps = [
+    { label: "Cargá tu logo", done: Boolean(logoUrl), href: `/app/${tenantSlug}/configuracion` },
+    { label: "Cargá tus servicios y precios", done: servicesCount > 0, href: `/app/${tenantSlug}/servicios` },
+    { label: "Conectá tu cuenta de Mercado Pago", done: mpConnected, href: `/app/${tenantSlug}/configuracion#mercadopago` },
+  ];
+  const setupDone = setupSteps.filter((step) => step.done).length;
 
   const monthChangePct =
     previousMonthPayments.applied > 0
@@ -111,133 +127,116 @@ export default async function TenantDashboardPage({
         <p className="font-body-sm text-body-sm capitalize text-on-surface-variant">{longDayLabel(dateISO)}</p>
       </div>
 
-      {(servicesCount === 0 || mpConnection?.status !== "connected") && (
+      {setupDone < setupSteps.length && (
         <Card hoverLift={false} className="space-y-3 border-primary/20 bg-primary/5 p-lg">
-          <div><p className="font-headline-sm text-headline-sm text-on-surface">Terminá de preparar tu turnero</p><p className="font-body-sm text-body-sm text-on-surface-variant">Dos pasos cortos y ya podés compartir tu link.</p></div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Link href={`/app/${tenantSlug}/servicios`} className="flex min-h-11 items-center gap-2 rounded-inner bg-surface px-3 font-label-md text-label-md"><Icon name={servicesCount > 0 ? "check_circle" : "radio_button_unchecked"} className={servicesCount > 0 ? "text-status-confirmed" : "text-primary"} />Cargar servicios</Link>
-            <Link href={`/app/${tenantSlug}/configuracion`} className="flex min-h-11 items-center gap-2 rounded-inner bg-surface px-3 font-label-md text-label-md"><Icon name={mpConnection?.status === "connected" ? "check_circle" : "radio_button_unchecked"} className={mpConnection?.status === "connected" ? "text-status-confirmed" : "text-primary"} />Conectar Mercado Pago</Link>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-headline-sm text-headline-sm text-on-surface">Terminá de preparar tu turnero</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant">Tres pasos cortos y ya podés compartir tu link.</p>
+            </div>
+            <span className="shrink-0 rounded-pill bg-surface px-2.5 py-1 font-label-xs text-label-xs tabular-nums text-secondary">
+              {setupDone}/{setupSteps.length}
+            </span>
           </div>
+          <ol className="space-y-2">
+            {setupSteps.map((step, index) => (
+              <li key={step.label}>
+                <Link
+                  href={step.href}
+                  className={cn(
+                    "flex min-h-12 items-center gap-3 rounded-inner bg-surface px-3 py-2 transition-colors hover:bg-surface-container-low",
+                    step.done && "opacity-70",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid h-7 w-7 shrink-0 place-items-center rounded-full font-label-md text-label-md tabular-nums",
+                      step.done ? "bg-status-confirmed-bg text-status-confirmed" : "bg-primary text-on-primary",
+                    )}
+                  >
+                    {step.done ? <Icon name="check" className="text-[16px]" /> : index + 1}
+                  </span>
+                  <span className={cn("min-w-0 flex-1 font-label-md text-label-md text-on-surface", step.done && "line-through decoration-on-surface-variant/50")}>
+                    {step.label}
+                  </span>
+                  {!step.done && <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />}
+                </Link>
+              </li>
+            ))}
+          </ol>
         </Card>
       )}
 
-      {/* Hero: lo primero que pidió Juan -- cuánta plata entró hoy, sin vueltas */}
-      <Card hoverLift={false} className="flex flex-col gap-1 p-lg">
-        <p className="font-label-md text-label-md text-on-surface-variant">Hoy llevás cobrados</p>
-        <p className="font-headline-lg text-headline-lg tabular-nums text-on-surface">
-          ${todayPayments.applied.toLocaleString("es-AR")}
-        </p>
-        {daySummary.porCobrar > 0 && (
-          <p className="flex items-center gap-1.5 font-label-sm text-label-sm text-on-surface-variant">
-            <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
-            ${daySummary.porCobrar.toLocaleString("es-AR")} por cobrar
-          </p>
-        )}
-      </Card>
-
-      {/* 4 KPIs -- grilla 2x2 en mobile, fila en desktop (patrón Perladerm).
-          Base `grid-cols-2` a propósito (no `grid-cols-1`): el 2x2 ES el
-          diseño pedido para mobile, no un fallback -- la regla del SKILL
-          sobre "grid-cols-1 explícito" apunta a grids SIN ninguna columna
-          base definida, no a este caso donde la base ya es explícita. */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiTile
+      {/* Contadores: chicos y en una sola tarjeta, para que la pantalla no
+          se la coman los números. `gap-px` sobre `bg-border` dibuja las
+          líneas divisorias sin bordes por celda. */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-border bg-border shadow-card lg:grid-cols-4">
+        <Stat
+          label="Cobrado hoy"
+          value={`$${todayPayments.applied.toLocaleString("es-AR")}`}
+          hint={daySummary.porCobrar > 0 ? `$${daySummary.porCobrar.toLocaleString("es-AR")} por cobrar` : undefined}
+        />
+        <Stat
           label="Turnos hoy"
-          icon={<Icon name="event" className="text-[14px]" />}
           value={daySummary.turnos}
           hint={atendidosHoy > 0 ? `${atendidosHoy} atendido${atendidosHoy === 1 ? "" : "s"}` : undefined}
         />
-        <KpiTile
-          label="Facturado hoy"
-          icon={<Icon name="payments" className="text-[14px]" />}
-          value={`$${daySummary.facturado.toLocaleString("es-AR")}`}
-        />
-        <KpiTile
+        <Stat
           label="Esta semana"
-          icon={<Icon name="trending_up" className="text-[14px]" />}
           value={`$${weekPayments.applied.toLocaleString("es-AR")}`}
           hint={`${weekSummary.turnos} turno${weekSummary.turnos === 1 ? "" : "s"}`}
         />
-        <KpiTile
+        <Stat
           label="Este mes"
-          icon={<Icon name="monitoring" className="text-[14px]" />}
           value={`$${monthPayments.applied.toLocaleString("es-AR")}`}
           hint={monthChangePct === null ? undefined : `${monthChangePct >= 0 ? "+" : ""}${monthChangePct}% vs. mes pasado`}
           hintTone={monthChangePct === null ? "neutral" : monthChangePct >= 0 ? "positive" : "warning"}
         />
       </div>
 
-      {/* Próximo turno -- compacto: foto, hora, servicio, profesional si hay equipo, y listo */}
-      {proximo ? (
-        <Card hoverLift={false} className="flex flex-col gap-md p-lg">
-          <div className="flex items-center gap-3">
-            <Avatar name={proximo.clientName} src={proximo.clientPhoto} size="lg" ring />
-            <div className="min-w-0 flex-1">
-              <p className="font-label-sm text-label-sm font-semibold uppercase tracking-wide text-secondary">
-                Próximo turno · {formatTimeInTz(proximo.startsAt, tenant.timezone)} hs
-              </p>
-              <p className="truncate font-headline-sm text-headline-sm text-on-surface">{proximo.clientName}</p>
-              <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
-                {proximo.serviceNames}
-                {hasMultipleStaff && proximo.staffName ? ` · ${proximo.staffName}` : ""}
-              </p>
+      {/* Turnos pendientes de hoy: tarjetitas verticales (Cliente, Servicio,
+          Horario) en una fila que se desliza. Si no queda ninguno, la
+          sección directamente no se muestra. */}
+      {upcoming.length > 0 && (
+        <section className="space-y-2" aria-labelledby="pendientes-hoy">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-1">
+              <h2 id="pendientes-hoy" className="font-headline-sm text-headline-sm text-on-surface">Pendientes de hoy</h2>
+              {hasMultipleStaff && <TenantTypeInfoButton />}
             </div>
+            <Link href={`/app/${tenantSlug}/agenda`} className="shrink-0 font-label-sm text-label-sm text-secondary">
+              Ver agenda
+            </Link>
           </div>
-          <Link
-            href={`/app/${tenantSlug}/agenda/${proximo.id}`}
-            className={cn(buttonVariants({ size: "default" }), "w-full")}
-          >
-            Ver detalle del turno
-          </Link>
-        </Card>
-      ) : (
-        <Card hoverLift={false} className="p-lg">
-          <EmptyState
-            icon={<Icon name="event_available" className="text-[24px]" />}
-            title="Sin más turnos pendientes hoy"
-            description="Todo lo agendado para hoy ya fue atendido."
-          />
-        </Card>
-      )}
-
-      {/* Tu día -- lo que queda, nada más (lo de atrás ya quedó en el hero + KPIs) */}
-      <div className="flex flex-col gap-sm">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <h2 className="font-headline-sm text-headline-sm text-on-surface">Tu día</h2>
-            {hasMultipleStaff && <TenantTypeInfoButton />}
-          </div>
-          <Link href={`/app/${tenantSlug}/agenda`} className="shrink-0 font-label-sm text-label-sm text-secondary">
-            Ver agenda completa
-          </Link>
-        </div>
-        {siguientes.length === 0 ? (
-          <p className="py-2 font-body-sm text-body-sm text-on-surface-variant">
-            {proximo
-              ? "No hay más turnos después de este."
-              : daySummary.turnos > 0
-                ? "Ya atendiste todos los turnos de hoy."
-                : "Todavía no hay turnos confirmados para hoy."}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {siguientes.map((a) => (
-              <AppointmentRow
+          <div className="-mx-gutter flex snap-x gap-2.5 overflow-x-auto px-gutter pb-1 [scrollbar-width:none]">
+            {upcoming.map((a, index) => (
+              <Link
                 key={a.id}
                 href={`/app/${tenantSlug}/agenda/${a.id}`}
-                time={formatTimeInTz(a.startsAt, tenant.timezone)}
-                clientName={a.clientName}
-                clientPhoto={a.clientPhoto}
-                serviceName={a.serviceNames}
-                staffName={hasMultipleStaff ? a.staffName : undefined}
-                statusTone="confirmed"
-                statusLabel="Confirmado"
-                price={`$${a.total.toLocaleString("es-AR")}`}
-              />
+                className={cn(
+                  "flex w-[8.75rem] shrink-0 snap-start flex-col gap-1.5 rounded-card border bg-surface-container-lowest p-3 shadow-card transition-transform active:scale-[0.98]",
+                  index === 0 ? "border-primary/40" : "border-border",
+                )}
+              >
+                <p className="truncate font-label-lg text-label-lg text-on-surface">{a.clientName}</p>
+                <p className="line-clamp-2 min-h-[2.5em] font-body-sm text-body-sm leading-tight text-on-surface-variant">
+                  {a.serviceNames}
+                  {hasMultipleStaff && a.staffName ? ` · ${a.staffName}` : ""}
+                </p>
+                <span
+                  className={cn(
+                    "mt-auto inline-flex w-fit items-center gap-1 rounded-pill px-2 py-0.5 font-label-sm text-label-sm tabular-nums",
+                    index === 0 ? "bg-primary text-on-primary" : "bg-surface-container-low text-on-surface",
+                  )}
+                >
+                  <Icon name="schedule" className="text-[13px]" />
+                  {formatTimeInTz(a.startsAt, tenant.timezone)}
+                </span>
+              </Link>
             ))}
           </div>
-        )}
-      </div>
+        </section>
+      )}
 
       {/* Botonera -- un solo tap a cada sección, cada una con un dato vivo.
           Misma lógica de base explícita que la grilla de KPIs de arriba. */}

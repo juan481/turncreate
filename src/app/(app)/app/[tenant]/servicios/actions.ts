@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import {
+  catalogOrderSchema,
   createServiceSchema,
   serviceCategoryIdSchema,
   serviceCategorySchema,
@@ -13,29 +14,27 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { requireTenantAccess } from "@/server/firebase/tenants";
 
-export type ServiceActionState = { error: string | null };
+export type ServiceActionState = { error: string | null; id?: string };
 
 function parseService(formData: FormData) {
-  let phases: unknown = [];
-  try {
-    phases = JSON.parse(typeof formData.get("phases") === "string" ? String(formData.get("phases")) : "[]");
-  } catch {
-    return { error: "Las fases no se pudieron leer, probá de nuevo" } as const;
-  }
-
   const rawCategoryId = formData.get("categoryId");
   const parsed = createServiceSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") ?? "",
     categoryId: typeof rawCategoryId === "string" && rawCategoryId.trim() ? rawCategoryId : null,
     price: formData.get("price"),
-    bufferAfterMin: formData.get("bufferAfterMin") || 0,
+    durationMin: formData.get("durationMin"),
     public: formData.get("public") === "on",
-    phases,
   });
   return parsed.success
     ? { data: parsed.data }
     : { error: parsed.error.issues[0]?.message ?? "Datos inválidos" } as const;
+}
+
+// El motor de agenda sigue trabajando con fases; desde la UI un servicio
+// es solo "dura N minutos", que es exactamente una fase activa sin margen.
+function durationFields(durationMin: number) {
+  return { phases: [{ kind: "active" as const, minutes: durationMin, position: 1 }], bufferAfterMin: 0 };
 }
 
 async function authenticatedTenant(tenantSlug: string) {
@@ -98,9 +97,9 @@ export async function createService(
       description: data.description,
       ...category,
       price: data.price,
-      bufferAfterMin: data.bufferAfterMin,
-      phases: data.phases.map((phase, index) => ({ ...phase, position: index + 1 })),
+      ...durationFields(data.durationMin),
       public: data.public,
+      featured: false,
       active: true,
       sort: Date.now(),
       archivedAt: null,
@@ -108,7 +107,7 @@ export async function createService(
       updatedAt: FieldValue.serverTimestamp(),
     });
     revalidateCatalog(tenantSlug);
-    return { error: null };
+    return { error: null, id: serviceRef.id };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "No se pudo crear el servicio" };
   }
@@ -140,8 +139,7 @@ export async function updateService(
       description: data.description,
       ...category,
       price: data.price,
-      bufferAfterMin: data.bufferAfterMin,
-      phases: data.phases.map((phase, index) => ({ ...phase, position: index + 1 })),
+      ...durationFields(data.durationMin),
       public: data.public,
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -218,7 +216,7 @@ export async function createServiceCategory(tenantSlug: string, name: string): P
       updatedAt: FieldValue.serverTimestamp(),
     });
     revalidateCatalog(tenantSlug);
-    return { error: null };
+    return { error: null, id: ref.id };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "No se pudo crear la categoría" };
   }
@@ -292,5 +290,48 @@ export async function archiveServiceCategory(
     return { error: null };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "No se pudo archivar la categoría" };
+  }
+}
+
+export async function setServiceFeatured(tenantSlug: string, serviceId: string, featured: boolean): Promise<ServiceActionState> {
+  const parsedServiceId = serviceIdSchema.safeParse(serviceId);
+  if (!parsedServiceId.success || typeof featured !== "boolean") return { error: "El servicio no es válido" };
+  try {
+    const { tenant } = await authenticatedTenant(tenantSlug);
+    const ref = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc(parsedServiceId.data);
+    if (!(await ref.get()).exists) return { error: "El servicio no existe" };
+    await ref.update({ featured, updatedAt: FieldValue.serverTimestamp() });
+    revalidateCatalog(tenantSlug, parsedServiceId.data);
+    return { error: null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo destacar el servicio" };
+  }
+}
+
+// Guarda el orden tal cual quedó en pantalla: el índice de cada categoría y
+// de cada servicio pasa a ser su `sort`, que es lo que usa el turnero
+// público para mostrar el catálogo en ese mismo orden.
+export async function saveCatalogOrder(
+  tenantSlug: string,
+  order: { categoryIds: string[]; serviceIds: string[] },
+): Promise<ServiceActionState> {
+  const parsed = catalogOrderSchema.safeParse(order);
+  if (!parsed.success) return { error: "El orden no es válido" };
+  try {
+    const { tenant } = await authenticatedTenant(tenantSlug);
+    const tenantRef = firebaseAdmin().db.collection("tenants").doc(tenant.id);
+    const refs = [
+      ...parsed.data.categoryIds.map((id, index) => ({ ref: tenantRef.collection("serviceCategories").doc(id), sort: index })),
+      ...parsed.data.serviceIds.map((id, index) => ({ ref: tenantRef.collection("services").doc(id), sort: index })),
+    ];
+    for (let start = 0; start < refs.length; start += 400) {
+      const batch = firebaseAdmin().db.batch();
+      for (const { ref, sort } of refs.slice(start, start + 400)) batch.update(ref, { sort, updatedAt: FieldValue.serverTimestamp() });
+      await batch.commit();
+    }
+    revalidateCatalog(tenantSlug);
+    return { error: null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo guardar el orden" };
   }
 }

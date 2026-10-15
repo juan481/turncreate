@@ -88,7 +88,7 @@ export default async function TenantAppLayout({
             </div>
             <NavPills tenantSlug={tenantSlug} items={nav} />
             <div className="flex shrink-0 items-center gap-3">
-              <a href={`https://wa.me/541124527669?text=${encodeURIComponent(`Hola, necesito ayuda con ${tenant.name} (${tenant.slug}) en TurnCreate.`)}`} target="_blank" rel="noopener noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface" aria-label="Ayuda por WhatsApp" title="Ayuda"><Icon name="help" className="text-[20px]" /></a>
+              <Link href={`/app/${tenantSlug}/ayuda`} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface" aria-label="Ayuda" title="Ayuda"><Icon name="help" className="text-[20px]" /></Link>
               <Link href={`/app/${tenantSlug}/configuracion`} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface" aria-label="Configuración" title="Configuración">
                 <Icon name="settings" className="text-[20px]" />
               </Link>
@@ -109,8 +109,11 @@ export default async function TenantAppLayout({
             </div>
           </div>
         </header>
-        <MobilePageHeader tenantSlug={tenantSlug} tenantName={tenant.name} />
-        <main className="mx-auto w-full max-w-[1440px] px-gutter pb-24 lg:px-gutter-desktop lg:pb-2xl lg:pt-28">
+        <MobilePageHeader tenantSlug={tenantSlug} tenantName={tenant.name} tenantLogoUrl={currentTenantOption.logoUrl ?? null} />
+        {/* pt-5 en mobile: sin aire bajo el AppBar sticky, los botones del
+            tope de cada pantalla ("Nuevo servicio", etc.) quedaban pegados
+            al header. En lg+ el header-pill flotante ya reserva su lugar. */}
+        <main className="mx-auto w-full max-w-[1440px] px-gutter pb-24 pt-5 lg:px-gutter-desktop lg:pb-2xl lg:pt-28">
           <PageTransition>{children}</PageTransition>
         </main>
         <Suspense fallback={null}>

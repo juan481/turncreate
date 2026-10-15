@@ -19,15 +19,17 @@ Correr todo: `npx playwright test`.
 Cubierto: primer ingreso + cambio de contraseña obligatorio (`auth.spec.ts`);
 reserva pública completa hasta el checkout y los 4 desenlaces del pago --
 aprobado/rechazado/pendiente/aprobación tardía sobre un horario ya ocupado
-(`public-booking.spec.ts`); alta y edición de servicio, con pausa
-(`servicios.spec.ts`); turno manual con seña en efectivo y por transferencia
-(`turno-manual.spec.ts`); navegación de clientes/agenda/calendario/caja/
-reportes y back físico (`navegacion.spec.ts`). Cada spec corre en 4 proyectos
-(Pixel 7 + anchos 320/360/390px) y valida que no haya scroll lateral en las
-pantallas clave. 44/44 corridas verificadas en verde.
+(`public-booking.spec.ts`); alta y edición de servicio, categoría creada en
+el momento, destacar y ordenar con teclado (`servicios.spec.ts`); turno
+manual con seña en efectivo y por transferencia (`turno-manual.spec.ts`);
+navegación de clientes/agenda/calendario/caja/reportes y back físico
+(`navegacion.spec.ts`); registro + onboarding de 3 pasos, URL ya en uso,
+pantalla de creación, checklist del inicio y Ayuda (`onboarding.spec.ts`).
+Cada spec corre en 4 proyectos (Pixel 7 + anchos 320/360/390px) y valida que
+no haya scroll lateral en las pantallas clave. 52/52 corridas en verde.
 
 Un único profesional ("owner" en el tenant de prueba) compite por los mismos
 horarios entre specs y proyectos corriendo en paralelo contra el mismo
-backend: cada spec que reserva un turno usa un offset de índice de horario
-distinto (ver los comentarios en `public-booking.spec.ts` y
-`turno-manual.spec.ts`) para no pisarse.
+backend: cada spec que reserva un turno lo hace en su propio día futuro
+(public-booking 1..4 días, turno-manual 5..8), así no se pisan ni dependen
+de la hora a la que se corra la suite.

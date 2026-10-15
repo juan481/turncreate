@@ -1,15 +1,13 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { useToast } from "@/components/ui/toast";
 import type { ServiceCategoryRecord } from "@/server/services/catalog";
-import { PhasesEditor, type PhaseDraft } from "../phases-editor";
-import { updateService, setServiceActive, archiveService, type ServiceActionState } from "../actions";
-
-const initialState: ServiceActionState = { error: null };
+import { ServiceFields } from "../service-fields";
+import { updateService, setServiceActive, archiveService } from "../actions";
 
 export function EditServiceForm({
   tenantSlug,
@@ -26,32 +24,30 @@ export function EditServiceForm({
     public: boolean;
     description: string;
     categoryId: string | null;
-    bufferAfterMin: number;
-    phases: PhaseDraft[];
+    durationMin: number;
   };
 }) {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(
-    updateService.bind(null, tenantSlug, service.id),
-    initialState,
-  );
-  const [phases, setPhases] = useState<PhaseDraft[]>(service.phases);
-  const [bufferAfterMin, setBufferAfterMin] = useState(service.bufferAfterMin);
+  const toast = useToast();
   const [active, setActive] = useState(service.active);
-  const [operationError, setOperationError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSaving] = useTransition();
   const [archiving, startArchiving] = useTransition();
   const [togglingActive, startTogglingActive] = useTransition();
+  const listHref = `/app/${tenantSlug}/servicios`;
 
   function handleToggleActive() {
     const next = !active;
     setActive(next);
-    setOperationError(null);
+    setError(null);
     startTogglingActive(async () => {
       const result = await setServiceActive(tenantSlug, service.id, next);
       if (result.error) {
         setActive(!next);
-        setOperationError(result.error);
+        setError(result.error);
+        return;
       }
+      toast.show(next ? "Servicio activado" : "Servicio pausado");
     });
   }
 
@@ -60,20 +56,33 @@ export function EditServiceForm({
     startArchiving(async () => {
       const result = await archiveService(tenantSlug, service.id);
       if (result.error) {
-        setOperationError(result.error);
+        setError(result.error);
         return;
       }
-      router.push(`/app/${tenantSlug}/servicios`);
+      toast.show("Servicio archivado");
+      router.push(listHref);
     });
   }
 
   return (
-    <form action={formAction} className="space-y-md">
-      <input type="hidden" name="phases" value={JSON.stringify(phases)} />
-
+    <form
+      className="space-y-lg"
+      action={(formData) =>
+        startSaving(async () => {
+          setError(null);
+          const result = await updateService(tenantSlug, service.id, { error: null }, formData);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          toast.show("¡Cambios guardados!");
+          router.push(listHref);
+        })
+      }
+    >
       <div className="flex items-center justify-between rounded-inner bg-surface-container-low p-3">
         <span className="font-label-md text-label-md text-on-surface">
-          {active ? "Servicio activo" : "Servicio inactivo"}
+          {active ? "Servicio activo" : "Servicio pausado"}
         </span>
         <button
           type="button"
@@ -86,69 +95,20 @@ export function EditServiceForm({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <label htmlFor="edit-service-name" className="font-label-md text-label-md text-on-surface-variant">Nombre</label>
-          <Input id="edit-service-name" name="name" defaultValue={service.name} maxLength={100} required />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="edit-service-price" className="font-label-md text-label-md text-on-surface-variant">Precio</label>
-          <Input id="edit-service-price" name="price" type="number" min="0.01" step="0.01" inputMode="decimal" defaultValue={service.price} required />
-        </div>
-      </div>
+      <ServiceFields
+        tenantSlug={tenantSlug}
+        categories={categories}
+        defaults={{
+          name: service.name,
+          price: service.price,
+          durationMin: service.durationMin,
+          categoryId: service.categoryId,
+          description: service.description,
+          public: service.public,
+        }}
+      />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <label htmlFor="edit-service-category" className="font-label-md text-label-md text-on-surface-variant">Categoría</label>
-          <select
-            id="edit-service-category"
-            name="categoryId"
-            defaultValue={service.categoryId ?? ""}
-            className="h-11 w-full rounded-pill border-0 bg-surface-muted px-4 font-body-lg text-body-lg text-on-surface outline-none ring-2 ring-transparent transition-all focus:bg-surface focus:ring-secondary"
-          >
-            <option value="">Otros servicios</option>
-            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-          </select>
-        </div>
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 self-end rounded-inner bg-surface-container-low px-3 py-2.5">
-          <input name="public" type="checkbox" defaultChecked={service.public} className="h-5 w-5 shrink-0 accent-secondary" />
-          <span>
-            <span className="block font-label-md text-label-md text-on-surface">Visible en el turnero</span>
-            <span className="block font-body-sm text-body-sm text-on-surface-variant">La clienta podrá elegirlo online.</span>
-          </span>
-        </label>
-      </div>
-
-      <div className="space-y-1.5">
-        <label htmlFor="edit-service-description" className="font-label-md text-label-md text-on-surface-variant">Descripción para la clienta</label>
-        <textarea
-          id="edit-service-description"
-          name="description"
-          rows={3}
-          maxLength={600}
-          defaultValue={service.description}
-          placeholder="Contá brevemente qué incluye y para quién está recomendado."
-          className="w-full resize-y rounded-inner border-0 bg-surface-muted px-4 py-3 font-body-lg text-body-lg text-on-surface placeholder:text-on-surface-variant outline-none ring-2 ring-transparent transition-all focus:bg-surface focus:ring-secondary"
-        />
-      </div>
-
-      <PhasesEditor phases={phases} onChange={setPhases} />
-
-      <div className="max-w-sm space-y-1.5">
-        <label htmlFor="edit-service-buffer" className="font-label-md text-label-md text-on-surface-variant">Limpieza después del turno</label>
-        <p className="font-body-sm text-body-sm text-on-surface-variant">
-          Minutos que bloqueás en la agenda para ordenar o higienizar antes del próximo cliente. No se cobra.
-        </p>
-        <Input
-          id="edit-service-buffer"
-          type="number"
-          min="0"
-          step="1"
-          value={bufferAfterMin}
-          onChange={(e) => setBufferAfterMin(Number(e.target.value) || 0)}
-        />
-        <input type="hidden" name="bufferAfterMin" value={bufferAfterMin} />
-      </div>
+      {error && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{error}</p>}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-md">
         <button
@@ -160,12 +120,10 @@ export function EditServiceForm({
           <Icon name="delete" className="text-[16px]" />
           {archiving ? "Archivando…" : "Archivar servicio"}
         </button>
-        <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-          {pending ? "Guardando…" : "Guardar cambios"}
+        <Button type="submit" disabled={saving} className="w-full sm:w-auto">
+          {saving ? "Guardando…" : "Guardar cambios"}
         </Button>
       </div>
-      {state.error && <p className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
-      {operationError && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{operationError}</p>}
     </form>
   );
 }

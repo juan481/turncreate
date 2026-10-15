@@ -1,13 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { SLUG, ATTEMPT_IDS, expectNoHorizontalScroll } from "./fixtures";
+import { SLUG, ATTEMPT_IDS, expectNoHorizontalScroll, projectIndex } from "./fixtures";
 
 // 4 proyectos (pixel-7/w320/w360/w390) corren este spec en paralelo contra
-// el mismo tenant/servicio/staff del emulador: cada uno debe tomar un
-// horario distinto para no pelearse por el mismo hold.
-const PROJECT_ORDER = ["pixel-7", "w320", "w360", "w390"];
-
+// el mismo tenant/servicio/staff del emulador: cada uno reserva en su
+// propio día futuro (1..4 días adelante), así no se pelean por el mismo
+// horario ni dependen de cuántas horas le queden al día de hoy.
 test("reserva pública completa: elige turno, paga la seña (MP stub) y llega al checkout", async ({ page }, testInfo) => {
-  const projectIndex = Math.max(0, PROJECT_ORDER.indexOf(testInfo.project.name));
+  const dayOffset = 1 + projectIndex(testInfo.project.name);
 
   await page.goto(`/${SLUG}`);
   await expectNoHorizontalScroll(page);
@@ -18,13 +17,14 @@ test("reserva pública completa: elige turno, paga la seña (MP stub) y llega al
   // Paso 2: "cualquiera disponible".
   await page.getByText("Cualquiera disponible", { exact: true }).click();
 
-  // Paso 3: fecha (hoy, ya seleccionada) y horario. El servicio dura 45min
-  // con slots cada 15min, así que slots vecinos se superponen en la misma
-  // ocupación: cada proyecto salta de 5 en 5 (75min) para no pisarse.
+  // Paso 3: fecha y horario. La tira de días arranca hoy; cada botón se
+  // llama "<día abreviado><número>" (p. ej. "vie16").
+  const dayButtons = page.getByRole("button", { name: /^\D{2,5}\d{1,2}$/ });
+  await expect(dayButtons.first()).toBeVisible({ timeout: 15_000 });
+  await dayButtons.nth(dayOffset).click();
   const timeButtons = page.getByRole("button", { name: /^\d{2}:\d{2}$/ });
-  await expect(timeButtons.first()).toBeVisible({ timeout: 15_000 });
-  const count = await timeButtons.count();
-  await timeButtons.nth((projectIndex * 5) % count).click();
+  await expect(timeButtons.nth(30)).toBeVisible({ timeout: 15_000 });
+  await timeButtons.nth(30).click();
   await page.getByRole("button", { name: "Continuar" }).click();
 
   // Paso 4: datos del cliente.

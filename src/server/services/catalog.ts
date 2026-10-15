@@ -23,6 +23,7 @@ export type ServiceRecord = {
   phases: Phase[];
   active: boolean;
   public: boolean;
+  featured: boolean;
   sort: number;
   archivedAt: unknown;
 };
@@ -33,6 +34,7 @@ export type PublicCatalogService = {
   description: string | null;
   price: number;
   duration: number;
+  featured: boolean;
 };
 
 export type PublicCatalogCategory = {
@@ -76,6 +78,7 @@ function serviceFromDoc(doc: DocumentSnapshot<DocumentData>): ServiceRecord {
     // Los documentos anteriores a esta funcionalidad no tenían `public`.
     // Se conservan visibles para no apagar catálogos existentes al desplegar.
     public: data.public !== false,
+    featured: data.featured === true,
     sort: finiteNumber(data.sort),
     archivedAt: data.archivedAt ?? null,
   };
@@ -150,16 +153,16 @@ export async function getPublicServiceCatalog(tenantId: string): Promise<PublicC
       description: service.description || null,
       price: service.price,
       duration: computeTotalDuration(service.phases, service.bufferAfterMin),
+      featured: service.featured,
     });
     grouped.set(categoryId, category);
   }
 
+  // `listServices` ya viene ordenado por `sort` (el orden que la dueña arma
+  // arrastrando en Servicios), así que dentro de cada categoría se respeta
+  // tal cual -- antes se reordenaba alfabéticamente y se perdía.
   const categoryPosition = new Map(categories.map((category, index) => [category.id, index]));
   return [...grouped.values()]
-    .map((category) => ({
-      ...category,
-      services: category.services.sort((left, right) => left.name.localeCompare(right.name, "es")),
-    }))
     .sort((left, right) => {
       const leftPosition = categoryPosition.get(left.id) ?? Number.MAX_SAFE_INTEGER;
       const rightPosition = categoryPosition.get(right.id) ?? Number.MAX_SAFE_INTEGER;

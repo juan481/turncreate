@@ -30,11 +30,14 @@ export function AppBar({
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 bg-primary pt-[var(--safe-t)] lg:hidden",
+        "sticky top-0 z-40 overflow-hidden border-b border-white/15 bg-gradient-to-br from-[#857df2] via-primary to-[#4c43c4] pt-[var(--safe-t)] shadow-[0_8px_24px_-14px_rgba(76,67,196,0.7)] lg:hidden",
         className,
       )}
     >
-      <div className="flex h-14 items-center gap-2 px-3">
+      <span aria-hidden className="pointer-events-none absolute -right-12 -top-20 h-44 w-44 rounded-full bg-white/15 blur-2xl" />
+      <span aria-hidden className="pointer-events-none absolute -left-16 top-2 h-24 w-40 rounded-full bg-[#c4b5fd]/20 blur-2xl" />
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+      <div className="relative flex h-14 items-center gap-2 px-3">
         {backHref && <BackButton fallbackHref={backHref} variant="on-brand" />}
         {left}
         {title && (

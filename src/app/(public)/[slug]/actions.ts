@@ -6,6 +6,7 @@ import { getTenantBySlugFromFirebase, type TenantRecord } from "@/server/firebas
 import { getServiceRecord, listAvailableStarts, occupancyDocId, occupancySlotInstants } from "@/server/firebase/booking";
 import { createCheckoutPreference, publicCheckoutQuote } from "@/server/mercadopago/checkout";
 import { getMpConnection } from "@/server/mercadopago/connections";
+import { getPublicServiceCatalog } from "@/server/services/catalog";
 import type { ClientFormData, PublicCategory, PublicHold, PublicStaffMember, PublicTenant } from "./types";
 
 async function getTenantRecordById(tenantId: string): Promise<TenantRecord> {
@@ -28,27 +29,7 @@ export async function getPublicTenant(slug: string): Promise<PublicTenant | null
 }
 
 export async function getPublicCatalog(tenantId: string): Promise<PublicCategory[]> {
-  const db = firebaseAdmin().db;
-  const [services, categories] = await Promise.all([
-    db.collection("tenants").doc(tenantId).collection("services").where("active", "==", true).get(),
-    db.collection("tenants").doc(tenantId).collection("serviceCategories").orderBy("order", "asc").get(),
-  ]);
-  const categoryNames = new Map(categories.docs.map((doc) => [doc.id, String(doc.data().name)]));
-  const grouped = new Map<string, PublicCategory>();
-  for (const doc of services.docs) {
-    const data = doc.data();
-    if (data.archivedAt || data.public === false) continue;
-    const categoryId = String(data.categoryId ?? "services");
-    if (!grouped.has(categoryId)) grouped.set(categoryId, { id: categoryId, name: categoryNames.get(categoryId) ?? String(data.categoryName ?? "Servicios"), services: [] });
-    grouped.get(categoryId)!.services.push({
-      id: doc.id,
-      name: String(data.name),
-      description: data.description ? String(data.description) : null,
-      price: Number(data.price),
-      duration: (data.phases ?? []).reduce((sum: number, phase: { minutes?: number }) => sum + Number(phase.minutes ?? 0), Number(data.bufferAfterMin ?? 0)),
-    });
-  }
-  return Array.from(grouped.values());
+  return getPublicServiceCatalog(tenantId);
 }
 
 export async function getPublicStaff(tenantId: string): Promise<PublicStaffMember[]> {

@@ -30,6 +30,11 @@ export default defineConfig({
   // puede demorar más que el timeout sin que sea un bug real.
   retries: process.env.CI ? 2 : 1,
   timeout: 60_000,
+  // `next dev` compila cada pantalla la primera vez que se pide: con varios
+  // proyectos en paralelo esa primera navegación puede pasar los 5s de
+  // espera por defecto sin que haya nada roto.
+  expect: { timeout: 10_000 },
+  workers: process.env.CI ? 2 : 4,
   reporter: "html",
   use: {
     baseURL: `http://localhost:${PORT}`,

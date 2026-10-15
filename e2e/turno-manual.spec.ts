@@ -1,21 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
-import { SLUG, loginAsOwner, expectNoHorizontalScroll } from "./fixtures";
+import { SLUG, loginAsOwner, expectNoHorizontalScroll, futureDateISO, projectIndex } from "./fixtures";
 
-const PROJECT_ORDER = ["pixel-7", "w320", "w360", "w390"];
-
-// El turnero sólo tiene un profesional ("owner"), así que cada turno manual
-// compite por el mismo horario de ese profesional contra el resto de los
-// proyectos (y contra public-booking.spec.ts, que usa índices bajos sobre
-// la misma agenda de "hoy"). Arranca bien lejos de ese rango y separa
-// efectivo/transferencia entre sí para no superponerse (servicio de 45min
-// con slots cada 15min).
-function slotIndexFor(projectName: string, which: "cash" | "transfer") {
-  const projectIndex = Math.max(0, PROJECT_ORDER.indexOf(projectName));
-  return 40 + projectIndex * 10 + (which === "transfer" ? 5 : 0);
-}
-
-async function createTurnoManual(page: Page, options: { clientPhoneSuffix: string; method: "Efectivo" | "Transferencia"; slotIndex: number }) {
-  await page.goto(`/app/${SLUG}/agenda/nuevo`);
+// Cada proyecto agenda en su propio día futuro (5..8 días adelante): así
+// nunca se pisa con otro proyecto ni con public-booking.spec.ts (1..4 días),
+// y no depende de la hora en que se corra la suite -- reservando "hoy" a la
+// tarde quedaban pocos horarios y el día se llenaba.
+async function createTurnoManual(page: Page, options: { dateISO: string; clientPhoneSuffix: string; method: "Efectivo" | "Transferencia"; slotIndex: number }) {
+  await page.goto(`/app/${SLUG}/agenda/nuevo?date=${options.dateISO}`);
   await expectNoHorizontalScroll(page);
 
   await page.getByRole("button", { name: "+ Cliente nuevo" }).click();
@@ -27,22 +18,25 @@ async function createTurnoManual(page: Page, options: { clientPhoneSuffix: strin
   await page.getByRole("button", { name: /Manicuría semipermanente/ }).click();
 
   const slotButtons = page.getByRole("button", { name: /^\d{2}:\d{2}$/ });
-  await expect(slotButtons.first()).toBeVisible({ timeout: 10_000 });
-  const count = await slotButtons.count();
+  await expect(slotButtons.nth(options.slotIndex)).toBeVisible({ timeout: 15_000 });
 
   await page.getByText("Cobrar seña ahora").click();
   await page.getByRole("button", { name: options.method }).click();
 
-  await slotButtons.nth(options.slotIndex % count).click();
-  await expect(page).toHaveURL(/\/agenda\?.*creado=1/, { timeout: 10_000 });
+  await slotButtons.nth(options.slotIndex).click();
+  // La agenda muestra el aviso y limpia `creado=1` de la URL enseguida, así
+  // que se verifica lo que ve la dueña, no el parámetro.
+  await expect(page.getByText(/Turno agendado para/).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/agenda/);
 }
 
 test("turno manual con seña en efectivo queda agendado y cobrado", async ({ page }, testInfo) => {
   await loginAsOwner(page);
   await createTurnoManual(page, {
+    dateISO: futureDateISO(5 + projectIndex(testInfo.project.name)),
     clientPhoneSuffix: `1${Date.now().toString().slice(-7)}`,
     method: "Efectivo",
-    slotIndex: slotIndexFor(testInfo.project.name, "cash"),
+    slotIndex: 20,
   });
   await expectNoHorizontalScroll(page);
 });
@@ -50,9 +44,10 @@ test("turno manual con seña en efectivo queda agendado y cobrado", async ({ pag
 test("turno manual con seña por transferencia queda agendado y cobrado", async ({ page }, testInfo) => {
   await loginAsOwner(page);
   await createTurnoManual(page, {
+    dateISO: futureDateISO(5 + projectIndex(testInfo.project.name)),
     clientPhoneSuffix: `2${Date.now().toString().slice(-7)}`,
     method: "Transferencia",
-    slotIndex: slotIndexFor(testInfo.project.name, "transfer"),
+    slotIndex: 40,
   });
   await expectNoHorizontalScroll(page);
 });

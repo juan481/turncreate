@@ -24,12 +24,30 @@ export async function updateBusinessInfo(tenantSlug: string, _prev: ConfigAction
       name: name.trim(), address: String(formData.get("address") || "") || null,
       instagramUrl: String(formData.get("instagramUrl") || "") || null,
       whatsappNumber: String(formData.get("whatsappNumber") || "") || null,
-      logoUrl: String(formData.get("logoUrl") || "") || null,
       updatedAt: FieldValue.serverTimestamp(),
     });
     revalidatePath(`/app/${tenantSlug}/configuracion`);
     return { error: null, success: true };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo actualizar el negocio" }; }
+}
+
+// El logo viaja ya comprimido desde el navegador (~512px). El techo de
+// 400 KB deja margen de sobra al límite de 1 MB por documento de Firestore,
+// y el tipo se restringe a raster: nada de SVG ni esquemas raros en el src.
+const LOGO_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+const MAX_LOGO_DATA_URL_LENGTH = 400 * 1024;
+
+export async function updateTenantLogo(tenantSlug: string, dataUrl: string | null): Promise<ConfigActionState> {
+  if (dataUrl !== null && (dataUrl.length > MAX_LOGO_DATA_URL_LENGTH || !LOGO_DATA_URL.test(dataUrl))) {
+    return { error: "La imagen no es válida. Probá con un PNG, JPG o WebP de hasta 2 MB." };
+  }
+  try {
+    const { tenant } = await tenantForUser(tenantSlug);
+    await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ logoUrl: dataUrl, updatedAt: FieldValue.serverTimestamp() });
+    revalidatePath(`/app/${tenantSlug}`, "layout");
+    revalidatePath(`/${tenantSlug}`);
+    return { error: null, success: true };
+  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo guardar el logo" }; }
 }
 
 export async function updateBusinessHours(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
