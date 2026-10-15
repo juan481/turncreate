@@ -1,6 +1,7 @@
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { addMonthsISO, monthLabel, monthRange, shortMonthLabel, toDateISOInTz, todayISO } from "@/lib/dates";
+import { getTenantAnalyticsRange } from "@/server/analytics";
 import { ReportesClient } from "./ReportesClient";
 
 export default async function ReportesPage({ params, searchParams }: { params: Promise<{ tenant: string }>; searchParams: Promise<{ month?: string }> }) {
@@ -19,11 +20,12 @@ export default async function ReportesPage({ params, searchParams }: { params: P
   const db = firebaseAdmin().db;
   const ref = db.collection("tenants").doc(tenant.id);
 
-  const [current, previousDocs, clients, staff] = await Promise.all([
+  const [current, previousDocs, clients, staff, publicAnalytics] = await Promise.all([
     ref.collection("appointments").where("startsAt", ">=", monthStart).where("startsAt", "<", monthEnd).orderBy("startsAt").get(),
     ref.collection("appointments").where("startsAt", ">=", previousStart).where("startsAt", "<", previousEnd).get(),
     ref.collection("clients").get(),
     ref.collection("staff").where("active", "==", true).get(),
+    getTenantAnalyticsRange({ tenantId: tenant.id, timezone: tenant.timezone, days: 14 }),
   ]);
 
   const completed = current.docs.map((doc) => doc.data()).filter((entry) => entry.status === "completed");
@@ -100,6 +102,7 @@ export default async function ReportesPage({ params, searchParams }: { params: P
         tenantSlug={slug}
         monthISO={monthISO}
         monthOptions={monthOptions}
+        publicAnalytics={publicAnalytics}
         stats={{
           turnosRealizados: completed.length,
           clientesQueVinieron: currentClients.size,

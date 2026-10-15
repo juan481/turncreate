@@ -17,7 +17,8 @@ export function ConfirmSlotButton(props: {
   rescheduleFrom?: string;
   keepDeposit?: boolean;
   depositAmount?: number;
-  depositMethod?: "cash" | "mercadopago";
+  depositMethod?: "cash" | "mercadopago" | "transfer" | "card_posnet";
+  appointmentNote?: string;
 }) {
   const [state, formAction, pending] = useActionState(
     confirmAppointment.bind(null, props.tenantSlug),
@@ -41,6 +42,7 @@ export function ConfirmSlotButton(props: {
         <>
           <input type="hidden" name="depositAmount" value={props.depositAmount} />
           <input type="hidden" name="depositMethod" value={props.depositMethod} />
+          <input type="hidden" name="appointmentNote" value={props.appointmentNote ?? ""} />
         </>
       ) : null}
       <Button type="submit" variant="secondary" size="sm" disabled={pending}>

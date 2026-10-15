@@ -5,6 +5,7 @@ import { firebaseAdmin } from "./admin";
 import { dayBoundsUTC, instantToMinutes, minutesToInstant, timeToMinutes } from "@/server/availability";
 import { minutesOfDayInTz, toDateISOInTz, weekdayOf } from "@/lib/dates";
 import type { TenantRecord } from "./tenants";
+import { paymentDocument, type PaymentMethod } from "@/domain/money/payment";
 
 /**
  * Motor de disponibilidad y reserva compartido por el turnero público y la
@@ -228,7 +229,8 @@ export type CreateAppointmentInput = {
   clientPhone: string;
   clientEmail?: string | null;
   depositAmount?: number;
-  depositMethod?: "cash" | "mercadopago";
+  depositMethod?: PaymentMethod;
+  appointmentNote?: string | null;
   /** Si viene de reprogramar otro turno: se cancela y libera el original en la misma transacción. */
   rescheduledFromId?: string;
 };
@@ -262,6 +264,10 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
 
   const deposit = Math.max(0, input.depositAmount ?? 0);
   const appointmentRef = tenantRef.collection("appointments").doc();
+  const openCash = input.depositMethod === "cash" && deposit > 0
+    ? await tenantRef.collection("cashSessions").where("closedAt", "==", null).limit(1).get()
+    : null;
+  const openCashSessionId = openCash?.docs[0]?.id ?? null;
 
   const staffId = await db.runTransaction(async (transaction) => {
     let oldAppointment: FirebaseFirestore.DocumentSnapshot | null = null;
@@ -368,17 +374,38 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
       items: [{ serviceId: service.id, name: service.name, price: service.price }],
       rescheduledFromId: input.rescheduledFromId ?? null,
       cancelReason: null,
+      note: input.appointmentNote?.trim() || null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    transaction.set(tenantRef.collection("clients").doc(input.clientId), {
+      appointmentsCount: FieldValue.increment(1),
+      totalSpent: FieldValue.increment(deposit),
+      lastVisitAt: Timestamp.fromDate(startsAt),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
 
     if (deposit > 0 && input.depositMethod) {
-      transaction.create(appointmentRef.collection("payments").doc(), {
-        amount: deposit,
+      const paymentRef = appointmentRef.collection("payments").doc();
+      transaction.create(paymentRef, paymentDocument({
+        id: paymentRef.id,
+        kind: "deposit",
         method: input.depositMethod,
         status: "approved",
-        createdAt: Timestamp.now(),
-      });
+        grossAmount: deposit,
+        appliedAmount: deposit,
+        feeAmount: 0,
+        surchargeAmount: 0,
+        netAmount: deposit,
+        paidAt: new Date(),
+        source: "admin",
+        tenantId: input.tenantId,
+        appointmentId: appointmentRef.id,
+      }));
+      if (input.depositMethod === "cash" && openCashSessionId) {
+        const movementRef = tenantRef.collection("cashSessions").doc(openCashSessionId).collection("movements").doc();
+        transaction.create(movementRef, { id: movementRef.id, type: "in", amount: deposit, method: "cash", reason: `SeÃ±a turno Â· ${input.clientName}`, appointmentId: appointmentRef.id, createdAt: FieldValue.serverTimestamp() });
+      }
     }
 
     if (oldAppointmentRef && oldAppointment?.exists) {

@@ -33,6 +33,27 @@ export type RangeSummary = {
   porCobrar: number;
 };
 
+export type PaymentSummary = { gross: number; applied: number; fees: number; surcharges: number; net: number; count: number };
+
+export async function getPaymentSummary(tenantId: string, range: { start: Date; end: Date }): Promise<PaymentSummary> {
+  const snapshot = await firebaseAdmin().db.collectionGroup("payments")
+    .where("tenantId", "==", tenantId)
+    .where("paidAt", ">=", range.start)
+    .where("paidAt", "<", range.end)
+    .get();
+  return snapshot.docs.reduce<PaymentSummary>((summary, doc) => {
+    const data = doc.data();
+    if (data.status !== "approved") return summary;
+    summary.gross += Number(data.grossAmount ?? data.amount ?? 0);
+    summary.applied += Number(data.appliedAmount ?? data.amount ?? 0);
+    summary.fees += Number(data.feeAmount ?? 0);
+    summary.surcharges += Number(data.surchargeAmount ?? 0);
+    summary.net += Number(data.netAmount ?? data.amount ?? 0);
+    summary.count += 1;
+    return summary;
+  }, { gross: 0, applied: 0, fees: 0, surcharges: 0, net: 0, count: 0 });
+}
+
 // Mismos estados en todos lados: cancelado y vencido nunca suman turno,
 // nunca suman plata. Antes cada pantalla (home, Caja, agenda) traía los
 // turnos del día con su propio criterio -- ninguno filtraba por estado,

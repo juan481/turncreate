@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { VerticalBarChart, HorizontalBarList } from "@/components/ui/bar-chart";
+import type { AnalyticsRange } from "@/server/analytics/types";
 import { exportarTurnosCsv } from "./actions";
 
 type ServicioPopular = { id: string; name: string; count: number; income: number };
@@ -17,6 +18,7 @@ interface ReportesClientProps {
   tenantSlug: string;
   monthISO: string;
   monthOptions: { value: string; label: string }[];
+  publicAnalytics: AnalyticsRange;
   stats: {
     turnosRealizados: number;
     clientesQueVinieron: number;
@@ -56,7 +58,81 @@ function KpiCard({ icon, color, label, value, hint }: { icon: string; color: str
   );
 }
 
-export function ReportesClient({ tenantSlug, monthISO, monthOptions, stats }: ReportesClientProps) {
+function PublicBookingAnalytics({ analytics }: { analytics: AnalyticsRange }) {
+  const { totals } = analytics;
+  const funnel = [
+    { label: "Visitas", value: totals.views, color: "bg-primary" },
+    { label: "Reservas iniciadas", value: totals.bookingStarted, color: "bg-[#8B84EE]" },
+    { label: "Checkout iniciado", value: totals.checkoutStarted, color: "bg-[#A9A3F4]" },
+    { label: "Pagos aprobados", value: totals.paymentApproved, color: "bg-[#34D399]" },
+    { label: "Turnos confirmados", value: totals.appointmentConfirmed, color: "bg-tertiary" },
+  ];
+  const maxFunnel = Math.max(...funnel.map((item) => item.value), 1);
+  const maxDailyViews = Math.max(...analytics.days.map((day) => day.views), 1);
+
+  return (
+    <Card hoverLift={false} className="space-y-lg p-lg">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-soft text-secondary">
+          <Icon name="ads_click" className="text-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="font-headline-sm text-headline-sm text-on-surface">Actividad del turnero</h2>
+          <p className="font-body-sm text-body-sm text-on-surface-variant">Embudo público de los últimos 14 días.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {[
+          { label: "Visitas", value: totals.views },
+          { label: "Visitantes/día aprox.", value: totals.approximateUniqueVisitors },
+          { label: "Confirmados", value: totals.appointmentConfirmed },
+          { label: "Conversión", value: `${totals.viewToConfirmationRate}%` },
+        ].map((item) => (
+          <div key={item.label} className="min-w-0 rounded-inner bg-surface-container-low p-3">
+            <p className="font-label-sm text-label-sm leading-tight text-on-surface-variant">{item.label}</p>
+            <p className="mt-1 font-headline-md text-headline-md tabular-nums text-on-surface">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <p className="mb-2 font-label-sm text-label-sm text-on-surface-variant">Visitas por día</p>
+        <div className="grid h-24 grid-cols-[repeat(14,minmax(0,1fr))] items-end gap-1" aria-label="Visitas diarias de los últimos 14 días">
+          {analytics.days.map((day, index) => (
+            <div key={day.dateISO} className="flex h-full min-w-0 flex-col justify-end gap-1">
+              <div className="flex flex-1 items-end rounded-sm bg-surface-container-low" title={`${day.dateISO}: ${day.views} visitas`}>
+                <div
+                  className="w-full rounded-sm bg-primary"
+                  style={{ height: `${day.views === 0 ? 3 : Math.max(8, (day.views / maxDailyViews) * 100)}%` }}
+                />
+              </div>
+              <span className="text-center text-[9px] leading-none text-on-surface-variant">
+                {index % 3 === 0 || index === analytics.days.length - 1 ? day.dateISO.slice(8) : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2.5">
+        {funnel.map((item) => (
+          <div key={item.label}>
+            <div className="mb-1 flex items-center justify-between gap-3 font-label-sm text-label-sm">
+              <span className="text-on-surface-variant">{item.label}</span>
+              <span className="shrink-0 tabular-nums text-on-surface">{item.value}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-container-low">
+              <div className={`h-full rounded-full ${item.color}`} style={{ width: `${(item.value / maxFunnel) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+export function ReportesClient({ tenantSlug, monthISO, monthOptions, publicAnalytics, stats }: ReportesClientProps) {
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
   const [openServiceId, setOpenServiceId] = useState<string | null>(null);
@@ -128,6 +204,8 @@ export function ReportesClient({ tenantSlug, monthISO, monthOptions, stats }: Re
           value={money(balance)}
         />
       </div>
+
+      <PublicBookingAnalytics analytics={publicAnalytics} />
 
       {/* Gráfico de evolución mensual con la primitiva VerticalBarChart --
           el chart hecho a mano antes no se veía: el contenedor raíz tenía

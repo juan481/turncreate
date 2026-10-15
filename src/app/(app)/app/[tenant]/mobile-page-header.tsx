@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AppBar } from "@/components/ui/app-bar";
 import { Logo } from "@/components/ui/logo";
 import { NotificationsButton } from "./notifications-button";
+import { Icon } from "@/components/ui/icon";
 
 // Título de cada sección de 1er nivel (/app/[tenant]/<sección>). El
 // detalle de un turno/cliente/servicio (2do nivel) muestra el mismo
@@ -37,6 +38,8 @@ export function MobilePageHeader({ tenantSlug, tenantName }: { tenantSlug: strin
   const base = `/app/${tenantSlug}`;
   const rest = pathname === base ? "" : pathname.slice(base.length + 1);
   const segments = rest.split("/").filter(Boolean);
+  const supportHref = `https://wa.me/541124527669?text=${encodeURIComponent(`Hola, necesito ayuda con ${tenantName} (${tenantSlug}) en TurnCreate.`)}`;
+  const support = <a href={supportHref} target="_blank" rel="noopener noreferrer" className="grid h-11 w-11 place-items-center rounded-full text-on-primary" aria-label="Ayuda por WhatsApp"><Icon name="help" className="text-[22px]" /></a>;
 
   if (segments.length === 0) {
     return (
@@ -47,7 +50,7 @@ export function MobilePageHeader({ tenantSlug, tenantName }: { tenantSlug: strin
             <span className="truncate font-headline-sm text-headline-sm text-on-primary">{tenantName}</span>
           </Link>
         }
-        right={<NotificationsButton notifications={[]} />}
+        right={<>{support}<NotificationsButton notifications={[]} /></>}
       />
     );
   }
@@ -55,5 +58,5 @@ export function MobilePageHeader({ tenantSlug, tenantName }: { tenantSlug: strin
   const section = segments[0];
   const title = SUB_TITLE[rest] ?? SECTION_TITLE[section] ?? "TurnCreate";
   const backHref = segments.length > 1 ? `${base}/${section}` : base;
-  return <AppBar title={title} backHref={backHref} />;
+  return <AppBar title={title} backHref={backHref} right={support} />;
 }

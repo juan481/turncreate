@@ -12,7 +12,9 @@
     "seed:demo": "node scripts/seed-demo-data.cjs",
     "seed:demo:estetica": "node scripts/reset-demo-estetica.cjs",
     "seed:demo:rebuild3": "node scripts/rebuild-3-tenants.cjs",
-    "seed:demo:enrich": "node scripts/enrich-demo-presentation.cjs"
+    "seed:demo:enrich": "node scripts/enrich-demo-presentation.cjs",
+    "provision:nails": "node --env-file=.env.local scripts/provision-initial-nail-accounts.cjs",
+    "migrate:payments:v2": "node --env-file=.env.local scripts/backfill-payments-v2.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1135.0",
@@ -27,12 +29,17 @@
     "firebase": "^12.19.0",
     "firebase-admin": "^14.5.0",
     "lucide-react": "^1.54.0",
+    "mercadopago": "^3.6.1",
     "next": "^16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "^7.88.0",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.5"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5",
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

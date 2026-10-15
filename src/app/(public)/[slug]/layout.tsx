@@ -1,6 +1,7 @@
 import { Logo } from "@/components/ui/logo";
 import { getPublicTenant } from "./actions";
 import { notFound } from "next/navigation";
+import Image from "next/image";
 
 export default async function PublicBookingLayout({
   children,
@@ -26,7 +27,7 @@ export default async function PublicBookingLayout({
             </span>
           </div>
           {tenant.logo_url ? (
-            <img src={tenant.logo_url} alt={tenant.name} className="h-6 w-auto" />
+            <Image src={tenant.logo_url} alt={tenant.name} width={96} height={32} unoptimized className="h-8 w-auto object-contain" />
           ) : (
             <Logo className="h-6 w-auto" />
           )}

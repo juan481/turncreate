@@ -45,7 +45,7 @@ export function PhasesEditor({
                 <button
                   type="button"
                   onClick={() => removePhase(index)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-status-alert"
+                  className="flex h-11 w-11 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-status-alert"
                   aria-label="Quitar paso"
                 >
                   <Icon name="close" className="text-[16px]" />
@@ -100,7 +100,7 @@ export function PhasesEditor({
                 step="1"
                 value={phase.minutes}
                 onChange={(e) => updatePhase(index, { minutes: Number(e.target.value) || 0 })}
-                className="h-9 w-20"
+                className="h-11 w-24"
               />
               <span className="font-body-sm text-body-sm text-on-surface-variant">minutos que dura este paso</span>
             </div>
@@ -111,7 +111,7 @@ export function PhasesEditor({
       <button
         type="button"
         onClick={addPhase}
-        className="flex items-center gap-1 font-label-sm text-label-sm text-secondary transition-colors hover:text-secondary/80"
+        className="flex min-h-11 items-center gap-1 rounded-pill px-2 font-label-sm text-label-sm text-secondary transition-colors hover:bg-surface-container-low hover:text-secondary/80"
       >
         <Icon name="add" className="text-[16px]" />
         Agregar fase

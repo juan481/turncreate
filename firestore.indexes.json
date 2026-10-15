@@ -32,6 +32,14 @@
         { "fieldPath": "clientId", "order": "ASCENDING" },
         { "fieldPath": "startsAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "paidAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

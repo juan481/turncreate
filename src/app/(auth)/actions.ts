@@ -53,15 +53,19 @@ export async function login(
 
   let tenantSlug: string | null;
   let isDemoUser = false;
+  let mustChangePassword = false;
   try {
     const authenticated = await signInWithFirebasePassword(parsed.data.email, parsed.data.password);
     await persistSession(authenticated.idToken);
     tenantSlug = await firstTenantSlug(authenticated.localId);
     isDemoUser = authenticated.email === DEMO_USER_EMAIL;
+    const profile = await firebaseAdmin().db.collection("users").doc(authenticated.localId).get();
+    mustChangePassword = profile.data()?.mustChangePassword === true;
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Email o contraseña incorrectos" };
   }
 
+  if (mustChangePassword) redirect("/cambiar-clave");
   if (!tenantSlug) redirect("/onboarding");
   // El usuario demo es compartido -- distintas personas lo prueban, así
   // que el tutorial se dispara en cada login (vía query param), no una

@@ -26,6 +26,8 @@ type AppointmentRow = {
   staffName?: string;
   staffPhoto?: string | null;
   total?: number;
+  items?: { name?: string }[];
+  note?: string | null;
 };
 
 export default async function ClientDetailPage({ params }: PageProps<"/app/[tenant]/clientes/[clientId]">) {
@@ -138,6 +140,8 @@ export default async function ClientDetailPage({ params }: PageProps<"/app/[tena
                         {new TZDate(startsAt, tenant.timezone).toLocaleString("es-AR", { dateStyle: "long", timeStyle: "short" })}
                       </p>
                       <p className="truncate font-body-sm text-body-sm text-on-surface-variant">{String(app.staffName ?? "")}</p>
+                      <p className="truncate font-body-sm text-body-sm text-on-surface-variant">{(app.items ?? []).map((item) => item.name).filter(Boolean).join(", ")}</p>
+                      {app.note && <p className="mt-1 line-clamp-2 break-words font-body-sm text-body-sm text-on-surface-variant">Nota: {app.note}</p>}
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1 text-right">
                       <p className="font-label-md text-label-md tabular-nums text-on-surface">

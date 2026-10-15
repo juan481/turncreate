@@ -9,6 +9,7 @@ export type PublicTenant = {
   name: string;
   logo_url: string | null;
   timezone: string;
+  booking_enabled: boolean;
 };
 
 export type PublicService = {

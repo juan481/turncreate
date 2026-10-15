@@ -55,6 +55,7 @@ export default async function TenantAppLayout({
     firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
   ]);
   if (!member || member.status !== "active") notFound();
+  if (profile.data()?.mustChangePassword === true) redirect("/cambiar-clave");
 
   const currentTenantOption: TenantOption = {
     id: tenant.id,
@@ -87,6 +88,7 @@ export default async function TenantAppLayout({
             </div>
             <NavPills tenantSlug={tenantSlug} items={nav} />
             <div className="flex shrink-0 items-center gap-3">
+              <a href={`https://wa.me/541124527669?text=${encodeURIComponent(`Hola, necesito ayuda con ${tenant.name} (${tenant.slug}) en TurnCreate.`)}`} target="_blank" rel="noopener noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface" aria-label="Ayuda por WhatsApp" title="Ayuda"><Icon name="help" className="text-[20px]" /></a>
               <Link href={`/app/${tenantSlug}/configuracion`} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface" aria-label="Configuración" title="Configuración">
                 <Icon name="settings" className="text-[20px]" />
               </Link>

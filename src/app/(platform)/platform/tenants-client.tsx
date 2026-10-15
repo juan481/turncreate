@@ -12,6 +12,11 @@ type Tenant = {
   slug: string;
   status: string;
   created_at: string;
+  analytics: {
+    views: number;
+    appointmentConfirmed: number;
+    viewToConfirmationRate: number;
+  };
 };
 
 export function TenantsClient({ tenants }: { tenants: Tenant[] }) {
@@ -58,7 +63,9 @@ export function TenantsClient({ tenants }: { tenants: Tenant[] }) {
               <TableHead>Local</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>MRR (Simulado)</TableHead>
+              <TableHead>Visitas · 14d</TableHead>
+              <TableHead>Confirmados · 14d</TableHead>
+              <TableHead>Conversión</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -74,7 +81,9 @@ export function TenantsClient({ tenants }: { tenants: Tenant[] }) {
                      t.status === "onboarding" ? "Onboarding" : t.status}
                   </StatusPill>
                 </TableCell>
-                <TableCell>$50.00</TableCell>
+                <TableCell className="tabular-nums">{t.analytics.views}</TableCell>
+                <TableCell className="tabular-nums">{t.analytics.appointmentConfirmed}</TableCell>
+                <TableCell className="tabular-nums">{t.analytics.viewToConfirmationRate}%</TableCell>
                 <TableCell className="text-right">
                   <Button
                     variant={t.status === "active" ? "secondary" : "primary"}
@@ -89,7 +98,7 @@ export function TenantsClient({ tenants }: { tenants: Tenant[] }) {
             ))}
             {tenants.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-on-surface-variant py-8">
+                <TableCell colSpan={7} className="text-center text-on-surface-variant py-8">
                   No hay locales registrados aún.
                 </TableCell>
               </TableRow>

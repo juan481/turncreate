@@ -17,7 +17,8 @@ import {
   getPublicStaffForService,
   getAvailableSlots,
   createHold,
-  confirmHold,
+  getPublicCheckoutQuote,
+  startPublicCheckout,
 } from "./actions";
 import type { PublicCategory, PublicHold, PublicService, PublicStaffMember, PublicAppointment } from "./types";
 
@@ -43,10 +44,17 @@ export function BookingFlow({
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
   const [hold, setHold] = useState<PublicHold | null>(null);
+  const [quote, setQuote] = useState<{ appliedAmount: number; surchargeAmount: number; grossAmount: number } | null>(null);
   const [clientData, setClientData] = useState({ full_name: "", phone_e164: "", email: "" });
 
   const [loading, setLoading] = useState(false);
-  const [confirmedData, setConfirmedData] = useState<PublicAppointment | null>(null);
+  const [confirmedData] = useState<PublicAppointment | null>(null);
+
+  const track = (event: "views" | "bookingStarted" | "checkoutStarted") => {
+    void fetch("/api/analytics/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, event }), keepalive: true });
+  };
+
+  useEffect(() => { track("views"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     getPublicCatalog(tenantId).then(setCatalog);
@@ -110,6 +118,7 @@ export function BookingFlow({
         timezone,
       );
       setHold(h);
+      setQuote(await getPublicCheckoutQuote(tenantId, selectedService.id));
       setStep(4);
     } catch (err) {
       console.error(err);
@@ -119,14 +128,16 @@ export function BookingFlow({
     }
   };
 
-  const handleConfirm = async (e: React.FormEvent) => {
+  const createPreferenceAndRedirect = async (e: React.SyntheticEvent) => {
     e.preventDefault();
+    const form = (e.currentTarget as HTMLButtonElement).form;
+    if (form && !form.reportValidity()) return;
     if (!hold) return;
     setLoading(true);
     try {
-      const result = await confirmHold(hold.id, clientData);
-      setConfirmedData(result);
-      setStep(5);
+      const result = await startPublicCheckout(slug, hold.id, clientData);
+      track("checkoutStarted");
+      window.location.assign(result.init_point);
     } catch (err) {
       console.error(err);
       alert("Error al confirmar. La reserva pudo haber expirado.");
@@ -157,6 +168,7 @@ export function BookingFlow({
                   className="cursor-pointer p-4 hover:border-primary/30"
                   onClick={() => {
                     setSelectedService(svc);
+                    track("bookingStarted");
                     setStep(2);
                   }}
                 >
@@ -310,9 +322,17 @@ export function BookingFlow({
           <div className="text-on-surface-variant text-sm">
             {format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })}
           </div>
+          {quote && (
+            <div className="mt-3 space-y-1 border-t border-border pt-3 text-sm">
+              <div className="flex justify-between"><span>SeÃ±a</span><strong>${quote.appliedAmount.toLocaleString("es-AR")}</strong></div>
+              {quote.surchargeAmount > 0 && <div className="flex justify-between text-on-surface-variant"><span>Cargo de procesamiento</span><span>${quote.surchargeAmount.toLocaleString("es-AR")}</span></div>}
+              <div className="flex justify-between font-semibold"><span>Total a pagar ahora</span><span>${quote.grossAmount.toLocaleString("es-AR")}</span></div>
+              <p className="pt-1 text-xs text-on-surface-variant">El turno se confirma cuando Mercado Pago aprueba la seÃ±a.</p>
+            </div>
+          )}
         </Card>
 
-        <form onSubmit={handleConfirm} className="space-y-4">
+        <form className="space-y-4">
           <div className="space-y-1">
             <label className="font-label-md text-label-md text-on-surface-variant">Nombre completo</label>
             <Input
@@ -342,9 +362,9 @@ export function BookingFlow({
 
           <div className="pt-4 flex gap-4">
             <Button type="button" variant="ghost" onClick={() => setStep(3)}>Volver</Button>
-            <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Confirmando..." : "Confirmar turno"}
-            </Button>
+            <button type="button" onClick={createPreferenceAndRedirect} disabled={loading || !quote} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-pill bg-primary px-5 font-label-lg text-label-lg text-on-primary disabled:opacity-50" data-mp-checkout-cta="checkout-pro" data-mp-marketplace-checkout="checkout-pro">
+              Pagar seÃ±a con Mercado Pago
+            </button>
           </div>
         </form>
       </div>

@@ -180,6 +180,7 @@ export default async function AppointmentDetailPage({
             Motivo: {appointment.cancelReason}
           </p>
         )}
+        {appointment.note && <div className="rounded-inner bg-surface-container-low p-md"><p className="font-label-sm text-label-sm text-on-surface-variant">Nota del turno</p><p className="mt-1 whitespace-pre-wrap break-words font-body-md text-body-md text-on-surface">{String(appointment.note)}</p></div>}
 
         {/* Cobrar: el flujo real de cobro vive en /caja (abre/cierra caja,
             suma productos, elige método) -- esa pantalla no acepta todavía
@@ -201,6 +202,7 @@ export default async function AppointmentDetailPage({
           appointmentId={appointmentDoc.id}
           dateISO={dateISO}
           status={appointment.status}
+          depositPaid={depositPaid}
         />
 
         {(appointment.status === "confirmed" || appointment.status === "pending_payment") && (

@@ -76,9 +76,10 @@ export async function confirmAppointment(
   const keepDeposit = formData.get("keepDeposit") !== "false";
   const depositAmountRaw = formData.get("depositAmount");
   const depositMethodRaw = formData.get("depositMethod");
+  const appointmentNote = String(formData.get("appointmentNote") ?? "").slice(0, 1000);
   const depositAmount =
     typeof depositAmountRaw === "string" && depositAmountRaw ? Number(depositAmountRaw) : 0;
-  const depositMethod = depositMethodRaw === "cash" || depositMethodRaw === "mercadopago" ? depositMethodRaw : undefined;
+  const depositMethod = depositMethodRaw === "cash" || depositMethodRaw === "mercadopago" || depositMethodRaw === "transfer" || depositMethodRaw === "card_posnet" ? depositMethodRaw : undefined;
 
   if (
     typeof staffId !== "string" ||
@@ -126,6 +127,7 @@ export async function confirmAppointment(
       depositAmount: depositAmount > 0 ? depositAmount : keptDeposit,
       depositMethod: depositAmount > 0 ? depositMethod : undefined,
       rescheduledFromId,
+      appointmentNote,
     });
   } catch (error) {
     return { error: error instanceof Error ? error.message : "No se pudo confirmar el turno" };

@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { Suspense } from "react";
-import { addMonthsISO, formatTimeInTz, longDayLabel, monthRange, todayISO, weekRange } from "@/lib/dates";
+import { addMonthsISO, dayRange, formatTimeInTz, longDayLabel, monthRange, todayISO, weekRange } from "@/lib/dates";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
-import { getDaySummary, getRangeSummary } from "@/server/firebase/stats";
+import { getDaySummary, getPaymentSummary, getRangeSummary } from "@/server/firebase/stats";
 import { Card } from "@/components/ui/card";
 import { KpiTile } from "@/components/ui/kpi-tile";
 import { MenuTile } from "@/components/ui/menu-tile";
@@ -14,10 +13,10 @@ import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TenantTypeInfoButton } from "./tenant-type-info";
-import { DemoTour } from "./demo-tour";
 import { PublicLink } from "./public-link";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { DEMO_USER_EMAIL } from "@/lib/demo";
+import { getMpConnection } from "@/server/mercadopago/connections";
 
 // Fuera del componente a propósito: el linter de React trata cualquier
 // `Date.now()` adentro de una función-componente como una llamada impura
@@ -49,17 +48,20 @@ export default async function TenantDashboardPage({
     daySummary,
     weekSummary,
     monthSummary,
-    previousMonthSummary,
     staffSnapshot,
     clientsSnapshot,
     servicesSnapshot,
     openCashSnapshot,
     currentUser,
+    todayPayments,
+    weekPayments,
+    monthPayments,
+    previousMonthPayments,
+    mpConnection,
   ] = await Promise.all([
     getDaySummary(tenant.id, dateISO, tenant.timezone),
     getRangeSummary(tenant.id, weekRange(dateISO, tenant.timezone)),
     getRangeSummary(tenant.id, monthRange(monthFirstDayISO, tenant.timezone)),
-    getRangeSummary(tenant.id, monthRange(previousMonthFirstDayISO, tenant.timezone)),
     tenantRef.collection("staff").where("active", "==", true).get(),
     // `archivedAt` no siempre existe en el doc (no es `null`, está AUSENTE
     // en los clientes/servicios activos) -- no se puede filtrar con un
@@ -72,6 +74,11 @@ export default async function TenantDashboardPage({
     // `openCash` en caja/actions.ts para chequear si ya hay una abierta.
     tenantRef.collection("cashSessions").where("closedAt", "==", null).limit(1).get(),
     getCurrentFirebaseUser(),
+    getPaymentSummary(tenant.id, dayRange(dateISO, tenant.timezone)),
+    getPaymentSummary(tenant.id, weekRange(dateISO, tenant.timezone)),
+    getPaymentSummary(tenant.id, monthRange(monthFirstDayISO, tenant.timezone)),
+    getPaymentSummary(tenant.id, monthRange(previousMonthFirstDayISO, tenant.timezone)),
+    getMpConnection(tenant.id),
   ]);
 
   const isDemoUser = currentUser?.email === DEMO_USER_EMAIL;
@@ -89,18 +96,14 @@ export default async function TenantDashboardPage({
   const atendidosHoy = daySummary.appointments.filter((a) => a.status === "completed").length;
 
   const monthChangePct =
-    previousMonthSummary.cobrado > 0
-      ? Math.round(((monthSummary.cobrado - previousMonthSummary.cobrado) / previousMonthSummary.cobrado) * 100)
-      : monthSummary.cobrado > 0
+    previousMonthPayments.applied > 0
+      ? Math.round(((monthPayments.applied - previousMonthPayments.applied) / previousMonthPayments.applied) * 100)
+      : monthPayments.applied > 0
         ? 100
         : null;
 
   return (
     <div className="space-y-lg">
-      <Suspense fallback={null}>
-        <DemoTour />
-      </Suspense>
-
       <div>
         <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface md:font-headline-lg md:text-headline-lg">
           Hoy en {tenant.name}
@@ -108,11 +111,21 @@ export default async function TenantDashboardPage({
         <p className="font-body-sm text-body-sm capitalize text-on-surface-variant">{longDayLabel(dateISO)}</p>
       </div>
 
+      {(servicesCount === 0 || mpConnection?.status !== "connected") && (
+        <Card hoverLift={false} className="space-y-3 border-primary/20 bg-primary/5 p-lg">
+          <div><p className="font-headline-sm text-headline-sm text-on-surface">TerminÃ¡ de preparar tu turnero</p><p className="font-body-sm text-body-sm text-on-surface-variant">Dos pasos cortos y ya podÃ©s compartir tu link.</p></div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Link href={`/app/${tenantSlug}/servicios`} className="flex min-h-11 items-center gap-2 rounded-inner bg-surface px-3 font-label-md text-label-md"><Icon name={servicesCount > 0 ? "check_circle" : "radio_button_unchecked"} className={servicesCount > 0 ? "text-status-confirmed" : "text-primary"} />Cargar servicios</Link>
+            <Link href={`/app/${tenantSlug}/configuracion`} className="flex min-h-11 items-center gap-2 rounded-inner bg-surface px-3 font-label-md text-label-md"><Icon name={mpConnection?.status === "connected" ? "check_circle" : "radio_button_unchecked"} className={mpConnection?.status === "connected" ? "text-status-confirmed" : "text-primary"} />Conectar Mercado Pago</Link>
+          </div>
+        </Card>
+      )}
+
       {/* Hero: lo primero que pidió Juan -- cuánta plata entró hoy, sin vueltas */}
       <Card hoverLift={false} className="flex flex-col gap-1 p-lg">
         <p className="font-label-md text-label-md text-on-surface-variant">Hoy llevás cobrados</p>
         <p className="font-headline-lg text-headline-lg tabular-nums text-on-surface">
-          ${daySummary.cobrado.toLocaleString("es-AR")}
+          ${todayPayments.applied.toLocaleString("es-AR")}
         </p>
         {daySummary.porCobrar > 0 && (
           <p className="flex items-center gap-1.5 font-label-sm text-label-sm text-on-surface-variant">
@@ -142,13 +155,13 @@ export default async function TenantDashboardPage({
         <KpiTile
           label="Esta semana"
           icon={<Icon name="trending_up" className="text-[14px]" />}
-          value={`$${weekSummary.cobrado.toLocaleString("es-AR")}`}
+          value={`$${weekPayments.applied.toLocaleString("es-AR")}`}
           hint={`${weekSummary.turnos} turno${weekSummary.turnos === 1 ? "" : "s"}`}
         />
         <KpiTile
           label="Este mes"
           icon={<Icon name="monitoring" className="text-[14px]" />}
-          value={`$${monthSummary.cobrado.toLocaleString("es-AR")}`}
+          value={`$${monthPayments.applied.toLocaleString("es-AR")}`}
           hint={monthChangePct === null ? undefined : `${monthChangePct >= 0 ? "+" : ""}${monthChangePct}% vs. mes pasado`}
           hintTone={monthChangePct === null ? "neutral" : monthChangePct >= 0 ? "positive" : "warning"}
         />

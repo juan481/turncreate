@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { ConfirmSlotButton } from "./confirm-slot-button";
 
 type Slot = { startsAtISO: string; label: string };
-type Method = "cash" | "mercadopago";
+type Method = "cash" | "transfer" | "card_posnet";
 
 export function SlotsAndDeposit({
   tenantSlug,
@@ -34,6 +34,7 @@ export function SlotsAndDeposit({
   const [chargeDeposit, setChargeDeposit] = useState(false);
   const [amount, setAmount] = useState(suggestedDeposit);
   const [method, setMethod] = useState<Method>("cash");
+  const [appointmentNote, setAppointmentNote] = useState("");
 
   return (
     <Card className="space-y-3 p-lg">
@@ -75,19 +76,21 @@ export function SlotsAndDeposit({
               </button>
               <button
                 type="button"
-                onClick={() => setMethod("mercadopago")}
+                onClick={() => setMethod("transfer")}
                 className={cn(
                   "flex items-center gap-1 rounded-pill px-3 py-1.5 font-label-sm text-label-sm transition-all duration-200",
-                  method === "mercadopago" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface",
+                  method === "transfer" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface",
                 )}
               >
-                <Icon name="account_balance_wallet" className="text-[14px]" />
-                Mercado Pago
+                <Icon name="account_balance" className="text-[14px]" />
+                Transferencia
               </button>
             </div>
           </div>
         )}
       </div>
+
+      <label className="block space-y-1"><span className="font-label-sm text-label-sm text-on-surface-variant">Nota del turno (opcional)</span><textarea value={appointmentNote} onChange={(event) => setAppointmentNote(event.target.value)} rows={3} maxLength={1000} placeholder="QuÃ© se va a realizar, color, diseÃ±o o detalle importante" className="w-full resize-y rounded-inner border border-border bg-surface px-3 py-2 text-base outline-none focus:border-primary" /></label>
 
       <div className="flex flex-wrap gap-2">
         {slots.map((slot) => (
@@ -104,6 +107,7 @@ export function SlotsAndDeposit({
             keepDeposit={keepDeposit}
             depositAmount={chargeDeposit ? amount : 0}
             depositMethod={chargeDeposit ? method : undefined}
+            appointmentNote={appointmentNote}
           />
         ))}
         {slots.length === 0 && (

@@ -22,6 +22,10 @@ export type TenantRecord = {
     depositType: "none" | "fixed" | "percent";
     depositValue: number;
     depositMin: number;
+    maxBookingDays?: number;
+    mpFeeMode?: "absorbed" | "passed_through";
+    mpFeePercent?: number;
+    publicBookingEnabled?: boolean;
   };
   businessHours: BusinessHours[];
 };
@@ -62,6 +66,10 @@ export async function createTenantForOwner(input: {
       depositType: "none",
       depositValue: 0,
       depositMin: 0,
+      maxBookingDays: 60,
+      mpFeeMode: "absorbed",
+      mpFeePercent: 0,
+      publicBookingEnabled: false,
     },
     businessHours: input.businessHours,
   };
