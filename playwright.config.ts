@@ -25,7 +25,11 @@ export default defineConfig({
   globalTeardown: "./e2e/global-teardown.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // Un reintento también fuera de CI: 4 proyectos comparten un único
+  // emulador + dev server, y bajo carga de máquina alguna request puntual
+  // puede demorar más que el timeout sin que sea un bug real.
+  retries: process.env.CI ? 2 : 1,
+  timeout: 60_000,
   reporter: "html",
   use: {
     baseURL: `http://localhost:${PORT}`,

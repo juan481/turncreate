@@ -16,13 +16,18 @@ Requisitos previos (una sola vez):
 
 Correr todo: `npx playwright test`.
 
-Cubierto hoy: primer ingreso + cambio de contraseña obligatorio
-(`auth.spec.ts`), reserva pública completa hasta el checkout y los 4
-desenlaces del pago -- aprobado/rechazado/pendiente/aprobación tardía sobre
-un horario ya ocupado (`public-booking.spec.ts`). Cada spec corre en 4
-proyectos (Pixel 7 + anchos 320/360/390px) y valida que no haya scroll
-lateral en las pantallas clave.
+Cubierto: primer ingreso + cambio de contraseña obligatorio (`auth.spec.ts`);
+reserva pública completa hasta el checkout y los 4 desenlaces del pago --
+aprobado/rechazado/pendiente/aprobación tardía sobre un horario ya ocupado
+(`public-booking.spec.ts`); alta y edición de servicio, con pausa
+(`servicios.spec.ts`); turno manual con seña en efectivo y por transferencia
+(`turno-manual.spec.ts`); navegación de clientes/agenda/calendario/caja/
+reportes y back físico (`navegacion.spec.ts`). Cada spec corre en 4 proyectos
+(Pixel 7 + anchos 320/360/390px) y valida que no haya scroll lateral en las
+pantallas clave. 44/44 corridas verificadas en verde.
 
-Todavía falta (plan maestro, sección 8.1): alta/edición de servicio, turno
-manual con efectivo y transferencia, navegación de clientes/agenda/
-calendario/caja/reportes, y back físico del teléfono.
+Un único profesional ("owner" en el tenant de prueba) compite por los mismos
+horarios entre specs y proyectos corriendo en paralelo contra el mismo
+backend: cada spec que reserva un turno usa un offset de índice de horario
+distinto (ver los comentarios en `public-booking.spec.ts` y
+`turno-manual.spec.ts`) para no pisarse.

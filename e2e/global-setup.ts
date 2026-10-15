@@ -35,7 +35,7 @@ export default async function globalSetup() {
   if (!child.pid) throw new Error("No se pudo arrancar el Firebase Emulator Suite");
   writeFileSync(PID_FILE, String(child.pid), "utf8");
 
-  await waitForAll(READY_URLS, 180_000);
+  await waitForAll(READY_URLS, 240_000);
 
   const seedEnv = {
     ...process.env,

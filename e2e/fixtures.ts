@@ -19,6 +19,14 @@ export const ATTEMPT_IDS = {
   pending: "e2e_attempt_pending",
 } as const;
 
+export async function loginAsOwner(page: import("@playwright/test").Page) {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(OWNER_EMAIL);
+  await page.getByLabel("Contraseña").fill(OWNER_PASSWORD);
+  await page.getByRole("button", { name: "Ingresar" }).click();
+  await page.waitForURL(new RegExp(`/app/${SLUG}`));
+}
+
 export async function expectNoHorizontalScroll(page: import("@playwright/test").Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (overflow > 1) throw new Error(`Hay scroll lateral: desborda ${overflow}px`);
