@@ -1,9 +1,8 @@
-import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 
 type Faq = { q: string; a: string };
 
@@ -88,8 +87,7 @@ const SECTIONS: { title: string; icon: string; faqs: Faq[] }[] = [
 
 export default async function AyudaPage({ params }: PageProps<"/app/[tenant]/ayuda">) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) notFound();
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const whatsappHref = `https://wa.me/541124527669?text=${encodeURIComponent(
     `Hola, necesito ayuda con ${tenant.name} (${tenant.slug}) en TurnCreate.`,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { getMpConnection } from "@/server/mercadopago/connections";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
@@ -24,8 +24,7 @@ function SectionCard({ id, icon, title, description, children }: { id?: string; 
 
 export default async function ConfiguracionPage({ params }: PageProps<"/app/[tenant]/configuracion">) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
   const [staffSnapshot, mpConnection, observedMpFee] = await Promise.all([
     firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
     getMpConnection(tenant.id),

@@ -29,7 +29,10 @@ export async function POST(request: Request) {
     // Mercado Pago puede notificar el mismo payment varias veces a medida que
     // cambia de pending a approved. Solo deduplicamos la entrega exacta; una
     // notificacion posterior con otro request-id debe volver a reconciliar.
-    if (data?.lastRequestId === requestId || (data?.processingUntil?.toMillis?.() ?? 0) > Date.now()) return false;
+    if (data?.lastRequestId === requestId) return "duplicate" as const;
+    // Otra notificación del mismo pago se está procesando: 409 para que MP
+    // reintente después. Con 200 este aviso (quizás el del approved) se perdía.
+    if ((data?.processingUntil?.toMillis?.() ?? 0) > Date.now()) return "busy" as const;
     transaction.set(eventRef, {
       type: "payment", paymentId: dataId,
       sellerId: body.user_id != null ? String(body.user_id) : data?.sellerId ?? null,
@@ -41,9 +44,10 @@ export async function POST(request: Request) {
       processedAt: null,
       processingUntil: Timestamp.fromMillis(Date.now() + 5 * 60_000),
     }, { merge: true });
-    return true;
+    return "claimed" as const;
   });
-  if (claimed) {
+  if (claimed === "busy") return NextResponse.json({ error: "En proceso" }, { status: 409 });
+  if (claimed === "claimed") {
     after(async () => {
       try {
         await eventRef.set({ attempts: FieldValue.increment(1), lastAttemptAt: FieldValue.serverTimestamp() }, { merge: true });

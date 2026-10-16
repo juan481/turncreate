@@ -15,6 +15,7 @@ import { getMpConnection } from "@/server/mercadopago/connections";
 import { addDaysISO, toDateISOInTz, todayISO } from "@/lib/dates";
 import { getPublicServiceCatalog } from "@/server/services/catalog";
 import { planFeatures } from "@/lib/plans";
+import { assertPublicBookingRate } from "@/server/public-booking/rate-limit";
 import type { ClientFormData, PublicCategory, PublicHold, PublicStaffMember, PublicTenant } from "./types";
 
 async function getTenantRecordById(tenantId: string): Promise<TenantRecord> {
@@ -91,6 +92,8 @@ export async function createHold(tenantId: string, serviceId: string, staffId: s
   if (tenant.settings.publicBookingEnabled === false || connection?.status !== "connected" || tenant.settings.depositType === "none" || tenant.settings.payments?.mercadopagoEnabled === false) {
     throw new Error("Las reservas online todavia no estan habilitadas");
   }
+  // Cada hold bloquea el horario 10'; una clienta real hace 1 o 2.
+  await assertPublicBookingRate(tenantId, "hold", 8);
   const tenantRef = db.collection("tenants").doc(tenantId);
   const service = await getServiceRecord(tenantId, serviceId);
   if (!service.active || !service.public) throw new Error("El servicio no está disponible para reservas online");

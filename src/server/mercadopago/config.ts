@@ -20,18 +20,13 @@ export function requireMercadoPagoOAuthEnv() {
 
 /**
  * URL absoluta pública para redirigir desde una API route. Detrás de nginx
- * `request.url` llega como http://localhost:3011/..., así que nunca se usa
- * como base: primero NEXT_PUBLIC_APP_URL, después los headers del proxy.
+ * `request.url` llega como http://localhost:3011/..., y los headers
+ * X-Forwarded-* los puede inventar cualquiera (open redirect): la base es
+ * SIEMPRE NEXT_PUBLIC_APP_URL, o el dominio de producción si falta.
  */
-export function publicAppUrl(path: string, request?: Request): URL {
-  const configured = mercadoPagoEnv().appUrl;
-  if (configured) return new URL(path, `${configured}/`);
-  const forwardedHost = request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  if (forwardedHost) {
-    const proto = request?.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
-    return new URL(path, `${proto}://${forwardedHost}/`);
-  }
-  return new URL(path, request ? new URL(request.url).origin : "https://turn.justcreate.com.ar");
+export function publicAppUrl(path: string): URL {
+  const base = mercadoPagoEnv().appUrl || "https://turn.justcreate.com.ar";
+  return new URL(path, `${base}/`);
 }
 
 export function isPublicHttpsUrl(value?: string): value is string {

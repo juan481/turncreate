@@ -1,6 +1,8 @@
 /**
  * Cálculo de seña de un turno (plan maestro, sección 5.4).
- * Seña = deposit_value (% o fijo), nunca menor a deposit_min.
+ * Seña = deposit_value (% o fijo), nunca menor a deposit_min y nunca mayor
+ * al precio del servicio (una seña fija de $10.000 en un servicio de $6.000
+ * cobraría de más).
  * No importa Next ni la base de datos: función pura, testeable sin infraestructura.
  */
 export type DepositPolicy =
@@ -19,5 +21,5 @@ export function calculateDeposit(
       ? totalAmount * (policy.value / 100)
       : policy.value;
 
-  return Math.max(raw, policy.min);
+  return Math.min(Math.max(0, totalAmount), Math.max(raw, policy.min));
 }

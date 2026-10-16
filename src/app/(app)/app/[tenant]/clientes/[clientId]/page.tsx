@@ -7,7 +7,7 @@ import { type StatusPillStatus } from "@/components/ui/status-pill";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { ClientNotes } from "./client-notes";
 
 const STATUS_LABEL: Record<string, { label: string; tone: StatusPillStatus }> = {
@@ -32,8 +32,7 @@ type AppointmentRow = {
 
 export default async function ClientDetailPage({ params }: PageProps<"/app/[tenant]/clientes/[clientId]">) {
   const { tenant: tenantSlug, clientId } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) notFound();
+  const { tenant } = await requireTenantPage(tenantSlug);
   const { db } = firebaseAdmin();
   const clientRef = db.collection("tenants").doc(tenant.id).collection("clients").doc(clientId);
   const [clientSnapshot, notesSnapshot, appointmentsSnapshot] = await Promise.all([

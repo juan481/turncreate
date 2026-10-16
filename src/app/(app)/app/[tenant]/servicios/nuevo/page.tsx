@@ -1,13 +1,11 @@
-import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { listServiceCategories } from "@/server/services/catalog";
 import { NewServiceForm } from "../new-service-form";
 
 export default async function NewServicePage({ params }: PageProps<"/app/[tenant]/servicios/nuevo">) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) notFound();
+  const { tenant } = await requireTenantPage(tenantSlug);
   const categories = await listServiceCategories(tenant.id);
 
   return (

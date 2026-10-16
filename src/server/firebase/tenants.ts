@@ -211,14 +211,17 @@ export async function createTenantForOwner(input: {
 }
 
 /**
- * Si el horario propio de la dueña era idéntico al del local (no lo
- * personalizó), lo mantiene sincronizado cuando cambian los horarios del
- * local: si no, al estirar el horario del local ella quedaría atendiendo
- * solo en el horario viejo. Devuelve cuántos staff se actualizaron.
+ * Guarda los horarios del local y, en el MISMO batch, sincroniza el horario
+ * propio de la dueña si era idéntico al del local (no lo personalizó): si
+ * no, al estirar el horario del local ella quedaría atendiendo solo en el
+ * horario viejo, y en plan Solo no tiene pantalla para corregirlo. Un solo
+ * commit evita que una falla a mitad de camino deje los dos desfasados.
+ * Devuelve cuántos staff se actualizaron.
  */
-export async function syncOwnerStaffSchedules(tenantId: string, previous: BusinessHours[], next: BusinessHours[]) {
+export async function saveBusinessHours(tenantId: string, previous: BusinessHours[], next: BusinessHours[]) {
   const { db } = firebaseAdmin();
-  const owners = await db.collection("tenants").doc(tenantId).collection("staff").where("isOwner", "==", true).get();
+  const tenantRef = db.collection("tenants").doc(tenantId);
+  const owners = await tenantRef.collection("staff").where("isOwner", "==", true).get();
   const previousFlat = toFlat(previous);
   const stale = owners.docs.filter((doc) => {
     const schedules = (doc.data().schedules ?? []) as { weekday: number; starts_at: string; ends_at: string }[];
@@ -227,8 +230,8 @@ export async function syncOwnerStaffSchedules(tenantId: string, previous: Busine
       previousFlat,
     );
   });
-  if (stale.length === 0) return 0;
   const batch = db.batch();
+  batch.update(tenantRef, { businessHours: next, updatedAt: FieldValue.serverTimestamp() });
   for (const doc of stale) {
     batch.update(doc.ref, { schedules: ownerStaffSchedules(next), updatedAt: FieldValue.serverTimestamp() });
   }

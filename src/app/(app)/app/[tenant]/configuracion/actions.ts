@@ -4,12 +4,16 @@ import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
-import { isStorableImageDataUrl, requireTenantAccess, syncOwnerStaffSchedules } from "@/server/firebase/tenants";
+import { isStorableImageDataUrl, requireTenantAccess, saveBusinessHours } from "@/server/firebase/tenants";
+import { flatHoursError, type FlatHours } from "@/components/ui/hours-editor-model";
 import { disconnectMp } from "@/server/mercadopago/connections";
 import { normalizeArPhone } from "@/lib/phone";
 import { DESCRIPTION_MAX_LENGTH, normalizeDescription, normalizeInstagramUrl } from "@/server/tenant-profile";
 
 export type ConfigActionState = { error: string | null; success?: boolean };
+
+// 00:00 a 23:59: el regex del editor solo miraba el formato y aceptaba "25:00".
+const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 async function tenantForUser(slug: string) {
   const user = await getCurrentFirebaseUser();
@@ -58,12 +62,16 @@ export async function updateTenantLogo(tenantSlug: string, dataUrl: string | nul
 
 export async function updateBusinessHours(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   try {
-    const hours = JSON.parse(typeof formData.get("hours") === "string" ? String(formData.get("hours")) : "[]");
-    if (!Array.isArray(hours) || !hours.every((hour) => typeof hour.weekday === "number" && /^\d{2}:\d{2}$/.test(hour.opens_at) && /^\d{2}:\d{2}$/.test(hour.closes_at))) return { error: "Horarios inválidos" };
+    const hours: unknown = JSON.parse(typeof formData.get("hours") === "string" ? String(formData.get("hours")) : "[]");
+    if (!Array.isArray(hours) || !hours.every((hour) => typeof hour?.weekday === "number" && HH_MM.test(hour.opens_at) && HH_MM.test(hour.closes_at))) return { error: "Horarios inválidos" };
+    const flat: FlatHours[] = hours.map((hour) => ({ weekday: hour.weekday, opens_at: hour.opens_at, closes_at: hour.closes_at }));
+    // Misma validación que el editor: un request armado a mano no puede
+    // guardar 25:00, franjas al revés o superpuestas.
+    const invalid = flatHoursError(flat);
+    if (invalid) return { error: invalid };
     const { tenant } = await tenantForUser(tenantSlug);
-    const nextHours = hours.map((hour) => ({ weekday: hour.weekday, opensAt: hour.opens_at, closesAt: hour.closes_at }));
-    await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ businessHours: nextHours, updatedAt: FieldValue.serverTimestamp() });
-    await syncOwnerStaffSchedules(tenant.id, tenant.businessHours, nextHours);
+    const nextHours = flat.map((hour) => ({ weekday: hour.weekday, opensAt: hour.opens_at, closesAt: hour.closes_at }));
+    await saveBusinessHours(tenant.id, tenant.businessHours, nextHours);
     revalidatePath(`/app/${tenantSlug}/configuracion`);
     return { error: null, success: true };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudieron actualizar los horarios" }; }
@@ -74,6 +82,8 @@ export async function updateDepositSettings(tenantSlug: string, _prev: ConfigAct
   const depositValue = Number(formData.get("depositValue") ?? 0);
   const depositMin = Number(formData.get("depositMin") ?? 0);
   if (depositType !== "none" && depositType !== "percent" && depositType !== "fixed") return { error: "Tipo de seña inválido" };
+  if (!Number.isFinite(depositValue) || !Number.isFinite(depositMin) || depositValue < 0 || depositMin < 0) return { error: "Ingresá montos válidos" };
+  if (depositType === "percent" && depositValue > 100) return { error: "El porcentaje no puede pasar de 100" };
   try {
     const { tenant } = await tenantForUser(tenantSlug);
     await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ settings: { ...tenant.settings, depositType, depositValue, depositMin }, updatedAt: FieldValue.serverTimestamp() });

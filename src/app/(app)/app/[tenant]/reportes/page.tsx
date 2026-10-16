@@ -1,5 +1,5 @@
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { addMonthsISO, monthLabel, monthRange, shortMonthLabel, toDateISOInTz, todayISO } from "@/lib/dates";
 import { getTenantAnalyticsRange } from "@/server/analytics";
 import { getPaymentBreakdown } from "@/server/firebase/stats";
@@ -8,8 +8,7 @@ import { ReportesClient } from "./ReportesClient";
 export default async function ReportesPage({ params, searchParams }: { params: Promise<{ tenant: string }>; searchParams: Promise<{ month?: string }> }) {
   const { tenant: slug } = await params;
   const sp = await searchParams;
-  const tenant = await getTenantBySlugFromFirebase(slug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(slug);
 
   const currentMonthISO = todayISO(tenant.timezone).slice(0, 7);
   const monthISO = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : currentMonthISO;

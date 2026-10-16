@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { timeToMinutes, instantToMinutes } from "@/server/availability";
 import { dayMonthLabel, dayRange, isDateISO, longDayLabel, minutesOfDayInTz, todayISO, weekdayOf } from "@/lib/dates";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,8 +21,7 @@ export default async function AgendaPage({
 }: PageProps<"/app/[tenant]/agenda">) {
   const { tenant: tenantSlug } = await params;
   const { date } = await searchParams;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const todayStr = todayISO(tenant.timezone);
   const dateISO = typeof date === "string" && isDateISO(date) ? date : todayStr;

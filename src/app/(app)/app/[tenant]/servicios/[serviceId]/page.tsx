@@ -3,14 +3,13 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { computeTotalDuration } from "@/domain/availability";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { getService, listServiceCategories } from "@/server/services/catalog";
 import { EditServiceForm } from "./edit-service-form";
 
 export default async function EditServicePage({ params }: PageProps<"/app/[tenant]/servicios/[serviceId]">) {
   const { tenant: tenantSlug, serviceId } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) notFound();
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const [service, categories] = await Promise.all([
     getService(tenant.id, serviceId),

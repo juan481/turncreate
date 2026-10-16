@@ -1,11 +1,16 @@
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { VerticalBarChart } from "@/components/ui/bar-chart";
+import { notFound } from "next/navigation";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getPlatformAnalytics } from "@/server/analytics";
+import { isPlatformAdmin } from "@/server/platform";
 import { TenantsClient } from "./tenants-client";
 
 export default async function PlatformDashboardPage() {
+  // El notFound() del layout no frena el render de la página (ver
+  // src/server/firebase/tenant-page.ts): sin esto, la lista de locales viaja en el RSC.
+  if (!(await isPlatformAdmin())) notFound();
   const snapshot = await firebaseAdmin().db.collection("tenants").orderBy("createdAt", "desc").get();
   const tenantsList = snapshot.docs.map((doc) => ({
     id: doc.id,

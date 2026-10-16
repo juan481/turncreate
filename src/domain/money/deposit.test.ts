@@ -25,11 +25,17 @@ describe("calculateDeposit", () => {
   });
 
   it("nunca cobra menos que deposit_min, incluso con porcentaje bajo", () => {
-    const deposit = calculateDeposit(1000, {
+    const deposit = calculateDeposit(5000, {
       type: "percent",
       value: 10,
       min: 2000,
     });
     expect(deposit).toBe(2000);
+  });
+
+  it("nunca cobra más que el precio del servicio", () => {
+    expect(calculateDeposit(6000, { type: "fixed", value: 10000, min: 10000 })).toBe(6000);
+    expect(calculateDeposit(1000, { type: "percent", value: 10, min: 2000 })).toBe(1000);
+    expect(calculateDeposit(0, { type: "fixed", value: 5000, min: 0 })).toBe(0);
   });
 });

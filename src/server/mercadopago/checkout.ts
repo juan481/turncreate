@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type DocumentReference } from "firebase-admin/firestore";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { calculateDeposit } from "@/domain/money/deposit";
 import { checkoutAmounts, paymentDocument } from "@/domain/money/payment";
@@ -185,6 +185,67 @@ function paymentFee(payment: { fee_details?: { amount?: number }[] }) {
   return (payment.fee_details ?? []).reduce((sum, detail) => sum + Number(detail.amount ?? 0), 0);
 }
 
+// Estados finales del intento: un aviso posterior de MP (in_process,
+// in_mediation, etc.) no puede volverlos a "pending".
+const SETTLED_ATTEMPT_STATUSES = new Set<string>(["approved", "refund_required", "refunded"]);
+
+/**
+ * Pago no aprobado. Si el intento ya terminó, nunca se baja de estado; si MP
+ * avisa que una seña ya aplicada se devolvió o tuvo contracargo, se revierte
+ * (el pago deja de contar en Caja/Reportes y el turno vuelve a deber la seña).
+ * Idempotente: sólo revierte si el pago todavía figura "approved".
+ */
+async function applyNonApprovedPayment(input: {
+  attemptRef: DocumentReference;
+  tenantRef: DocumentReference;
+  tenantId: string;
+  paymentId: string;
+  paymentStatus: string;
+}): Promise<BookingAttemptStatus> {
+  const reversed = input.paymentStatus === "refunded" || input.paymentStatus === "charged_back";
+  return firebaseAdmin().db.runTransaction(async (transaction) => {
+    const attempt = (await transaction.get(input.attemptRef)).data() ?? {};
+    const current = String(attempt.status ?? "pending") as BookingAttemptStatus;
+    const appointmentId = attempt.appointmentId ? String(attempt.appointmentId) : null;
+    const base = { paymentStatus: input.paymentStatus, externalPaymentId: input.paymentId, updatedAt: FieldValue.serverTimestamp() };
+
+    if (!reversed) {
+      if (SETTLED_ATTEMPT_STATUSES.has(current)) {
+        transaction.set(input.attemptRef, base, { merge: true });
+        return current;
+      }
+      const status: BookingAttemptStatus = input.paymentStatus === "rejected" || input.paymentStatus === "cancelled" ? "rejected" : "pending";
+      transaction.set(input.attemptRef, { ...base, status }, { merge: true });
+      return status;
+    }
+
+    if (appointmentId) {
+      const appointmentRef = input.tenantRef.collection("appointments").doc(appointmentId);
+      const paymentRef = appointmentRef.collection("payments").doc(input.paymentId);
+      const [appointment, paymentDoc] = await Promise.all([transaction.get(appointmentRef), transaction.get(paymentRef)]);
+      const applied = Number(paymentDoc.data()?.appliedAmount ?? 0);
+      if (paymentDoc.exists && paymentDoc.data()?.status === "approved") {
+        transaction.update(paymentRef, { status: "refunded", refundedAt: FieldValue.serverTimestamp(), mpStatus: input.paymentStatus });
+        if (appointment.exists && applied > 0) {
+          const data = appointment.data()!;
+          const depositPaid = Math.max(0, Number(data.depositPaid ?? 0) - applied);
+          const balance = ["cancelled", "no_show", "expired"].includes(String(data.status))
+            ? Number(data.balance ?? 0)
+            : Math.min(Number(data.total ?? 0), Number(data.balance ?? 0) + applied);
+          transaction.update(appointmentRef, { depositPaid, balance, depositRefunded: true, updatedAt: FieldValue.serverTimestamp() });
+          if (data.clientId) {
+            transaction.set(input.tenantRef.collection("clients").doc(String(data.clientId)), {
+              totalSpent: FieldValue.increment(-applied), updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+        }
+      }
+    }
+    transaction.set(input.attemptRef, { ...base, status: "refunded", refundedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return "refunded";
+  });
+}
+
 export async function reconcileMercadoPagoPayment(paymentId: string) {
   const db = firebaseAdmin().db;
   const eventRef = db.collection("mpWebhookEvents").doc(`payment_${paymentId}`);
@@ -212,8 +273,13 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
   if (Math.abs(expected - paid) > 0.01 || String(payment.currency_id) !== "ARS") throw new Error("El importe recibido no coincide");
 
   if (payment.status !== "approved") {
-    const status: BookingAttemptStatus = payment.status === "rejected" || payment.status === "cancelled" ? "rejected" : "pending";
-    await attemptRef.set({ status, paymentStatus: payment.status, externalPaymentId: String(payment.id), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const status = await applyNonApprovedPayment({
+      attemptRef,
+      tenantRef: db.collection("tenants").doc(tenantId),
+      paymentId: String(payment.id),
+      paymentStatus: String(payment.status ?? ""),
+      tenantId,
+    });
     await eventRef.set({
       processedAt: FieldValue.serverTimestamp(),
       processingUntil: Timestamp.fromMillis(0),
@@ -241,6 +307,13 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
     if (freshAttempt.data()?.appointmentId) {
       confirmedAppointmentId = String(freshAttempt.data()!.appointmentId);
       finalStatus = freshAttempt.data()?.status === "refund_required" ? "refund_required" : "approved";
+      return;
+    }
+    // Aprobación tardía que ya se marcó para devolver (o ya se devolvió): no
+    // revive el turno aunque el horario se haya liberado mientras tanto.
+    const previousStatus = String(freshAttempt.data()?.status ?? "");
+    if (previousStatus === "refund_required" || previousStatus === "refunded") {
+      finalStatus = previousStatus;
       return;
     }
     const startsAt = attempt.snapshot.startsAt.toDate();

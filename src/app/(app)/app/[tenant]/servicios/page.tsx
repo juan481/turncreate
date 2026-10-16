@@ -4,15 +4,14 @@ import { UNCATEGORIZED_CATEGORY_NAME } from "@/lib/schemas/service";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { listServiceCategories, listServices } from "@/server/services/catalog";
 import { CategoryManager } from "./category-manager";
 import { CatalogList, type CatalogGroup } from "./catalog-list";
 
 export default async function ServiciosPage({ params }: PageProps<"/app/[tenant]/servicios">) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const [categories, services] = await Promise.all([
     listServiceCategories(tenant.id),

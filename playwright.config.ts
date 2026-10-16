@@ -10,6 +10,8 @@ const E2E_ENV = {
   FIREBASE_WEB_API_KEY: "e2e-fake-api-key",
   MP_TOKEN_ENCRYPTION_KEY: "e2e-encryption-key-not-for-production",
   MP_E2E_STUB: "1",
+  // Los 4 proyectos reservan en paralelo desde la misma IP.
+  PUBLIC_BOOKING_RATE_LIMIT: "off",
   NEXT_PUBLIC_APP_URL: "http://localhost:3100",
   ANALYTICS_HASH_SECRET: "e2e-analytics-secret",
   ANALYTICS_INTERNAL_SECRET: "e2e-analytics-internal-secret",

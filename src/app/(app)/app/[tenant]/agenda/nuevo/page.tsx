@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { listAvailableStarts } from "@/server/firebase/booking";
 import { addDaysISO, formatTimeInTz, isDateISO, todayISO } from "@/lib/dates";
 import { Icon } from "@/components/ui/icon";
@@ -12,8 +12,7 @@ export default async function NuevoTurnoPage({
 }: PageProps<"/app/[tenant]/agenda/nuevo">) {
   const { tenant: tenantSlug } = await params;
   const sp = await searchParams;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const firstDateISO = todayISO(tenant.timezone);
   const maxBookingDays = tenant.settings.maxBookingDays ?? 60;

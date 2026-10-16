@@ -62,6 +62,9 @@ async function authUser(account) {
   }
 }
 
+// Mismo shape que createTenantForOwner (src/server/firebase/tenants.ts).
+const OWNER_STAFF_FLAGS = (uid) => ({ isOwner: true, autoAssignServices: true, userId: uid });
+
 async function provision(account) {
   const { user, created: userCreated } = await authUser(account);
   const id = tenantId(account.slug);
@@ -99,7 +102,7 @@ async function provision(account) {
     });
   }
   batch.set(slugRef, { tenantId: id, updatedAt: FieldValue.serverTimestamp(), ...(!existingSlug.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
-  batch.set(memberRef, { uid: user.uid, role: "owner", status: "active", updatedAt: FieldValue.serverTimestamp(), ...(!memberSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
+  batch.set(memberRef, { uid: user.uid, role: "owner", status: "active", staffId: "owner", updatedAt: FieldValue.serverTimestamp(), ...(!memberSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
   batch.set(userRef, { email: account.email, fullName: account.name, ...(userCreated ? { mustChangePassword: true } : {}), updatedAt: FieldValue.serverTimestamp(), ...(!userSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
   batch.set(membershipRef, { tenantId: id, slug: account.slug, role: "owner", status: "active", updatedAt: FieldValue.serverTimestamp(), ...(!membershipSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
   for (const [index, category] of CATEGORIES.entries()) {
@@ -110,7 +113,10 @@ async function provision(account) {
     const categoryName = CATEGORIES.find((category) => category.id === categoryId).name;
     batch.create(serviceRefs[index], { id: serviceId, tenantId: id, name, nameNormalized: name.toLocaleLowerCase("es-AR"), description: null, categoryId, categoryName, price, phases: [{ kind: "active", minutes, position: 1 }], bufferAfterMin, active: true, public: true, sort: index + 1, archivedAt: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
   }
-  if (!staffSnapshot.exists) batch.create(staffRef, { id: "owner", tenantId: id, displayName: account.name, active: true, color: "#7069e8", photoUrl: null, serviceIds: SERVICES.map((service) => service[0]), schedules: BUSINESS_HOURS.map((hours) => ({ weekday: hours.weekday, starts_at: hours.opensAt, ends_at: hours.closesAt })), commission: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
+  if (!staffSnapshot.exists) batch.create(staffRef, { id: "owner", tenantId: id, displayName: account.name, active: true, color: "#7069e8", photoUrl: null, serviceIds: SERVICES.map((service) => service[0]), schedules: BUSINESS_HOURS.map((hours) => ({ weekday: hours.weekday, starts_at: hours.opensAt, ends_at: hours.closesAt })), commission: null, ...OWNER_STAFF_FLAGS(user.uid), updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
+  // Cuentas dadas de alta antes de que existiera la dueña-como-staff: sin estos
+  // flags, los servicios nuevos no se le asignan y sus horarios no siguen a los del local.
+  else batch.set(staffRef, { ...OWNER_STAFF_FLAGS(user.uid), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   await batch.commit();
   console.log(`OK ${account.name} <${account.email}> (${account.slug}) · ${tenantSnapshot.exists ? "cuenta preservada" : "cuenta creada"}`);
 }

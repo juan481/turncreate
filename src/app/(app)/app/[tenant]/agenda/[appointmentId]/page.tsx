@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { formatTimeInTz, toDateISOInTz } from "@/lib/dates";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
@@ -25,8 +25,7 @@ export default async function AppointmentDetailPage({
   params,
 }: PageProps<"/app/[tenant]/agenda/[appointmentId]">) {
   const { tenant: tenantSlug, appointmentId } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) notFound();
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const { db } = firebaseAdmin();
   const appointmentDoc = await db.collection("tenants").doc(tenant.id).collection("appointments").doc(appointmentId).get();

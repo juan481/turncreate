@@ -1,5 +1,5 @@
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { getPaymentBreakdown } from "@/server/firebase/stats";
 import { dayRange, todayISO } from "@/lib/dates";
 import { planFeatures } from "@/lib/plans";
@@ -7,8 +7,7 @@ import { CajaClient } from "./caja-client";
 
 export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja">) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const { db } = firebaseAdmin();
   const ref = db.collection("tenants").doc(tenant.id);

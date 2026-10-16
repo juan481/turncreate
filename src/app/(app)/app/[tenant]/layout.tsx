@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { Logo } from "@/components/ui/logo";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
@@ -9,8 +9,8 @@ import { ToastProvider } from "@/components/ui/toast";
 import { RememberRouteSearch } from "@/components/ui/back-button";
 import { planFeatures } from "@/lib/plans";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
-import { getTenantBySlugFromFirebase, getTenantMember, getTenantMembershipsForUser } from "@/server/firebase/tenants";
+import { getTenantMembershipsForUser } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { signOut } from "./actions";
 import { NavPills } from "./nav-pills";
 import { MobileMenuButton } from "./mobile-menu";
@@ -43,20 +43,13 @@ export default async function TenantAppLayout({
   params,
 }: LayoutProps<"/app/[tenant]">) {
   const { tenant: tenantSlug } = await params;
-  const [tenant, user] = await Promise.all([
-    getTenantBySlugFromFirebase(tenantSlug),
-    getCurrentFirebaseUser(),
-  ]);
-  if (!tenant) notFound();
-  if (!user) redirect(`/login?next=${encodeURIComponent(`/app/${tenantSlug}`)}`);
+  const { tenant, user, member } = await requireTenantPage(tenantSlug);
 
-  const [member, tenantOptions, profile, staffSnapshot] = await Promise.all([
-    getTenantMember(user.uid, tenant.id),
+  const [tenantOptions, profile, staffSnapshot] = await Promise.all([
     getTenantMembershipsForUser(user.uid),
     firebaseAdmin().db.collection("users").doc(user.uid).get(),
     firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
   ]);
-  if (!member || member.status !== "active") notFound();
   if (profile.data()?.mustChangePassword === true) redirect("/cambiar-clave");
 
   const currentTenantOption: TenantOption = {

@@ -37,7 +37,10 @@ const ROUTES: Record<string, RouteMeta> = {
   "configuracion/local": { title: "Información del local", parent: "configuracion" },
   "configuracion/horarios": { title: "Horarios", parent: "configuracion" },
   "configuracion/pagos": { title: "Pagos y señas", parent: "configuracion" },
+  "configuracion/link": { title: "Link de reservas", parent: "configuracion" },
   staff: { title: "Equipo", parent: "configuracion" },
+  // Señas por transferencia esperando que la dueña confirme el comprobante.
+  transferencias: { title: "Transferencias", parent: "" },
 };
 
 const PATTERNS = Object.entries(ROUTES)
@@ -84,7 +87,7 @@ export function resolveTenantRoute(pathname: string, tenantSlug: string) {
 
 export type BottomNavTab = "inicio" | "agenda" | "clientes" | "menu";
 
-const MENU_SECTIONS = new Set(["caja", "reportes", "servicios", "staff", "configuracion", "ayuda", "novedades", "tutorial", "bot"]);
+const MENU_SECTIONS = new Set(["caja", "reportes", "servicios", "staff", "configuracion", "ayuda", "novedades", "tutorial", "bot", "transferencias"]);
 
 /** Qué pestaña de la barra inferior queda marcada en cada ruta. */
 export function bottomNavTab(relativePath: string): BottomNavTab | null {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -15,8 +15,7 @@ export default async function AgendaSemanaPage({
 }: PageProps<"/app/[tenant]/agenda/semana">) {
   const { tenant: tenantSlug } = await params;
   const { date } = await searchParams;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const todayStr = todayISO(tenant.timezone);
   const referenceISO = typeof date === "string" && isDateISO(date) ? date : todayStr;

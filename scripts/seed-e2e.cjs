@@ -112,7 +112,8 @@ async function main() {
     id: "owner", tenantId: TENANT_ID, displayName: "E2E Nails", active: true, color: "#7069e8", photoUrl: null,
     serviceIds: services.map((s) => s.id),
     schedules: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, starts_at: "00:00", ends_at: "23:45" })),
-    commission: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
+    commission: null, isOwner: true, autoAssignServices: true, userId: OWNER_UID,
+    updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
   });
   // Cliente estable para que las pruebas de navegación no dependan de que
   // otro spec cree uno antes (los cuatro proyectos corren en paralelo).

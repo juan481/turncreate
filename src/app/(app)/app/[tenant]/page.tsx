@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { addMonthsISO, dayRange, formatTimeInTz, longDayLabel, monthRange, todayISO, weekRange } from "@/lib/dates";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { getDaySummary, getPaymentSummary, getRangeSummary } from "@/server/firebase/stats";
 import { Card } from "@/components/ui/card";
 import { MenuTile } from "@/components/ui/menu-tile";
@@ -43,8 +43,7 @@ export default async function TenantDashboardPage({
   params,
 }: PageProps<"/app/[tenant]">) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const dateISO = todayISO(tenant.timezone);
   const monthISO = dateISO.slice(0, 7);

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { getMonthData } from "@/server/agenda-month";
 import { isDateISO, todayISO } from "@/lib/dates";
 import { ViewToggle } from "../view-toggle";
@@ -15,8 +15,7 @@ export default async function AgendaMonthPage({
 }: PageProps<"/app/[tenant]/agenda/mes">) {
   const { tenant: tenantSlug } = await params;
   const { date } = await searchParams;
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) return null;
+  const { tenant } = await requireTenantPage(tenantSlug);
 
   const todayStr = todayISO(tenant.timezone);
   // Sin isDateISO, un ?date= inválido llegaba directo a getMonthData ->

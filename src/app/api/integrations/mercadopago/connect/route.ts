@@ -8,20 +8,20 @@ import { publicAppUrl, requireMercadoPagoOAuthEnv } from "@/server/mercadopago/c
 
 export async function GET(request: Request) {
   const tenantSlug = new URL(request.url).searchParams.get("tenant") ?? "";
-  const pagosPath = `/app/${tenantSlug}/configuracion`;
+  const pagosPath = `/app/${encodeURIComponent(tenantSlug)}/configuracion/pagos`;
   const user = await getCurrentFirebaseUser();
-  if (!user) return NextResponse.redirect(publicAppUrl(`/login?next=${encodeURIComponent(pagosPath)}`, request));
+  if (!user) return NextResponse.redirect(publicAppUrl(`/login?next=${encodeURIComponent(pagosPath)}`));
   let tenantId: string;
   try {
     tenantId = (await requireTenantAccess(user.uid, tenantSlug)).tenant.id;
   } catch {
-    return NextResponse.redirect(publicAppUrl("/login", request));
+    return NextResponse.redirect(publicAppUrl("/login"));
   }
   let env: ReturnType<typeof requireMercadoPagoOAuthEnv>;
   try {
     env = requireMercadoPagoOAuthEnv();
   } catch {
-    return NextResponse.redirect(publicAppUrl(`${pagosPath}?mp=unavailable#mercadopago`, request));
+    return NextResponse.redirect(publicAppUrl(`${pagosPath}?mp=unavailable`));
   }
   const rawState = crypto.randomBytes(32).toString("base64url");
   const stateHash = crypto.createHash("sha256").update(rawState).digest("hex");

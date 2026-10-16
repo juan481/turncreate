@@ -5,7 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { SectionHeaderNew } from "@/components/ui/section-header-new";
 import { firebaseAdmin } from "@/server/firebase/admin";
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { NewStaffForm } from "./new-staff-form";
 import { NewTimeBlockForm } from "./new-time-block-form";
 import { EditScheduleForm } from "./edit-schedule-form";
@@ -21,7 +21,7 @@ type Schedule = { weekday: number; starts_at: string; ends_at: string };
 type Staff = { id: string; displayName: string; active: boolean; color?: string; photoUrl?: string | null; schedules?: Schedule[]; serviceIds?: string[]; commission?: { type: "percent" | "fixed"; value: number } | null };
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 export default async function StaffPage({ params }: PageProps<"/app/[tenant]/staff">) {
-  const { tenant: tenantSlug } = await params; const tenant = await getTenantBySlugFromFirebase(tenantSlug); if (!tenant) return null;
+  const { tenant: tenantSlug } = await params; const { tenant } = await requireTenantPage(tenantSlug);
   if (planFeatures(tenant).maxStaff <= 1) redirect(`/app/${tenantSlug}/configuracion`);
   const { db } = firebaseAdmin(); const [staffSnapshot, servicesSnapshot, blocksSnapshot] = await Promise.all([db.collection("tenants").doc(tenant.id).collection("staff").orderBy("displayName").get(), db.collection("tenants").doc(tenant.id).collection("services").where("active", "==", true).get(), db.collection("tenants").doc(tenant.id).collection("timeBlocks").where("endsAt", ">=", new Date()).orderBy("endsAt").get()]);
   const staff = staffSnapshot.docs.map((doc) => doc.data() as Staff); const services = servicesSnapshot.docs.map((doc) => doc.data() as { id: string; name: string }); const byService = new Map(services.map((service) => [service.id, service])); const options: ServiceOption[] = services.map((service) => ({ id: service.id, name: service.name, categoryName: null })); const today = new TZDate(new Date(), tenant.timezone).getDay();
