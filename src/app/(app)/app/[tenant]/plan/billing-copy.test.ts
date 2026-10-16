@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { billingAccess, type TenantBilling } from "@/lib/billing";
-import { billingBanner, billingDateLabel, billingStatusDetail, daysUntil, planIncludes, READONLY_MESSAGE, staffLimitLabel } from "./billing-copy";
+import { billingBanner, billingDateLabel, billingStatusDetail, billingStatusLabel, daysUntil, planIncludes, READONLY_MESSAGE, staffLimitLabel } from "./billing-copy";
 
 const TZ = "America/Argentina/Buenos_Aires";
 const DAY = 24 * 60 * 60 * 1000;
@@ -101,5 +101,33 @@ describe("planIncludes / staffLimitLabel", () => {
     expect(staffLimitLabel("solo")).toBe("1 profesional (vos)");
     expect(staffLimitLabel("equipo")).toBe("Hasta 5 profesionales");
     expect(staffLimitLabel("pro")).toBe("Hasta 15 profesionales");
+  });
+});
+
+describe("baja programada (cancelAtPeriodEnd)", () => {
+  const scheduled = (end: number): TenantBilling => ({ status: "active", plan: "equipo", currentPeriodEnd: end, cancelAtPeriodEnd: true });
+
+  it("dentro del período: etiqueta 'Baja programada' y detalle con la fecha de corte", () => {
+    const billing = scheduled(Date.UTC(2026, 10, 5, 15));
+    expect(billingStatusLabel(billing, access(billing))).toBe("Baja programada");
+    expect(billingStatusDetail(billing, access(billing), TZ, NOW)).toContain("hasta el 5 de noviembre");
+  });
+
+  it("aviso suave solo a 5 días o menos del corte", () => {
+    const far = scheduled(NOW + 20 * DAY);
+    expect(billingBanner(access(far), TZ, NOW, far)).toBeNull();
+    const near = scheduled(NOW + 2 * DAY);
+    expect(billingBanner(access(near), TZ, NOW, near)).toEqual({ kind: "trial", message: "Diste de baja tu plan: tu turnero se interrumpe el 18 de octubre." });
+  });
+
+  it("pasado el período: dado de baja y cartel rojo", () => {
+    const billing = scheduled(NOW - DAY);
+    expect(billingStatusLabel(billing, access(billing))).toBe("Dado de baja");
+    expect(billingBanner(access(billing), TZ, NOW, billing)?.kind).toBe("readonly");
+  });
+
+  it("sin baja programada la etiqueta es la de siempre", () => {
+    const billing: TenantBilling = { status: "active", plan: "pro", currentPeriodEnd: NOW + 10 * DAY };
+    expect(billingStatusLabel(billing, access(billing))).toBe("Al día");
   });
 });

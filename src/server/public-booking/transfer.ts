@@ -7,6 +7,7 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { occupancyDocId, occupancySlotInstants } from "@/server/firebase/booking";
 import { getTenantBySlugFromFirebase, type TenantRecord, type TransferSettings } from "@/server/firebase/tenants";
 import { recordTrustedAnalyticsEvent } from "@/server/analytics";
+import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
 import { cleanPublicClient, tenantPhoneKey, type PublicClientInput } from "./client";
 import {
   activePendingIds,

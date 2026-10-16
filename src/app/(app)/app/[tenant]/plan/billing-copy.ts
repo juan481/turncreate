@@ -2,7 +2,7 @@
 // banners del layout, estado de "Mi plan" y lo que incluye cada plan.
 // Puro (sin Firestore ni Next) para poder testearlo y usarlo desde el layout,
 // la página de Mi plan y el hub de Configuración por igual.
-import type { BillingAccess, TenantBilling } from "@/lib/billing";
+import { BILLING_STATUS_LABEL, type BillingAccess, type TenantBilling } from "@/lib/billing";
 import { PLANS, type PlanId } from "@/lib/plans";
 import { formatInTz } from "@/lib/dates";
 
@@ -37,7 +37,7 @@ export type BillingBannerModel =
  * - grace: tira ámbar "regularizalo antes del X".
  * - trial con <= 5 días: tira suave "tu prueba termina el X".
  */
-export function billingBanner(access: BillingAccess, timezone: string, now: number = Date.now()): BillingBannerModel | null {
+export function billingBanner(access: BillingAccess, timezone: string, now: number = Date.now(), billing?: TenantBilling | null): BillingBannerModel | null {
   if (access.level === "readonly") {
     return { kind: "readonly", message: access.reason === "cancelled" ? CANCELLED_MESSAGE : READONLY_MESSAGE };
   }
@@ -59,7 +59,21 @@ export function billingBanner(access: BillingAccess, timezone: string, now: numb
   if (access.reason === "trial" && access.until != null && access.until - now <= TRIAL_WARNING_DAYS * DAY_MS) {
     return { kind: "trial", message: `Tu prueba termina el ${billingDateLabel(access.until, timezone, now)}.` };
   }
+  // Baja programada (cancelAtPeriodEnd): a los 5 días del corte, aviso suave.
+  if (billing?.status === "active" && billing.cancelAtPeriodEnd && access.until != null && access.until - now <= TRIAL_WARNING_DAYS * DAY_MS) {
+    return { kind: "trial", message: `Diste de baja tu plan: tu turnero se interrumpe el ${billingDateLabel(access.until, timezone, now)}.` };
+  }
   return null;
+}
+
+/**
+ * Etiqueta de estado. Igual a BILLING_STATUS_LABEL salvo la baja programada,
+ * que en la base sigue "active" pero no está "Al día" en el sentido de que
+ * se va a renovar.
+ */
+export function billingStatusLabel(billing: TenantBilling, access: BillingAccess): string {
+  if (billing.status === "active" && billing.cancelAtPeriodEnd) return access.level === "readonly" ? BILLING_STATUS_LABEL.cancelled : "Baja programada";
+  return BILLING_STATUS_LABEL[billing.status];
 }
 
 /**
@@ -85,6 +99,14 @@ export function billingStatusDetail(billing: TenantBilling, access: BillingAcces
     }
     case "active": {
       const end = date(billing.currentPeriodEnd);
+      if (billing.cancelAtPeriodEnd) {
+        if (access.level === "full") {
+          return end
+            ? `Diste de baja la suscripción: Mercado Pago no te cobra más y tu turnero sigue andando hasta el ${end}. Si querés seguir, volvé a suscribirte.`
+            : "Diste de baja la suscripción: Mercado Pago no te cobra más.";
+        }
+        return CANCELLED_MESSAGE;
+      }
       if (access.level === "full") return end ? `Próximo cobro el ${end}. Mercado Pago lo debita solo todos los meses.` : "Mercado Pago debita tu plan solo todos los meses.";
       const graceEnd = date(access.until);
       if (access.level === "grace") return graceEnd ? `No registramos el último pago. Tenés hasta el ${graceEnd} para regularizarlo.` : "No registramos el último pago.";

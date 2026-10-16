@@ -4,21 +4,51 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { mercadoPagoEnv } from "@/server/mercadopago/config";
 import { validateMercadoPagoSignature } from "@/server/mercadopago/signature";
 import { reconcileMercadoPagoPayment } from "@/server/mercadopago/checkout";
+import { subscriptionTopic } from "@/server/billing/model";
+import { handleSubscriptionNotification } from "@/server/billing/webhook";
 
 type MpNotification = { type?: string; action?: string; user_id?: number | string; data?: { id?: string | number } };
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => null) as MpNotification | null;
-  const dataId = body?.data?.id != null ? String(body.data.id) : null;
-  const secret = mercadoPagoEnv().webhookSecret;
-  if (!secret || !validateMercadoPagoSignature({
+/**
+ * Firma HMAC de MP. Además del secreto de la app de TurnCreate (MP_WEBHOOK_SECRET)
+ * se acepta MP_PLATFORM_WEBHOOK_SECRET por si la suscripción de los locales
+ * se cobra con OTRA aplicación de MP de Just Create (cada app tiene su clave).
+ */
+function validSignature(request: Request, dataId: string | null) {
+  const secrets = [mercadoPagoEnv().webhookSecret, process.env.MP_PLATFORM_WEBHOOK_SECRET?.trim()]
+    .filter((secret): secret is string => Boolean(secret));
+  return secrets.some((secret) => validateMercadoPagoSignature({
     signature: request.headers.get("x-signature"),
     requestId: request.headers.get("x-request-id"),
     dataId,
     secret,
-  })) {
+  }));
+}
+
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => null) as MpNotification | null;
+  const url = new URL(request.url);
+  // MP firma con el data.id del query string; el body trae el mismo id.
+  const dataId = body?.data?.id != null ? String(body.data.id) : url.searchParams.get("data.id");
+  if (!validSignature(request, dataId)) {
     return NextResponse.json({ error: "Firma inválida" }, { status: 401 });
   }
+
+  // Suscripción del local a TurnCreate (cuenta de Just Create): preapproval y
+  // cuotas. Se procesa en el momento (es corto e idempotente vía billingEvents):
+  // si MP no responde, 500 y MP reintenta.
+  const topic = subscriptionTopic(body?.type ?? url.searchParams.get("type") ?? url.searchParams.get("topic"));
+  if (topic) {
+    if (!dataId) return NextResponse.json({ ok: true });
+    try {
+      const result = await handleSubscriptionNotification({ topic, id: dataId });
+      return NextResponse.json({ ok: true, result });
+    } catch (error) {
+      console.error("[webhook mp] suscripción", topic, dataId, error instanceof Error ? error.message : error);
+      return NextResponse.json({ error: "No se pudo procesar" }, { status: 500 });
+    }
+  }
+
   if (body?.type !== "payment" || !dataId) return NextResponse.json({ ok: true });
 
   const eventRef = firebaseAdmin().db.collection("mpWebhookEvents").doc(`payment_${dataId}`);
