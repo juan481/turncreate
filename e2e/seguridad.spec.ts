@@ -10,7 +10,8 @@ const PRIVATE_PAGES = ["clientes", "clientes/e2e_client_fixture", "caja", "repor
 
 for (const path of PRIVATE_PAGES) {
   test(`sin sesión válida, /app/${SLUG}/${path} no filtra datos del local en el RSC`, async ({ request }) => {
-    for (const headers of [{ Cookie: FAKE_SESSION }, { Cookie: FAKE_SESSION, RSC: "1" }]) {
+    const variants: Record<string, string>[] = [{ Cookie: FAKE_SESSION }, { Cookie: FAKE_SESSION, RSC: "1" }];
+    for (const headers of variants) {
       const response = await request.get(`/app/${SLUG}/${path}`, { headers, maxRedirects: 0 });
       const body = await response.text();
       expect(body).not.toContain("Cliente Fixture");

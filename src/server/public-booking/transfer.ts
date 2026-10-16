@@ -261,3 +261,9 @@ export async function expirePendingTransfers(limit = 50) {
 export async function clearPendingTransfer(tenantId: string, appointmentId: string) {
   await pendingTransferRef(tenantId, appointmentId).delete();
 }
+
+/** Señas por transferencia que esperan que la dueña confirme el comprobante (badge del home). */
+export async function countPendingTransfers(tenantId: string): Promise<number> {
+  const snapshot = await firebaseAdmin().db.collection("pendingTransfers").where("tenantId", "==", tenantId).count().get();
+  return snapshot.data().count;
+}
