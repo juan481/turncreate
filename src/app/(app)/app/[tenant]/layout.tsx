@@ -8,7 +8,9 @@ import { PageTransition } from "@/components/ui/page-transition";
 import { JustCreateFooter } from "@/components/ui/just-create-footer";
 import { ToastProvider } from "@/components/ui/toast";
 import { RememberRouteSearch } from "@/components/ui/back-button";
+import { BillingBanner } from "@/components/ui/billing-banner";
 import { planFeatures } from "@/lib/plans";
+import { tenantBillingAccess } from "@/server/billing/tenant-billing";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantMembershipsForUser } from "@/server/firebase/tenants";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
@@ -21,6 +23,7 @@ import { MobilePageHeader } from "./mobile-page-header";
 import { NewAppointmentFab } from "./new-appointment-fab";
 import { NotificationsButton } from "./notifications-button";
 import { TenantSwitcher, type TenantOption } from "./tenant-switcher";
+import { billingBanner } from "./plan/billing-copy";
 
 const NAV = [
   { href: "", label: "Inicio", icon: "home" },
@@ -66,6 +69,12 @@ export default async function TenantAppLayout({
   const roleLabel = ROLE_LABEL[currentTenantOption.role] ?? currentTenantOption.role;
   const features = planFeatures(tenant);
   const nav = NAV.filter((item) => item.href !== "staff" || (features.maxStaff > 1 && staffSnapshot.size > 1));
+  // Suscripción a TurnCreate: en "readonly" el panel solo deja mirar (las
+  // server actions que escriben ya lo bloquean); acá se explica con el
+  // cartel y se esconden los atajos de crear (+) para no llevar a callejones.
+  const billing = tenantBillingAccess(tenant);
+  const banner = billingBanner(billing, tenant.timezone);
+  const readOnly = billing.level === "readonly";
 
   return (
     <ToastProvider>
@@ -103,7 +112,7 @@ export default async function TenantAppLayout({
                   <Icon name="logout" className="text-[18px]" />
                 </button>
               </form>
-              <MobileMenuButton tenantSlug={tenantSlug} items={[...nav, { href: "configuracion", label: "Configuración", icon: "settings" }]} signOutAction={signOut} tenantOptions={tenantOptions.length ? tenantOptions : undefined} currentTenant={currentTenantOption} />
+              <MobileMenuButton tenantSlug={tenantSlug} items={[...nav, { href: "configuracion", label: "Configuración", icon: "settings" }, { href: "plan", label: "Mi plan", icon: "workspace_premium" }]} signOutAction={signOut} tenantOptions={tenantOptions.length ? tenantOptions : undefined} currentTenant={currentTenantOption} />
             </div>
           </div>
         </header>
@@ -115,6 +124,9 @@ export default async function TenantAppLayout({
             real de abajo, así el footer de Just Create (último hijo) nunca
             queda tapado por la barra en un iPhone con home indicator. */}
         <main className="mx-auto w-full max-w-[1440px] px-gutter pb-[calc(5.5rem+var(--safe-b))] pt-5 lg:px-gutter-desktop lg:pb-lg lg:pt-28">
+          {/* Aviso de la suscripción: arriba del contenido, debajo del AppBar
+              sticky (está dentro de <main>, no compite con el header). */}
+          {banner && <BillingBanner kind={banner.kind} message={banner.message} href={`/app/${tenantSlug}/plan#suscribirme`} className="mb-lg" />}
           <PageTransition>{children}</PageTransition>
           <JustCreateFooter className="pb-2" />
         </main>
@@ -126,9 +138,10 @@ export default async function TenantAppLayout({
             signOutAction={signOut}
             tenantOptions={tenantOptions.length ? tenantOptions : undefined}
             currentTenant={currentTenantOption}
+            readOnly={readOnly}
           />
         </Suspense>
-        <NewAppointmentFab tenantSlug={tenantSlug} />
+        {!readOnly && <NewAppointmentFab tenantSlug={tenantSlug} />}
       </div>
     </ToastProvider>
   );

@@ -12,7 +12,7 @@ import { TenantSwitcherMobile, type TenantOption } from "./tenant-switcher";
 
 /**
  * Inicio · Agenda · (+) · Clientes · Más. Lo que se mira todo el día va
- * directo; el resto (Caja, Servicios, Reportes, Equipo, Configuración,
+ * directo; el resto (Caja, Servicios, Reportes, Equipo, Configuración, Mi plan,
  * Ayuda) vive en la hoja "Más", que queda marcada en cualquiera de esas
  * pantallas (bottomNavTab() === "menu"). 5 slots de ~64px a 320px: los
  * labels son label-xs y truncan, nunca desbordan.
@@ -54,6 +54,7 @@ export function MobileBottomNav({
   signOutAction,
   tenantOptions,
   currentTenant,
+  readOnly = false,
 }: {
   tenantSlug: string;
   /** Equipo solo si el plan admite más de una profesional. */
@@ -61,6 +62,12 @@ export function MobileBottomNav({
   signOutAction: () => Promise<void>;
   tenantOptions?: TenantOption[];
   currentTenant: TenantOption;
+  /**
+   * Turnero interrumpido por falta de pago: el panel solo deja mirar, así
+   * que el + (Nuevo turno / cliente / Cobrar) llevaría a callejones sin
+   * salida. En su lugar va "Pagar" → Mi plan.
+   */
+  readOnly?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -87,6 +94,7 @@ export function MobileBottomNav({
     { href: "reportes", label: "Reportes", icon: "monitoring" },
     ...(showStaff ? [{ href: "staff", label: "Equipo", icon: "badge" }] : []),
     { href: "configuracion", label: "Configuración", icon: "settings" },
+    { href: "plan", label: "Mi plan", icon: "workspace_premium" },
     { href: "ayuda", label: "Ayuda", icon: "help" },
   ];
 
@@ -109,6 +117,18 @@ export function MobileBottomNav({
         <div className="relative mx-auto flex h-16 max-w-[30rem] items-stretch">
           {TABS.map((item) => {
             if (!item) {
+              if (readOnly) {
+                const planHref = `${base}/plan`;
+                const onPlan = pathname === planHref;
+                return (
+                  <Link key="pagar" href={`${planHref}#suscribirme`} aria-current={onPlan ? "page" : undefined} className={SLOT_CLASS}>
+                    <span className="grid h-8 w-14 max-w-full place-items-center rounded-pill bg-status-alert text-on-primary">
+                      <Icon name="credit_card" className="text-[20px]" />
+                    </span>
+                    <span className="max-w-full truncate font-label-xs text-label-xs text-status-alert">Pagar</span>
+                  </Link>
+                );
+              }
               return <QuickActionsNavButton key="nuevo" base={base} newAppointmentHref={newAppointmentHref} dial={dial} toggleRef={dialToggleRef} />;
             }
             const href = item.href ? `${base}/${item.href}` : base;

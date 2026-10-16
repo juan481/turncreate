@@ -6,8 +6,9 @@ import { auditDocId, isAuditAction, toDateOrNull, type AuditAction } from "./mod
 
 /**
  * Auditoría de la consola de plataforma: colección raíz `platformAudit`,
- * un documento por cambio (apagar/prender local o turnero). Se escribe en
- * la MISMA transacción que el cambio (ver actions.ts de (platform)): si
+ * un documento por cambio (local, turnero, suscripción, demo, borrado,
+ * precios globales; estos últimos con tenantId ""). Se escribe en
+ * la MISMA transacción que el cambio cuando se puede (ver actions.ts de (platform)): si
  * el cambio se guarda, el registro también, y viceversa.
  *
  * Lecturas sin índices compuestos (producción los exige):
@@ -27,6 +28,8 @@ export type AuditEntry = {
   from: string;
   to: string;
   reason: string | null;
+  /** Dato extra legible (fechas de una prueba, qué precios cambiaron, URL del local borrado). */
+  detail: string | null;
 };
 
 export function newAuditRef(now: Date = new Date()) {
@@ -42,8 +45,9 @@ export function auditEntryData(input: {
   from: string;
   to: string;
   reason: string | null;
+  detail?: string | null;
 }) {
-  return { ...input, at: FieldValue.serverTimestamp() };
+  return { ...input, detail: input.detail ?? null, at: FieldValue.serverTimestamp() };
 }
 
 function toEntry(id: string, data: Record<string, unknown>): AuditEntry | null {
@@ -58,6 +62,7 @@ function toEntry(id: string, data: Record<string, unknown>): AuditEntry | null {
     from: String(data.from ?? ""),
     to: String(data.to ?? ""),
     reason: typeof data.reason === "string" && data.reason ? data.reason : null,
+    detail: typeof data.detail === "string" && data.detail ? data.detail : null,
   };
 }
 

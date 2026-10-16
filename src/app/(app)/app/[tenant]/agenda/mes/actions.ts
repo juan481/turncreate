@@ -7,6 +7,6 @@ import { getMonthData, type MonthData } from "@/server/agenda-month";
 export async function loadMonth(tenantSlug: string, monthISO: string): Promise<MonthData> {
   const user = await getCurrentFirebaseUser();
   if (!user) throw new Error("No autorizado");
-  const { tenant } = await requireTenantAccess(user.uid, tenantSlug);
+  const { tenant } = await requireTenantAccess(user.uid, tenantSlug, { write: false });
   return getMonthData({ tenantId: tenant.id, timezone: tenant.timezone, monthISO });
 }

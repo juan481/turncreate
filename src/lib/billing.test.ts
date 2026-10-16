@@ -37,6 +37,13 @@ describe("billingAccess", () => {
     expect(billingAccess(base({ status: "active", currentPeriodEnd: NOW - 1, graceDays: 0 }), NOW).level).toBe("readonly");
   });
 
+  it("baja con período pago (cancelAtPeriodEnd): pleno hasta el fin, después solo lectura sin gracia", () => {
+    const cancelled = (end: number) => base({ status: "active", currentPeriodEnd: end, cancelAtPeriodEnd: true });
+    expect(billingAccess(cancelled(NOW + DAY), NOW)).toEqual({ level: "full", reason: "paid", until: NOW + DAY });
+    expect(billingAccess(cancelled(NOW - 1), NOW)).toEqual({ level: "readonly", reason: "cancelled", until: null });
+    expect(billingAllowsPublicBooking(cancelled(NOW - 1), NOW)).toBe(false);
+  });
+
   it("unpaid y cancelled: solo lectura y turnero cerrado", () => {
     for (const status of ["unpaid", "cancelled"] as const) {
       expect(billingAccess(base({ status }), NOW).level).toBe("readonly");

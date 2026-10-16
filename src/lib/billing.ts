@@ -31,6 +31,12 @@ export type TenantBilling = {
   mpPreapprovalStatus?: string | null;
   payerEmail?: string | null;
   cancelledAt?: number | null;
+  /**
+   * Dio de baja la suscripción de MP pero ya tenía el período pago: sigue
+   * "active" hasta `currentPeriodEnd` y ahí pasa directo a solo lectura
+   * (sin gracia: no hay ningún cobro pendiente que regularizar).
+   */
+  cancelAtPeriodEnd?: boolean | null;
 };
 
 /**
@@ -73,6 +79,11 @@ export function billingAccess(billing: TenantBilling | null | undefined, now: nu
     case "trial":
       return afterDeadline(billing.trialEndsAt, now, grace, "trial", "trial_ended");
     case "active":
+      if (billing.cancelAtPeriodEnd) {
+        const end = billing.currentPeriodEnd;
+        if (end != null && now < end) return { level: "full", reason: "paid", until: end };
+        return { level: "readonly", reason: "cancelled", until: null };
+      }
       return afterDeadline(billing.currentPeriodEnd, now, grace, "paid", "payment_overdue");
     case "past_due":
       // MP ya avisó el rechazo: la gracia corre desde el fin del período pago

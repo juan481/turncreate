@@ -3,7 +3,12 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { PlanId } from "@/lib/plans";
 import type { Gender } from "@/lib/gender";
 import { sameHours, type FlatHours } from "@/components/ui/hours-editor-model";
+import { billingAllowsWrites } from "@/lib/billing";
+import { getBillingConfig } from "@/server/billing/config";
+import { initialBillingFor, readTenantBilling } from "@/server/billing/tenant-billing";
 import { firebaseAdmin } from "./admin";
+
+export const BILLING_READONLY_ERROR = "Por falta de pago tu turnero está interrumpido. Regularizá tu plan para seguir operando.";
 
 export type BusinessHours = {
   weekday: number;
@@ -36,6 +41,13 @@ export type TenantRecord = {
   whatsappNumber?: string | null;
   /** Bajada corta que se muestra arriba del turnero público. */
   description?: string | null;
+  /**
+   * Suscripción del local a TurnCreate (mapa con fechas como Timestamp).
+   * Leer SIEMPRE con readTenantBilling / tenantBillingAccess (src/server/billing).
+   */
+  billing?: unknown;
+  /** Local de demo/presentación (no se le cobra). */
+  isDemo?: boolean;
   settings: {
     payments?: {
       /** Default true: los locales previos solo tenían Mercado Pago. */
@@ -121,6 +133,8 @@ export async function createTenantForOwner(input: {
   // La dueña también atiende: sin este staff un local recién creado no tiene
   // a nadie que pueda recibir turnos.
   const ownerStaffRef = tenantRef.collection("staff").doc();
+  // Cortesía o prueba según platformConfig/billing (se lee fuera de la transacción).
+  const billing = initialBillingFor(await getBillingConfig(), input.plan ?? "equipo", Date.now());
 
   const tenant: TenantRecord = {
     id: tenantRef.id,
@@ -146,6 +160,7 @@ export async function createTenantForOwner(input: {
       publicBookingEnabled: false,
     },
     businessHours: input.businessHours,
+    billing,
   };
 
   await db.runTransaction(async (transaction) => {
@@ -284,12 +299,19 @@ export async function getTenantMember(uid: string, tenantId: string) {
   return member.exists ? member.data() : null;
 }
 
-export async function requireTenantAccess(uid: string, slug: string) {
+/**
+ * Auth + local para las server actions del panel. Por defecto la acción
+ * ESCRIBE: si el local está interrumpido por falta de pago (billingAllowsWrites
+ * false) tira. Las que solo leen (mes de la agenda, exportar, analítica, pagar
+ * el plan) pasan `{ write: false }` y siguen andando en solo lectura.
+ */
+export async function requireTenantAccess(uid: string, slug: string, options: { write?: boolean } = {}) {
   const tenant = await getTenantBySlugFromFirebase(slug);
   if (!tenant) throw new Error("El local no existe");
   const member = await getTenantMember(uid, tenant.id);
   if (!member || member.status !== "active") throw new Error("No tenés acceso a este local");
   // Local apagado desde /platform: ninguna server action del panel opera sobre él.
   if (tenant.status === "suspended") throw new Error("Esta cuenta está suspendida. Escribinos para reactivarla.");
+  if (options.write !== false && !billingAllowsWrites(readTenantBilling(tenant), Date.now())) throw new Error(BILLING_READONLY_ERROR);
   return { tenant, member };
 }

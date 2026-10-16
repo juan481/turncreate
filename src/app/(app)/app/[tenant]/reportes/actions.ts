@@ -4,7 +4,7 @@ import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { requireTenantAccess } from "@/server/firebase/tenants";
 import { formatInTz, monthRange } from "@/lib/dates";
 export async function exportarTurnosCsv(tenantSlug: string, monthISO: string) {
-  const user = await getCurrentFirebaseUser(); if (!user) throw new Error("No autorizado"); const { tenant } = await requireTenantAccess(user.uid, tenantSlug);
+  const user = await getCurrentFirebaseUser(); if (!user) throw new Error("No autorizado"); const { tenant } = await requireTenantAccess(user.uid, tenantSlug, { write: false });
   const { start, end } = monthRange(`${monthISO}-01`, tenant.timezone);
   const docs = await firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("appointments").where("startsAt", ">=", start).where("startsAt", "<", end).orderBy("startsAt").get();
   const labels: Record<string, string> = { pending_payment: "Pendiente de pago", confirmed: "Confirmado", completed: "Completado", no_show: "No vino", cancelled: "Cancelado", expired: "Vencido" }; const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;

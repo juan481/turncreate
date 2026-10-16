@@ -24,6 +24,8 @@ const ROUTES: Record<string, RouteMeta> = {
   novedades: { title: "Novedades", parent: "" },
   tutorial: { title: "Cómo funciona", parent: "" },
   bot: { title: "IA", parent: "" },
+  // Suscripción del local a TurnCreate (lo que se le paga a Just Create).
+  plan: { title: "Mi plan", parent: "" },
 
   "agenda/semana": { title: "Semana", parent: "agenda" },
   "agenda/mes": { title: "Calendario", parent: "agenda" },
@@ -87,7 +89,7 @@ export function resolveTenantRoute(pathname: string, tenantSlug: string) {
 
 export type BottomNavTab = "inicio" | "agenda" | "clientes" | "menu";
 
-const MENU_SECTIONS = new Set(["caja", "reportes", "servicios", "staff", "configuracion", "ayuda", "novedades", "tutorial", "bot", "transferencias"]);
+const MENU_SECTIONS = new Set(["caja", "reportes", "servicios", "staff", "configuracion", "ayuda", "novedades", "tutorial", "bot", "transferencias", "plan"]);
 
 /** Qué pestaña de la barra inferior queda marcada en cada ruta. */
 export function bottomNavTab(relativePath: string): BottomNavTab | null {

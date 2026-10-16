@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ slu
 
   try {
     const { slug } = await context.params;
-    const { tenant } = await requireTenantAccess(user.uid, slug);
+    const { tenant } = await requireTenantAccess(user.uid, slug, { write: false });
     const requestedDays = Number(request.nextUrl.searchParams.get("days") ?? 14);
     const analytics = await getTenantAnalyticsRange({ tenantId: tenant.id, timezone: tenant.timezone, days: requestedDays });
     return NextResponse.json(analytics, { headers: { "Cache-Control": "private, no-store" } });

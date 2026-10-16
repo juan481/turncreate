@@ -2,7 +2,9 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { getMpConnection } from "@/server/mercadopago/connections";
 import { bookingAvailability, isTransferReady } from "@/server/public-booking/payment-methods";
-import { planFeatures } from "@/lib/plans";
+import { readTenantBilling, tenantBillingAccess } from "@/server/billing/tenant-billing";
+import { BILLING_STATUS_LABEL } from "@/lib/billing";
+import { PLANS, planFeatures } from "@/lib/plans";
 import { HubTile, ScreenIntro, type HubTileTone } from "./settings-ui";
 import { depositSummary, hoursSummary } from "./summaries";
 
@@ -49,6 +51,14 @@ export default async function ConfiguracionPage({ params }: PageProps<"/app/[ten
       ? ["Tomando reservas", "ok"]
       : ["Todavía no toma reservas", "warning"];
 
+  // Suscripción a TurnCreate: "Plan Equipo · Cortesía". Sin `billing` = cortesía.
+  const billing = readTenantBilling(tenant);
+  const billingLevel = tenantBillingAccess(tenant).level;
+  const planStatus: [string, HubTileTone] = [
+    `Plan ${(billing ? PLANS[billing.plan] ?? features : features).name} · ${BILLING_STATUS_LABEL[billing?.status ?? "free"]}`,
+    billingLevel !== "full" ? "warning" : billing?.status === "active" ? "ok" : "neutral",
+  ];
+
   return (
     <div className="mx-auto max-w-[42rem] space-y-lg">
       <ScreenIntro title="Configuración" description="Datos del local, horarios, cobros y tu link de reservas." />
@@ -64,6 +74,7 @@ export default async function ConfiguracionPage({ params }: PageProps<"/app/[ten
           status={teamLocked ? "Disponible en el plan Equipo" : `${staffCount} profesional${staffCount === 1 ? "" : "es"} activo${staffCount === 1 ? "" : "s"}`}
         />
         <HubTile href={`${base}/configuracion/link`} icon="link" title="Link de reservas" status={linkStatus[0]} tone={linkStatus[1]} />
+        <HubTile href={`${base}/plan`} icon="workspace_premium" title="Mi plan" status={planStatus[0]} tone={planStatus[1]} />
         <HubTile href={`${base}/ayuda`} icon="help" title="Ayuda" status="Preguntas frecuentes y soporte" />
       </div>
     </div>

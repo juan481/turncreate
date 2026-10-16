@@ -17,6 +17,7 @@ describe("routeMeta", () => {
     ["novedades", "Novedades"],
     ["tutorial", "Cómo funciona"],
     ["bot", "IA"],
+    ["plan", "Mi plan"],
   ])("1er nivel %s vuelve a Inicio", (path, title) => {
     expect(routeMeta(path)).toEqual({ title, parent: "" });
   });
@@ -86,6 +87,7 @@ describe("bottomNavTab", () => {
     ["reportes", "menu"],
     ["staff", "menu"],
     ["novedades", "menu"],
+    ["plan", "menu"],
     ["desconocida", null],
   ])("%s → %s", (path, tab) => {
     expect(bottomNavTab(path)).toBe(tab);

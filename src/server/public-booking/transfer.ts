@@ -90,7 +90,7 @@ export async function createTransferAppointment(input: { slug: string; holdId: s
   if (typeof input.holdId !== "string" || !ID_PATTERN.test(input.holdId)) throw new Error("La reserva venció. Elegí el horario de nuevo.");
   const client = cleanPublicClient(input.client);
   const tenant = await getTenantBySlugFromFirebase(input.slug);
-  if (!tenant || tenant.status === "suspended") throw new Error("Este turnero no está disponible");
+  if (!tenant || tenant.status === "suspended" || !tenantBillingAllowsPublicBooking(tenant)) throw new Error("Este turnero no está disponible");
   if (tenant.settings.publicBookingEnabled === false) throw new Error("Las reservas online están pausadas");
   if (tenant.settings.depositType === "none") throw new Error("La reserva online requiere una seña configurada");
   if (!isTransferReady(tenant.settings.payments?.transfer)) throw new Error("Este local no recibe señas por transferencia");

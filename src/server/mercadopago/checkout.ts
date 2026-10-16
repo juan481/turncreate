@@ -11,6 +11,7 @@ import { isPublicHttpsUrl, mercadoPagoEnv } from "./config";
 import { sellerAccessToken } from "./connections";
 import { recordTrustedAnalyticsEvent } from "@/server/analytics";
 import { cleanPublicClient, type PublicClientInput } from "@/server/public-booking/client";
+import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
 
 export type BookingAttemptStatus =
   | "created"
@@ -43,7 +44,7 @@ export async function publicCheckoutQuote(tenantId: string, serviceId: string) {
   ]);
   if (!tenantSnapshot.exists || !serviceSnapshot.exists || serviceSnapshot.data()?.active === false || serviceSnapshot.data()?.public === false || serviceSnapshot.data()?.archivedAt) throw new Error("No se pudo calcular la seña");
   const tenant = tenantSnapshot.data() as TenantRecord;
-  if (tenant.status === "suspended" || tenant.settings.publicBookingEnabled === false || tenant.settings.depositType === "none") {
+  if (tenant.status === "suspended" || !tenantBillingAllowsPublicBooking(tenant) || tenant.settings.publicBookingEnabled === false || tenant.settings.depositType === "none") {
     throw new Error("Las reservas online no están habilitadas");
   }
   const depositAmount = depositFor(tenant, Number(serviceSnapshot.data()!.price ?? 0));
@@ -57,7 +58,7 @@ export async function publicCheckoutQuote(tenantId: string, serviceId: string) {
 export async function createCheckoutPreference(input: { slug: string; holdId: string; client: CheckoutClient }) {
   const client = cleanPublicClient(input.client);
   const tenant = await getTenantBySlugFromFirebase(input.slug);
-  if (!tenant || tenant.status === "suspended") throw new Error("Este turnero no está disponible");
+  if (!tenant || tenant.status === "suspended" || !tenantBillingAllowsPublicBooking(tenant)) throw new Error("Este turnero no está disponible");
   if (tenant.settings.publicBookingEnabled === false) throw new Error("Las reservas online están pausadas");
   if (tenant.settings.payments?.mercadopagoEnabled === false) throw new Error("Este local no cobra la seña con Mercado Pago");
   const sellerOauthAccessToken = await sellerAccessToken(tenant.id);

@@ -15,6 +15,7 @@ import { getMpConnection } from "@/server/mercadopago/connections";
 import { addDaysISO, toDateISOInTz, todayISO } from "@/lib/dates";
 import { getPublicServiceCatalog } from "@/server/services/catalog";
 import { planFeatures } from "@/lib/plans";
+import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
 import { assertPublicBookingRate } from "@/server/public-booking/rate-limit";
 import {
   bookingAvailability,
@@ -57,7 +58,8 @@ async function tenantBooking(tenant: TenantRecord): Promise<BookingAvailability 
   // transferencia lista igual hace falta saber si MP también está.
   const connection = await getMpConnection(tenant.id);
   const availability = bookingAvailability(tenant, connection?.status === "connected");
-  const open = tenant.status !== "suspended" && tenant.settings.publicBookingEnabled !== false && availability.enabled;
+  // Interrumpido por falta de pago: booking_enabled false → la página muestra "no disponible".
+  const open = tenant.status !== "suspended" && tenant.settings.publicBookingEnabled !== false && availability.enabled && tenantBillingAllowsPublicBooking(tenant);
   return { ...availability, open };
 }
 
@@ -111,6 +113,7 @@ export async function getPublicStaffForService(tenantId: string, serviceId: stri
 
 export async function getAvailableSlots(tenantId: string, serviceId: string, staffId: string | "any", dateISO: string, timezone: string, allStaffIds: string[]): Promise<string[]> {
   const tenant = await getTenantRecordById(tenantId);
+  if (!tenantBillingAllowsPublicBooking(tenant)) throw new Error("Este turnero no está disponible");
   void timezone;
   void allStaffIds;
   assertBookableDate(dateISO, tenant);

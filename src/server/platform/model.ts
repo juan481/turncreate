@@ -1,3 +1,4 @@
+import { BILLING_STATUS_LABEL, type BillingStatus } from "@/lib/billing";
 import { PLANS } from "@/lib/plans";
 import { addDaysISO, formatInTz, parseDateISO, startOfDayInTz, toDateISOInTz, todayISO } from "@/lib/dates";
 
@@ -29,8 +30,10 @@ export function normalizeTenantStatus(value: unknown): TenantStatus {
   return value === "active" || value === "suspended" ? value : "trial";
 }
 
+// "trial" es el estado con el que nace un local (createTenantForOwner), no la
+// prueba de la suscripción (eso vive en billing.status): por eso "Nuevo".
 export const TENANT_STATUS_LABEL: Record<TenantStatus, string> = {
-  trial: "En prueba",
+  trial: "Nuevo",
   active: "Activo",
   suspended: "Apagado",
 };
@@ -67,22 +70,28 @@ export function depositLabel(settings: { depositType?: unknown; depositValue?: u
 /* Búsqueda, filtro y totales del listado                               */
 /* ------------------------------------------------------------------ */
 
-export type StatusFilter = "all" | TenantStatus;
-export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "active", "trial", "suspended"];
+/** "demo" = los locales de muestra (isDemo), que no cuentan en los totales. */
+export type StatusFilter = "all" | TenantStatus | "demo";
+export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "active", "trial", "suspended", "demo"];
 
 /** Minúsculas y sin tildes: "Peluquería" lo encuentra "peluqueria". */
 export function normalizeSearch(value: string): string {
   return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
-export function filterTenants<T extends { name: string; slug: string; ownerEmail: string | null; status: TenantStatus }>(
+type FilterableRow = { name: string; slug: string; ownerEmail: string | null; status: TenantStatus; isDemo?: boolean; billingFilter?: string };
+
+/** `billing`: una clave de BILLING_FILTERS (billing-model.ts) o "all". */
+export function filterTenants<T extends FilterableRow>(
   rows: readonly T[],
   query: string,
   status: StatusFilter,
+  billing: string = "all",
 ): T[] {
   const needle = normalizeSearch(query);
   return rows.filter((row) => {
-    if (status !== "all" && row.status !== status) return false;
+    if (status === "demo" ? !row.isDemo : status !== "all" && row.status !== status) return false;
+    if (billing !== "all" && row.billingFilter !== billing) return false;
     if (!needle) return true;
     return [row.name, row.slug, row.ownerEmail ?? ""].some((field) => normalizeSearch(field).includes(needle));
   });
@@ -95,13 +104,20 @@ export type TenantTotals = {
   suspended: number;
   bookingOn: number;
   appointments30d: number;
+  /** Locales demo: se cuentan aparte y NO entran en ninguno de los totales de arriba. */
+  demo: number;
 };
 
+/** Totales de la plataforma SIN los locales demo (con ellos "turnos cargados" se inflaba). */
 export function summarizeTenantRows(
-  rows: Iterable<{ status: TenantStatus; bookingEnabled: boolean; appointments30d: number }>,
+  rows: Iterable<{ status: TenantStatus; bookingEnabled: boolean; appointments30d: number; isDemo?: boolean }>,
 ): TenantTotals {
-  const totals: TenantTotals = { total: 0, active: 0, trial: 0, suspended: 0, bookingOn: 0, appointments30d: 0 };
+  const totals: TenantTotals = { total: 0, active: 0, trial: 0, suspended: 0, bookingOn: 0, appointments30d: 0, demo: 0 };
   for (const row of rows) {
+    if (row.isDemo) {
+      totals.demo += 1;
+      continue;
+    }
     totals.total += 1;
     totals[row.status] += 1;
     // Un turnero "prendido" en un local apagado no toma reservas: no cuenta.
@@ -133,13 +149,41 @@ export function validateReason(raw: unknown, required: boolean): Check<string | 
   return { ok: true, value: reason };
 }
 
-export type AuditAction = "tenant.suspend" | "tenant.activate" | "tenant.booking_off" | "tenant.booking_on";
+export type AuditAction =
+  | "tenant.suspend"
+  | "tenant.activate"
+  | "tenant.booking_off"
+  | "tenant.booking_on"
+  | "tenant.demo_on"
+  | "tenant.demo_off"
+  | "tenant.delete"
+  | "billing.free"
+  | "billing.trial"
+  | "billing.extend"
+  | "billing.plan"
+  | "billing.unpaid"
+  | "billing.reactivate"
+  | "billing.cancel"
+  | "billing.sync"
+  | "config.billing";
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "tenant.suspend": "Local apagado",
   "tenant.activate": "Local prendido",
   "tenant.booking_off": "Turnero apagado",
   "tenant.booking_on": "Turnero prendido",
+  "tenant.demo_on": "Marcado como demo",
+  "tenant.demo_off": "Ya no es demo",
+  "tenant.delete": "Local eliminado",
+  "billing.free": "Cortesía",
+  "billing.trial": "Prueba iniciada",
+  "billing.extend": "Prueba extendida",
+  "billing.plan": "Cambio de plan",
+  "billing.unpaid": "Interrumpido por falta de pago",
+  "billing.reactivate": "Suscripción reactivada",
+  "billing.cancel": "Dado de baja",
+  "billing.sync": "Sincronizado con Mercado Pago",
+  "config.billing": "Precios y planes",
 };
 
 export function isAuditAction(value: unknown): value is AuditAction {
@@ -147,9 +191,46 @@ export function isAuditAction(value: unknown): value is AuditAction {
 }
 
 export function auditActionTone(action: AuditAction): PlatformTone {
-  if (action === "tenant.suspend") return "alert";
-  if (action === "tenant.booking_off") return "draft";
-  return "confirmed";
+  switch (action) {
+    case "tenant.suspend":
+    case "tenant.delete":
+    case "billing.unpaid":
+    case "billing.cancel":
+      return "alert";
+    case "tenant.booking_off":
+    case "tenant.demo_on":
+    case "tenant.demo_off":
+      return "draft";
+    case "billing.trial":
+    case "billing.extend":
+    case "billing.plan":
+    case "billing.sync":
+    case "config.billing":
+      return "pending";
+    default:
+      return "confirmed";
+  }
+}
+
+function isBillingStatusValue(value: string): value is BillingStatus {
+  return value in BILLING_STATUS_LABEL;
+}
+
+/** "De X a Y" de una fila de auditoría; null si la acción no tiene un antes/después que mostrar. */
+export function auditChangeLabel(entry: { action: AuditAction; from: string; to: string }): string | null {
+  const { action, from, to } = entry;
+  if (action === "tenant.booking_on" || action === "tenant.booking_off") {
+    return `De ${from === "on" ? "prendido" : "apagado"} a ${to === "on" ? "prendido" : "apagado"}`;
+  }
+  if (action === "tenant.suspend" || action === "tenant.activate") {
+    const label = (value: string) => TENANT_STATUS_LABEL[normalizeTenantStatus(value)].toLowerCase();
+    return `De ${label(from)} a ${label(to)}`;
+  }
+  if (action === "billing.plan") return `De ${planLabel(from)} a ${planLabel(to)}`;
+  if (action.startsWith("billing.") && from !== to && isBillingStatusValue(from) && isBillingStatusValue(to)) {
+    return `De ${BILLING_STATUS_LABEL[from].toLowerCase()} a ${BILLING_STATUS_LABEL[to].toLowerCase()}`;
+  }
+  return null;
 }
 
 export type StatusChange = { from: TenantStatus; to: "active" | "suspended"; action: "tenant.suspend" | "tenant.activate" };
