@@ -14,6 +14,7 @@ import { RealtimeAgendaRefresh } from "./realtime-refresh";
 import { CreatedToast } from "./created-toast";
 import { AgendaDayGrid } from "./agenda-day-grid";
 import { SimpleAgendaList } from "./simple-agenda-list";
+import { clampAgendaDateISO } from "./dial-range";
 
 export default async function AgendaPage({
   params,
@@ -24,7 +25,8 @@ export default async function AgendaPage({
   const { tenant } = await requireTenantPage(tenantSlug);
 
   const todayStr = todayISO(tenant.timezone);
-  const dateISO = typeof date === "string" && isDateISO(date) ? date : todayStr;
+  // Años absurdos (?date=9999-12-31) se acotan: rompían la aritmética del dial.
+  const dateISO = typeof date === "string" && isDateISO(date) ? clampAgendaDateISO(date, todayStr) : todayStr;
   const nowMinute = dateISO === todayStr ? minutesOfDayInTz(new Date(), tenant.timezone) : null;
   const weekday = weekdayOf(dateISO);
   const { start, end } = dayRange(dateISO, tenant.timezone);

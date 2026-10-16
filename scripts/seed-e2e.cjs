@@ -65,6 +65,16 @@ async function main() {
   }));
   for (const user of primerIngresoUsers) await upsertUser(user);
 
+  // Admin de plataforma + un local propio para apagar/prender sin tocar e2e-nails.
+  await upsertUser({ uid: "e2e_platform_admin_uid", email: "e2e-platform-admin@turncreate.test", password: "Plataforma2026!" });
+  await db.collection("users").doc("e2e_platform_admin_uid").set({ email: "e2e-platform-admin@turncreate.test", fullName: "E2E Admin", mustChangePassword: false });
+  await db.collection("tenants").doc("e2e_platform_tenant").set({
+    id: "e2e_platform_tenant", name: "E2E Plataforma", slug: "e2e-platform", status: "active", timezone: TIMEZONE, businessTypeId: "estetica-unas",
+    settings: { publicBookingEnabled: true, depositType: "none", depositValue: 0, depositMin: 0, slotIntervalMin: 15, minNoticeMin: 0, booksByStaff: false },
+    businessHours: [], createdAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("tenantSlugs").doc("e2e-platform").set({ tenantId: "e2e_platform_tenant" });
+
   const tenantRef = db.collection("tenants").doc(TENANT_ID);
   const batch = db.batch();
 

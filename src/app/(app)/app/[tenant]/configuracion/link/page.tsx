@@ -38,7 +38,7 @@ export default async function ConfiguracionLinkPage({ params }: PageProps<"/app/
       </SettingsSection>
 
       <SettingsSection icon={<Icon name="event_available" />} title="Reservas online" description="Para tomar reservas, tu turnero necesita todo esto:">
-        <PublicBookingToggle tenantSlug={tenant.slug} enabled={enabled} ready={ready} />
+        <PublicBookingToggle tenantSlug={tenant.slug} enabled={enabled} ready={ready} publicUrl={publicUrl} />
         <ul className="space-y-2">
           <RequirementRow
             done={tenant.settings.depositType !== "none"}

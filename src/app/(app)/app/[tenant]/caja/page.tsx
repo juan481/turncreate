@@ -1,14 +1,14 @@
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
-import { getPaymentBreakdown } from "@/server/firebase/stats";
+import { getPaymentBreakdown, getPayments, getRefundDueAppointmentIds } from "@/server/firebase/stats";
 import type { DocumentData } from "firebase-admin/firestore";
 import { awaitsDeposit, porCobrarOf, summarizeAppointments } from "@/server/firebase/stats-model";
 import { dayRange, todayISO } from "@/lib/dates";
 import { planFeatures } from "@/lib/plans";
-import { CajaClient, type AppointmentDue } from "./caja-client";
+import { CajaClient, type AppointmentDue, type RefundDueItem } from "./caja-client";
 import { CajaTabs } from "./caja-tabs";
 
-const APPOINTMENT_FIELDS = ["startsAt", "status", "total", "balance", "clientName", "staffName", "items", "serviceName"] as const;
+const APPOINTMENT_FIELDS = ["startsAt", "status", "total", "balance", "clientName", "staffName", "items", "serviceName", "awaitingTransfer", "depositDue"] as const;
 
 function toDue(id: string, item: DocumentData): AppointmentDue {
   return {
@@ -16,6 +16,7 @@ function toDue(id: string, item: DocumentData): AppointmentDue {
     startsAt: item.startsAt?.toDate?.().toISOString?.() ?? "",
     total: Number(item.total ?? 0),
     balance: Number(item.balance ?? 0),
+    depositDue: Number(item.depositDue ?? 0),
     clientName: String(item.clientName ?? ""),
     staffName: String(item.staffName ?? ""),
     serviceNames: Array.isArray(item.items)
@@ -62,15 +63,34 @@ export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja
 
   // "Por cobrar" con la definición única (stats-model.ts): confirmados y
   // completados con saldo. Los pending_payment se listan aparte: todavía
-  // esperan la seña, pero si pagan acá se confirman.
+  // esperan la seña, pero si pagan acá se confirman. Los que esperan una
+  // transferencia NO se cobran acá (no es el saldo lo que falta, es
+  // confirmar la seña): van en su propia lista con "Confirmar transferencia".
   const due: AppointmentDue[] = [];
   const awaitingDeposit: AppointmentDue[] = [];
+  const awaitingTransfer: AppointmentDue[] = [];
   for (const doc of appointments.docs) {
     const data = doc.data();
     const item = toDue(doc.id, data);
     if (!item.startsAt) continue;
     if (porCobrarOf(data) > 0) due.push(item);
+    else if (awaitsDeposit(data) && data.awaitingTransfer === true) awaitingTransfer.push(item);
     else if (awaitsDeposit(data) && item.balance > 0) awaitingDeposit.push(item);
+  }
+
+  // Turnos detrás del "A devolver" de hoy, para poder abrir cada uno y
+  // marcar la seña devuelta. Pagos y turnos a devolver ya están en caché
+  // del request (los leyó getPaymentBreakdown): solo se leen los nombres.
+  const refundDue: RefundDueItem[] = [];
+  if (paymentBreakdown.refundDue.count > 0) {
+    const [todayPayments, refundIds] = await Promise.all([getPayments(tenant.id, range), getRefundDueAppointmentIds(tenant.id)]);
+    const ids = [...new Set(todayPayments.map((payment) => payment.appointmentId).filter((id): id is string => id !== null && refundIds.has(id)))];
+    if (ids.length > 0) {
+      const docs = await db.getAll(...ids.map((id) => ref.collection("appointments").doc(id)), { fieldMask: ["clientName"] });
+      for (const doc of docs) {
+        refundDue.push({ id: doc.id, clientName: String(doc.data()?.clientName ?? ""), href: `/app/${tenantSlug}/agenda/${doc.id}` });
+      }
+    }
   }
 
   const paymentsByMethod = Object.fromEntries(
@@ -91,11 +111,13 @@ export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja
         } : null}
         appointments={due}
         awaitingDeposit={awaitingDeposit}
+        awaitingTransfer={awaitingTransfer}
         totals={{
           cobrado: paymentBreakdown.gross,
           porCobrar: summarizeAppointments(appointments.docs.map((doc) => doc.data())).porCobrar,
           aDevolver: paymentBreakdown.refundDue.gross,
           aDevolverCount: paymentBreakdown.refundDue.count,
+          refundDue,
         }}
         products={products.docs.map((doc) => ({ id: doc.id, name: String(doc.data().name ?? ""), price: Number(doc.data().price ?? 0) }))}
         movements={movements?.docs.map((doc) => ({

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
-import { formatTimeInTz, toDateISOInTz } from "@/lib/dates";
+import { formatInTz, formatTimeInTz, toDateISOInTz } from "@/lib/dates";
+import { isRefundDue } from "@/server/firebase/stats-model";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
 import { Avatar } from "@/components/ui/avatar";
@@ -11,6 +12,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { StatusActions } from "./status-actions";
 import { RescheduleButton } from "./reschedule-button";
+import { RefundButton } from "./refund-button";
 import { TransferDecision } from "../../transferencias/transfer-decision";
 import { moneyLabel, transferTimeLeftLabel } from "@/server/public-booking/payment-methods";
 
@@ -63,6 +65,12 @@ export default async function AppointmentDetailPage({
   const transferExpiresAt: Date | null = appointment.transferExpiresAt?.toDate?.() ?? null;
   const depositDue = Number(appointment.depositDue ?? 0);
   const canCharge = !awaitingTransfer && balance > 0 && (appointment.status === "confirmed" || appointment.status === "pending_payment");
+  // Mismo criterio que "A devolver" en Caja/Reportes (stats-model.ts).
+  const refundDue = isRefundDue(appointment);
+  const depositRefunded = appointment.status === "cancelled" && appointment.depositRefunded === true;
+  // Reservas por transferencia sin confirmar todavía no tienen ficha (se
+  // arma al confirmar la seña): el nombre se muestra sin link.
+  const clientId = typeof appointment.clientId === "string" && appointment.clientId ? appointment.clientId : null;
 
   return (
     <div className="mx-auto max-w-[32rem] space-y-lg">
@@ -105,12 +113,16 @@ export default async function AppointmentDetailPage({
         <div className="flex flex-col gap-md rounded-inner bg-surface-container-low p-lg">
           <div className="flex items-center gap-md">
             <Avatar name={clientName} src={clientPhoto} size="lg" />
-            <Link
-              href={`/app/${tenantSlug}/clientes/${appointment.clientId}`}
-              className="font-headline-sm text-headline-sm text-on-surface hover:underline"
-            >
-              {clientName}
-            </Link>
+            {clientId ? (
+              <Link
+                href={`/app/${tenantSlug}/clientes/${clientId}`}
+                className="min-w-0 truncate font-headline-sm text-headline-sm text-on-surface hover:underline"
+              >
+                {clientName}
+              </Link>
+            ) : (
+              <span className="min-w-0 truncate font-headline-sm text-headline-sm text-on-surface">{clientName}</span>
+            )}
           </div>
           <div className="flex items-center justify-between font-body-sm text-body-sm text-on-surface-variant">
             <span className="flex items-center gap-1.5">
@@ -187,7 +199,30 @@ export default async function AppointmentDetailPage({
             Motivo: {appointment.cancelReason}
           </p>
         )}
-        {appointment.note && <div className="rounded-inner bg-surface-container-low p-md"><p className="font-label-sm text-label-sm text-on-surface-variant">Nota del turno</p><p className="mt-1 whitespace-pre-wrap break-words font-body-md text-body-md text-on-surface">{String(appointment.note)}</p></div>}
+        {refundDue && (
+          <div className="space-y-md rounded-inner border border-status-alert/30 bg-status-alert-bg p-lg">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface text-status-alert">
+                <Icon name="warning" className="text-[20px]" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-label-lg text-label-lg text-on-surface">Seña a devolver</p>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                  Cancelaste este turno y elegiste devolver la seña de <strong className="tabular-nums text-on-surface">{moneyLabel(depositPaid)}</strong>. Cuando se la devuelvas, marcala acá para que deje de figurar en &ldquo;A devolver&rdquo;.
+                </p>
+              </div>
+            </div>
+            <RefundButton tenantSlug={tenantSlug} appointmentId={appointmentDoc.id} amountLabel={moneyLabel(depositPaid)} />
+          </div>
+        )}
+        {depositRefunded && (
+          <p className="flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant">
+            <Icon name="check_circle" className="text-[16px] text-status-confirmed" />
+            Seña devuelta
+            {appointment.depositRefundedAt?.toDate ? ` el ${formatInTz(appointment.depositRefundedAt.toDate(), tenant.timezone, { day: "numeric", month: "numeric" })}` : ""}
+          </p>
+        )}
+        {appointment.note &&<div className="rounded-inner bg-surface-container-low p-md"><p className="font-label-sm text-label-sm text-on-surface-variant">Nota del turno</p><p className="mt-1 whitespace-pre-wrap break-words font-body-md text-body-md text-on-surface">{String(appointment.note)}</p></div>}
 
         {/* Cobrar: el flujo real de cobro vive en /caja (abre/cierra caja,
             suma productos, elige método) -- esa pantalla no acepta todavía

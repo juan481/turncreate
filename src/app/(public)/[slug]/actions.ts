@@ -19,8 +19,9 @@ import { assertPublicBookingRate } from "@/server/public-booking/rate-limit";
 import {
   bookingAvailability,
   isTransferReady,
+  PUBLIC_HOLD_MINUTES,
   TRANSFER_MIN_LEAD_HOURS,
-  transferAllowedFor,
+  transferSlotOfferable,
   type BookingAvailability,
 } from "@/server/public-booking/payment-methods";
 import { createTransferAppointment, getTransferInstructions } from "@/server/public-booking/transfer";
@@ -121,11 +122,13 @@ export async function getAvailableSlots(tenantId: string, serviceId: string, sta
   const starts = await listAvailableStarts({ tenantId, tenant, serviceId, staffId, dateISO, timezone: tenant.timezone });
   // Si la seña solo se puede pagar por transferencia, no se ofrecen los
   // horarios demasiado cercanos (no hay tiempo de esperar el comprobante).
+  // Mismo margen que al tomar el horario: anticipación mínima + lo que dura
+  // el hold, así no se ofrece uno que createTransferAppointment rechazaría.
   if (isTransferReady(tenant.settings.payments?.transfer)) {
     const booking = await tenantBooking(tenant);
     if (!booking.methods.mercadopago) {
       const now = new Date();
-      return starts.filter((date) => transferAllowedFor(date, now)).map((date) => date.toISOString());
+      return starts.filter((date) => transferSlotOfferable(date, now)).map((date) => date.toISOString());
     }
   }
   return starts.map((date) => date.toISOString());
@@ -145,7 +148,7 @@ async function holdSlot(tenantId: string, serviceId: string, staffId: string | "
   if (!service.active || !service.public) throw new Error("El servicio no está disponible para reservas online");
   const start = new Date(typeof startsAtISO === "string" ? startsAtISO : "");
   if (Number.isNaN(start.getTime())) throw new Error("Horario invalido");
-  if (!booking.methods.mercadopago && !transferAllowedFor(start)) {
+  if (!booking.methods.mercadopago && !transferSlotOfferable(start)) {
     throw new Error(`Ese horario está muy cerca: para pagar la seña por transferencia elegí uno con al menos ${TRANSFER_MIN_LEAD_HOURS} h de anticipación.`);
   }
   const dateISO = toDateISOInTz(start, tenant.timezone);
@@ -175,7 +178,7 @@ async function holdSlot(tenantId: string, serviceId: string, staffId: string | "
       const existing = await transaction.getAll(...slots);
       if (existing.some((doc) => doc.exists && (!doc.data()?.expiresAt || doc.data()?.expiresAt.toDate() > new Date()))) continue;
       selected = candidate;
-      const expiresAt = Timestamp.fromDate(new Date(Date.now() + 10 * 60_000));
+      const expiresAt = Timestamp.fromDate(new Date(Date.now() + PUBLIC_HOLD_MINUTES * 60_000));
       slots.forEach((slot) => transaction.set(slot, { holdId: holdRef.id, tenantId, expiresAt }));
       transaction.create(holdRef, { id: holdRef.id, tenantId, staffId: selected, serviceId, startsAt: Timestamp.fromDate(start), endsAt: Timestamp.fromDate(end), expiresAt, createdAt: FieldValue.serverTimestamp() });
       break;

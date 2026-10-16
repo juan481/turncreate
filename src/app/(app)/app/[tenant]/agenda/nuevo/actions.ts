@@ -132,6 +132,7 @@ export async function confirmAppointment(
       depositAmount: depositAmount > 0 ? depositAmount : keptDeposit,
       depositMethod: depositAmount > 0 ? depositMethod : undefined,
       rescheduledFromId,
+      changedBy: user.uid,
       appointmentNote,
     });
   } catch (error) {

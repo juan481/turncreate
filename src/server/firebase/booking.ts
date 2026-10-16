@@ -6,6 +6,8 @@ import { dayBoundsUTC, instantToMinutes, minutesToInstant, timeToMinutes } from 
 import { minutesOfDayInTz, toDateISOInTz, weekdayOf } from "@/lib/dates";
 import type { TenantRecord } from "./tenants";
 import { paymentDocument, type PaymentMethod } from "@/domain/money/payment";
+import { rescheduleBlockReason } from "@/domain/booking/reschedule";
+import { clampDepositToPrice } from "@/domain/money/deposit";
 
 /**
  * Motor de disponibilidad y reserva compartido por el turnero público y la
@@ -240,6 +242,8 @@ export type CreateAppointmentInput = {
   appointmentNote?: string | null;
   /** Si viene de reprogramar otro turno: se cancela y libera el original en la misma transacción. */
   rescheduledFromId?: string;
+  /** uid de quien reprograma (historial del turno original). */
+  changedBy?: string;
 };
 
 /**
@@ -270,7 +274,8 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
     .map((h) => ({ start: timeToMinutes(h.opensAt), end: timeToMinutes(h.closesAt) }));
   const requestedStartMinutes = minutesOfDayInTz(startsAt, input.tenant.timezone);
 
-  const deposit = Math.max(0, input.depositAmount ?? 0);
+  // [0, precio] y nunca NaN/Infinity: el monto llega de un form del panel.
+  const deposit = clampDepositToPrice(input.depositAmount, service.price);
   const appointmentRef = tenantRef.collection("appointments").doc();
   const openCash = input.depositMethod === "cash" && deposit > 0
     ? await tenantRef.collection("cashSessions").where("closedAt", "==", null).limit(1).get()
@@ -283,6 +288,12 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
     if (input.rescheduledFromId) {
       oldAppointmentRef = tenantRef.collection("appointments").doc(input.rescheduledFromId);
       oldAppointment = await transaction.get(oldAppointmentRef);
+      // Se relee ADENTRO de la transacción: entre que la dueña abrió
+      // "Reprogramar" y confirmó, el turno pudo cancelarse, vencer o quedar
+      // esperando una transferencia. Solo se mueven confirmed/pending_payment
+      // comunes (ver domain/booking/reschedule.ts).
+      const blocked = rescheduleBlockReason(oldAppointment.exists ? oldAppointment.data() : null);
+      if (blocked) throw new Error(blocked);
     }
 
     const clientSnapshot = await transaction.get(tenantRef.collection("clients").doc(input.clientId));
@@ -436,8 +447,13 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
       transaction.update(oldAppointmentRef, {
         status: "cancelled",
         cancelReason: "Reprogramado",
+        cancelSource: "rescheduled",
+        rescheduledToId: appointmentRef.id,
+        cancelledAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      const historyRef = oldAppointmentRef.collection("statusHistory").doc();
+      transaction.create(historyRef, { id: historyRef.id, from: oldData.status, to: "cancelled", reason: "Reprogramado", depositDisposition: null, changedBy: input.changedBy ?? null, createdAt: FieldValue.serverTimestamp() });
     }
 
     return selected;

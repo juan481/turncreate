@@ -11,6 +11,7 @@ import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
 import { cancelAppointmentAction } from "./actions";
 import { TransferInstructions } from "../../transfer-instructions";
 import { buildTransferPanel } from "../../transfer-panel";
+import { publicCancelReason } from "./public-cancel-reason";
 
 export default async function MiTurnoPage({
   params,
@@ -136,9 +137,11 @@ export default async function MiTurnoPage({
             </div>
           )}
 
-          {appointment.status === "cancelled" && data.cancelReason && (
+          {/* Solo un motivo fijo derivado de campos del sistema: el texto
+              libre de la dueña (cancelReason) puede tener notas internas. */}
+          {appointment.status === "cancelled" && (
             <p className="rounded-inner bg-surface-container-low px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">
-              Motivo: {String(data.cancelReason)}
+              {publicCancelReason(data)}
             </p>
           )}
         </div>

@@ -53,7 +53,7 @@ export function ClientsList({ tenantSlug, clients }: { tenantSlug: string; clien
   return (
     <div className="space-y-md">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 sm:max-w-xs">
+        <div className="relative flex-1 sm:max-w-[20rem]">
           <Icon
             name="search"
             className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[18px] text-on-surface-variant"

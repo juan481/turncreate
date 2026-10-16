@@ -5,6 +5,8 @@
  * cobraría de más).
  * No importa Next ni la base de datos: función pura, testeable sin infraestructura.
  */
+import { roundMoney } from "./payment";
+
 export type DepositPolicy =
   | { type: "none" }
   | { type: "percent"; value: number; min: number }
@@ -22,4 +24,18 @@ export function calculateDeposit(
       : policy.value;
 
   return Math.min(Math.max(0, totalAmount), Math.max(raw, policy.min));
+}
+
+/**
+ * Seña cargada a mano (turno manual / reprogramación): nunca negativa ni
+ * mayor al precio del servicio (una seña de más deja el saldo en negativo e
+ * infla "Cobrado"). Un valor no numérico (NaN/Infinity desde un form
+ * adulterado) se rechaza en vez de guardarse.
+ */
+export function clampDepositToPrice(amount: number | undefined, price: number): number {
+  const raw = amount ?? 0;
+  if (!Number.isFinite(raw)) throw new Error("El monto de la seña no es válido");
+  const cap = Number.isFinite(price) ? Math.max(0, price) : 0;
+  const clamped = Math.min(cap, Math.max(0, raw));
+  return roundMoney(clamped);
 }

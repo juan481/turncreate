@@ -64,10 +64,10 @@ test("alta de un local nuevo: registro, onboarding mobile, pantalla de creación
   // Inicio: checklist simple de 3 pasos.
   await expect(page).toHaveURL(new RegExp(`/app/unas-lumiere-${stamp.toLowerCase()}$`), { timeout: 15_000 });
   await expect(page.getByText("Terminá de preparar tu turnero")).toBeVisible();
-  await expect(page.getByText("0/3")).toBeVisible();
+  await expect(page.getByText("0/4")).toBeVisible();
   await expect(page.getByText("Cargá tu logo")).toBeVisible();
   await expect(page.getByText("Cargá tus servicios y precios")).toBeVisible();
-  await expect(page.getByText("Conectá tu cuenta de Mercado Pago")).toBeVisible();
+  await expect(page.getByText("Elegí cómo cobrar la seña")).toBeVisible();
   // Sin turnos hoy: no aparece ninguna sección de pendientes ni texto de "no hay turnos".
   await expect(page.getByText("Pendientes de hoy")).toHaveCount(0);
   await expect(page.getByText(/no hay turnos/i)).toHaveCount(0);

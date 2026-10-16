@@ -6,7 +6,10 @@
  * el que muestra el formulario.
  */
 
-export type StaffOption = { id: string; displayName: string; photoUrl: string | null; serviceIds: string[] };
+import { calculateDeposit } from "@/domain/money/deposit";
+import { roundMoney } from "@/domain/money/payment";
+
+export type StaffOption ={ id: string; displayName: string; photoUrl: string | null; serviceIds: string[] };
 export type ServiceOption = { id: string; name: string; price: number };
 export type DepositRule = { type: "none" | "fixed" | "percent"; value: number; min: number };
 
@@ -42,9 +45,12 @@ export function resolveStaffId(staff: StaffOption[], serviceId: string, current:
   return "";
 }
 
-/** Seña sugerida según la configuración del local (mismo cálculo que había en la página). */
+/**
+ * Seña sugerida según la configuración del local: EXACTAMENTE la misma que
+ * cobra el turnero público (calculateDeposit + roundMoney, como en
+ * public-booking/transfer.ts): nunca menor al mínimo ni mayor al precio.
+ */
 export function suggestedDepositFor(price: number, rule: DepositRule): number {
-  if (rule.type === "percent") return Math.max(Math.round((price * rule.value) / 100), rule.min);
-  if (rule.type === "fixed") return Math.max(rule.value, rule.min);
-  return 0;
+  if (rule.type === "none") return 0;
+  return roundMoney(calculateDeposit(price, { type: rule.type, value: rule.value, min: rule.min }));
 }

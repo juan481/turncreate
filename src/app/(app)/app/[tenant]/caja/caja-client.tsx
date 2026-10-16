@@ -1,7 +1,11 @@
 "use client";
 
-import { useActionState, useId, useState } from "react";
+import { useActionState, useId, useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatInTz, formatTimeInTz } from "@/lib/dates";
+import { useToast } from "@/components/ui/toast";
+import { confirmTransferAction } from "../transferencias/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,10 +31,14 @@ export type AppointmentDue = {
   startsAt: string;
   total: number;
   balance: number;
+  /** Seña pedida (turnos que esperan transferencia). */
+  depositDue?: number;
   clientName: string;
   staffName: string;
   serviceNames: string;
 };
+/** Turno detrás del "A devolver" de hoy (para abrirlo y marcar la seña devuelta). */
+export type RefundDueItem = { id: string; clientName: string; href: string };
 type Product = { id: string; name: string; price: number };
 type Movement = { id: string; type: string; amount: number; reason: string; createdAt: string };
 type LastClosedSession = {
@@ -40,7 +48,7 @@ type LastClosedSession = {
   difference: number;
 } | null;
 /** Mismas definiciones que la home y Reportes (src/server/firebase/stats-model.ts). */
-export type DayTotals = { cobrado: number; porCobrar: number; aDevolver: number; aDevolverCount: number };
+export type DayTotals = { cobrado: number; porCobrar: number; aDevolver: number; aDevolverCount: number; refundDue?: RefundDueItem[] };
 
 const initialCajaState: CajaActionState = { error: null };
 const initialChargeState: ChargeActionState = { error: null };
@@ -104,13 +112,30 @@ function DayTotalsTiles({ totals }: { totals: DayTotals }) {
         />
       </div>
       {totals.aDevolver > 0 && (
-        <p className="flex min-w-0 items-start gap-2 rounded-inner bg-status-alert-bg px-3 py-2.5 font-body-sm text-body-sm text-status-alert">
-          <Icon name="warning" className="mt-0.5 shrink-0 text-[14px]" />
-          <span className="min-w-0">
-            <span className="tabular-nums">{money(totals.aDevolver)}</span> a devolver ({totals.aDevolverCount} seña
-            {totals.aDevolverCount === 1 ? "" : "s"} de turnos cancelados). No suma en lo cobrado.
-          </span>
-        </p>
+        <div className="space-y-2 rounded-inner bg-status-alert-bg px-3 py-2.5 font-body-sm text-body-sm text-status-alert">
+          <p className="flex min-w-0 items-start gap-2">
+            <Icon name="warning" className="mt-0.5 shrink-0 text-[14px]" />
+            <span className="min-w-0">
+              <span className="tabular-nums">{money(totals.aDevolver)}</span> a devolver ({totals.aDevolverCount} seña
+              {totals.aDevolverCount === 1 ? "" : "s"} de turnos cancelados). No suma en lo cobrado.
+              {totals.refundDue && totals.refundDue.length > 0 && " Cuando la devuelvas, abrí el turno y tocá “Marcar seña devuelta”."}
+            </span>
+          </p>
+          {totals.refundDue && totals.refundDue.length > 0 && (
+            <div className="flex flex-wrap gap-2 pl-[22px]">
+              {totals.refundDue.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="flex h-11 max-w-full min-w-0 items-center gap-1 rounded-pill bg-surface px-3 font-label-sm text-label-sm text-on-surface transition-colors hover:bg-surface-muted"
+                >
+                  <span className="truncate">{item.clientName || "Ver turno"}</span>
+                  <Icon name="chevron_right" className="shrink-0 text-[16px]" />
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -331,13 +356,77 @@ function ChargeRow({
 }
 
 /**
+ * Turno del turnero público que espera la seña por transferencia. No se
+ * "cobra" acá (no falta el saldo, falta confirmar la seña): el botón usa el
+ * mismo camino que /transferencias (confirmTransferDeposit), que registra la
+ * seña exacta, confirma el turno y arma la ficha de la clienta.
+ */
+function TransferRow({ appointment, timezone, tenantSlug, showStaff }: { appointment: AppointmentDue; timezone: string; tenantSlug: string; showStaff: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const deposit = appointment.depositDue ?? 0;
+
+  const confirm = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await confirmTransferAction(tenantSlug, appointment.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      toast.show(result.message);
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className="space-y-2 rounded-inner bg-surface-container-low p-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar name={appointment.clientName} size="sm" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-label-lg text-label-lg text-on-surface">
+            <span className="tabular-nums">{formatTimeInTz(appointment.startsAt, timezone)}</span> · {appointment.clientName}
+          </p>
+          <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
+            {appointment.serviceNames}
+            {showStaff && appointment.staffName ? ` · ${appointment.staffName}` : ""}
+          </p>
+          <StatusDot tone="pending">Esperando transferencia</StatusDot>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-label-lg text-label-lg tabular-nums text-on-surface">{money(deposit)}</p>
+          <p className="font-label-sm text-label-sm text-on-surface-variant">seña</p>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button type="button" className="w-full sm:w-auto" disabled={pending} onClick={confirm}>
+          <Icon name="check_circle" className="text-[18px]" />
+          {pending ? "Confirmando…" : "Confirmar transferencia"}
+        </Button>
+        <Link
+          href={`/app/${tenantSlug}/transferencias`}
+          className="flex h-11 items-center justify-center rounded-pill px-3 font-label-md text-label-md text-on-surface-variant transition-colors hover:text-on-surface"
+        >
+          Ver en Transferencias
+        </Link>
+      </div>
+      {error && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{error}</p>}
+    </div>
+  );
+}
+
+/**
  * Lista de cobros del día. "Por cobrar" (confirmados/completados con saldo)
  * arriba; abajo, aparte, los que todavía esperan la seña (no suman en "Por
- * cobrar", pero si la clienta paga acá, el turno queda confirmado).
+ * cobrar", pero si la clienta paga acá, el turno queda confirmado) y los que
+ * esperan una transferencia (se confirman, no se cobran).
  */
 function ChargeList({
   appointments,
   awaitingDeposit,
+  awaitingTransfer,
   timezone,
   tenantSlug,
   sessionId,
@@ -347,6 +436,7 @@ function ChargeList({
 }: {
   appointments: AppointmentDue[];
   awaitingDeposit: AppointmentDue[];
+  awaitingTransfer: AppointmentDue[];
   timezone: string;
   tenantSlug: string;
   sessionId: string;
@@ -388,6 +478,16 @@ function ChargeList({
             Esperan la seña · no suman en &quot;por cobrar&quot;
           </p>
           {awaitingDeposit.map((appointment) => row(appointment, true))}
+        </div>
+      )}
+      {awaitingTransfer.length > 0 && (
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="font-label-md text-label-md text-on-surface-variant">
+            Esperan la transferencia de la seña · confirmala cuando veas el comprobante
+          </p>
+          {awaitingTransfer.map((appointment) => (
+            <TransferRow key={appointment.id} appointment={appointment} timezone={timezone} tenantSlug={tenantSlug} showStaff={showStaff} />
+          ))}
         </div>
       )}
     </Card>
@@ -450,6 +550,7 @@ function DirectCaja({
   timezone,
   appointments,
   awaitingDeposit,
+  awaitingTransfer,
   products,
   paymentsByMethod,
   totals,
@@ -458,6 +559,7 @@ function DirectCaja({
   timezone: string;
   appointments: AppointmentDue[];
   awaitingDeposit: AppointmentDue[];
+  awaitingTransfer: AppointmentDue[];
   products: Product[];
   paymentsByMethod: Record<string, number>;
   totals: DayTotals;
@@ -479,6 +581,7 @@ function DirectCaja({
         <ChargeList
           appointments={appointments}
           awaitingDeposit={awaitingDeposit}
+          awaitingTransfer={awaitingTransfer}
           timezone={timezone}
           tenantSlug={tenantSlug}
           sessionId=""
@@ -498,6 +601,7 @@ export function CajaClient({
   session,
   appointments,
   awaitingDeposit,
+  awaitingTransfer,
   products,
   movements,
   lastClosedSession,
@@ -510,6 +614,7 @@ export function CajaClient({
   session: Session;
   appointments: AppointmentDue[];
   awaitingDeposit: AppointmentDue[];
+  awaitingTransfer: AppointmentDue[];
   products: Product[];
   movements: Movement[];
   lastClosedSession: LastClosedSession;
@@ -529,6 +634,7 @@ export function CajaClient({
         timezone={timezone}
         appointments={appointments}
         awaitingDeposit={awaitingDeposit}
+        awaitingTransfer={awaitingTransfer}
         products={products}
         paymentsByMethod={paymentsByMethod}
         totals={totals}
@@ -611,6 +717,7 @@ export function CajaClient({
         <ChargeList
           appointments={appointments}
           awaitingDeposit={awaitingDeposit}
+          awaitingTransfer={awaitingTransfer}
           timezone={timezone}
           tenantSlug={tenantSlug}
           sessionId={session.id}

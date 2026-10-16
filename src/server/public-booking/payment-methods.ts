@@ -15,6 +15,14 @@ export const TRANSFER_MIN_LEAD_HOURS = 2;
 export const TRANSFER_DEADLINE_BEFORE_START_HOURS = 1;
 /** Transferencias sin confirmar que puede tener abiertas un mismo WhatsApp en un local. */
 export const MAX_PENDING_TRANSFERS_PER_PHONE = 2;
+/**
+ * Transferencias sin confirmar que puede tener abiertas un local en total:
+ * sin este tope, alguien rotando números de WhatsApp podría ocupar media
+ * agenda con turnos que nunca se pagan.
+ */
+export const MAX_PENDING_TRANSFERS_PER_TENANT = 10;
+/** Lo que dura el hold del turnero público (el horario queda tomado mientras la clienta completa sus datos). */
+export const PUBLIC_HOLD_MINUTES = 10;
 
 export type PublicPaymentMethods = { mercadopago: boolean; transfer: boolean };
 
@@ -53,6 +61,29 @@ export function bookingAvailability(tenant: TenantPaymentSettings, mpConnected: 
 /** ¿Hay margen para esperar una transferencia antes de este turno? */
 export function transferAllowedFor(startsAt: Date, now: Date = new Date()): boolean {
   return startsAt.getTime() - now.getTime() >= TRANSFER_MIN_LEAD_HOURS * HOUR_MS;
+}
+
+/**
+ * ¿Se puede OFRECER este horario a quien solo puede pagar por transferencia?
+ * Más estricto que `transferAllowedFor`: entre que toma el horario (hold) y
+ * confirma la reserva pueden pasar hasta PUBLIC_HOLD_MINUTES, y al confirmar
+ * se vuelve a exigir TRANSFER_MIN_LEAD_HOURS. Sin este margen, un horario
+ * ofrecido con 2 h 05 min de anticipación se rechazaba al final del flujo.
+ */
+export function transferSlotOfferable(startsAt: Date, now: Date = new Date()): boolean {
+  return transferAllowedFor(startsAt, new Date(now.getTime() + PUBLIC_HOLD_MINUTES * 60_000));
+}
+
+/**
+ * Turnos que siguen esperando transferencia según el contador por teléfono
+ * (`pendingTransferPhones`: appointmentId -> vencimiento en ms). Los
+ * vencidos no cuentan aunque el cron todavía no los haya limpiado.
+ */
+export function activePendingIds(entries: Record<string, unknown> | null | undefined, nowMs: number): string[] {
+  if (!entries || typeof entries !== "object") return [];
+  return Object.entries(entries)
+    .filter(([, expiresAt]) => typeof expiresAt === "number" && expiresAt > nowMs)
+    .map(([id]) => id);
 }
 
 /**

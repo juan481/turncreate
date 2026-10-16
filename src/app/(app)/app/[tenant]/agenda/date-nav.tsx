@@ -3,9 +3,8 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { Icon } from "@/components/ui/icon";
 import { DayDial, type DayDialItem } from "@/components/ui/day-dial";
 import { addDaysISO, dayRange, monthLabel, todayISO, toDateISOInTz } from "@/lib/dates";
+import { clampAgendaDateISO, dialBounds } from "./dial-range";
 
-/** Días a cada lado de hoy que ofrece el dial (siempre incluye el día elegido). */
-const DIAL_RANGE_DAYS = 60;
 /**
  * Días a cada lado del día elegido para los que se cuentan turnos (el
  * puntito del dial). No se cuenta todo el dial: serían ~120 días de
@@ -36,8 +35,8 @@ export async function DateNav({
   dateISO: string;
 }) {
   const today = todayISO(timezone);
-  const minDialISO = [addDaysISO(today, -DIAL_RANGE_DAYS), addDaysISO(dateISO, -7)].sort()[0];
-  const maxDialISO = [addDaysISO(today, DIAL_RANGE_DAYS), addDaysISO(dateISO, 7)].sort()[1];
+  // Acotado a ±60 días del día elegido (ver dial-range.ts): un ?date= lejano no arma un dial gigante.
+  const { minISO: minDialISO, maxISO: maxDialISO } = dialBounds(clampAgendaDateISO(dateISO, today), today);
 
   const countFromISO = addDaysISO(dateISO, -COUNT_RANGE_DAYS);
   const countToISO = addDaysISO(dateISO, COUNT_RANGE_DAYS);

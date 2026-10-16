@@ -175,6 +175,16 @@ describe("A devolver (señas refund_required)", () => {
     expect(day.breakdown.gross).toBe(0);
     expect(day.breakdown.refundDue.gross).toBe(300);
   });
+
+  it("\"Marcar seña devuelta\" (depositRefunded + pagos refunded) la saca de A devolver y de Cobrado", () => {
+    const appointment = { status: "cancelled", depositDisposition: "refund_required", depositRefunded: true };
+    const refundIds = new Set(isRefundDue(appointment) ? ["t1"] : []);
+    const payments = [normalizePayment("p1", { appointmentId: "t1", status: "refunded", grossAmount: 3000 })]
+      .filter((p): p is NormalizedPayment => p !== null);
+    const breakdown = summarizePayments(payments, refundIds);
+    expect(breakdown.refundDue).toEqual({ gross: 0, net: 0, count: 0 });
+    expect(breakdown.gross).toBe(0);
+  });
 });
 
 describe("Por cobrar: saldo de turnos firmes", () => {

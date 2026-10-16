@@ -209,6 +209,63 @@
   --animate-icon-rise: icon-rise 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   /* Ítems del speed-dial del +: se escalonan con animation-delay inline. */
   --animate-dial-in: dial-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* Celebración "¡Turnero habilitado!": tarjeta, check y papelitos. */
+  --animate-celebrate-card: celebrate-card 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-celebrate-check: celebrate-check 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+  --animate-celebrate-ring: celebrate-ring 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+  --animate-confetti: confetti 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes celebrate-card {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes celebrate-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-25deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12) rotate(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes celebrate-ring {
+  from {
+    opacity: 0.55;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+/* Cada papelito recibe su destino en --dx / --dy / --rot (style inline). */
+@keyframes confetti {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0) scale(0.4);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+  }
 }
 
 @keyframes greet-in {

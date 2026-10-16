@@ -289,5 +289,7 @@ export async function requireTenantAccess(uid: string, slug: string) {
   if (!tenant) throw new Error("El local no existe");
   const member = await getTenantMember(uid, tenant.id);
   if (!member || member.status !== "active") throw new Error("No tenés acceso a este local");
+  // Local apagado desde /platform: ninguna server action del panel opera sobre él.
+  if (tenant.status === "suspended") throw new Error("Esta cuenta está suspendida. Escribinos para reactivarla.");
   return { tenant, member };
 }

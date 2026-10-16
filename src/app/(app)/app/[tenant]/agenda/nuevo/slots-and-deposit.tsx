@@ -143,9 +143,10 @@ export function SummaryStep({
                 type="number"
                 inputMode="decimal"
                 min="0"
+                max={service.price}
                 step="0.01"
                 value={amount}
-                onChange={(e) => setAmount(Number(e.target.value) || 0)}
+                onChange={(e) => setAmount(Math.min(service.price, Math.max(0, Number(e.target.value) || 0)))}
                 className="w-32 tabular-nums"
               />
             </label>

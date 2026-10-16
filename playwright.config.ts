@@ -12,6 +12,8 @@ const E2E_ENV = {
   MP_E2E_STUB: "1",
   // Los 4 proyectos reservan en paralelo desde la misma IP.
   PUBLIC_BOOKING_RATE_LIMIT: "off",
+  PLATFORM_ADMIN_EMAIL: "e2e-platform-admin@turncreate.test",
+  PLATFORM_ADMIN_UID: "e2e_platform_admin_uid",
   NEXT_PUBLIC_APP_URL: "http://localhost:3100",
   ANALYTICS_HASH_SECRET: "e2e-analytics-secret",
   ANALYTICS_INTERNAL_SECRET: "e2e-analytics-internal-secret",
@@ -20,6 +22,8 @@ const E2E_ENV = {
 // de que Playwright reutilice (o se choque con) un dev server real que ya
 // esté corriendo contra Firebase de producción.
 const PORT = 3100;
+// Los specs (workers) también leen el email admin para loguearse.
+process.env.PLATFORM_ADMIN_EMAIL ??= E2E_ENV.PLATFORM_ADMIN_EMAIL;
 
 export default defineConfig({
   testDir: "./e2e",

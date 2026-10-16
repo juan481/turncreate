@@ -4,7 +4,7 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { getUserProfileSnapshot } from "@/server/firebase/user-profile";
 import { getDaySummary, getPaymentSummary, getRangeSummary } from "@/server/firebase/stats";
-import { Card } from "@/components/ui/card";
+
 import { MenuTile } from "@/components/ui/menu-tile";
 import { KpiTile } from "@/components/ui/kpi-tile";
 import { Icon } from "@/components/ui/icon";
@@ -17,6 +17,8 @@ import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { DEMO_USER_EMAIL } from "@/lib/demo";
 import { getMpConnection } from "@/server/mercadopago/connections";
 import { countPendingTransfers } from "@/server/public-booking/transfer";
+import { bookingAvailability } from "@/server/public-booking/payment-methods";
+import { TurneroSwitch } from "./turnero-switch";
 import { planFeatures } from "@/lib/plans";
 
 // Fuera del componente a propósito: el linter de React trata cualquier
@@ -123,12 +125,17 @@ export default async function TenantDashboardPage({
 
   const logoUrl = (tenant as typeof tenant & { logoUrl?: string | null }).logoUrl ?? null;
   const mpConnected = mpConnection?.status === "connected";
+  // Seña + al menos un medio de cobro (Mercado Pago conectado o transferencia lista).
+  const paymentsReady = bookingAvailability(tenant, mpConnected).enabled;
+  const turneroOn = tenant.settings.publicBookingEnabled !== false;
   const setupSteps = [
     { label: "Cargá tu logo", done: Boolean(logoUrl), href: `/app/${tenantSlug}/configuracion/local` },
     { label: "Cargá tus servicios y precios", done: servicesCount > 0, href: `/app/${tenantSlug}/servicios` },
-    { label: "Conectá tu cuenta de Mercado Pago", done: mpConnected, href: `/app/${tenantSlug}/configuracion/pagos` },
+    { label: "Elegí cómo cobrar la seña", done: paymentsReady, href: `/app/${tenantSlug}/configuracion/pagos` },
   ];
-  const setupDone = setupSteps.filter((step) => step.done).length;
+  // El 4° paso es prender el turnero (interruptor, no link): cuenta para el total.
+  const setupTotal = setupSteps.length + 1;
+  const setupDone = setupSteps.filter((step) => step.done).length + (turneroOn && paymentsReady ? 1 : 0);
 
   const monthChangePct =
     previousMonthPayments.gross > 0
@@ -162,45 +169,58 @@ export default async function TenantDashboardPage({
         </Link>
       )}
 
-      {setupDone < setupSteps.length && (
-        <Card hoverLift={false} className="space-y-3 border-primary/20 bg-primary/5 p-lg">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-headline-sm text-headline-sm text-on-surface">Terminá de preparar tu turnero</p>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Tres pasos cortos y ya podés compartir tu link.</p>
-            </div>
-            <span className="shrink-0 rounded-pill bg-surface px-2.5 py-1 font-label-xs text-label-xs tabular-nums text-secondary">
-              {setupDone}/{setupSteps.length}
-            </span>
-          </div>
-          <ol className="space-y-2">
-            {setupSteps.map((step, index) => (
-              <li key={step.label}>
-                <Link
-                  href={step.href}
-                  className={cn(
-                    "flex min-h-12 items-center gap-3 rounded-inner bg-surface px-3 py-2 transition-colors hover:bg-surface-container-low",
-                    step.done && "opacity-70",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "grid h-7 w-7 shrink-0 place-items-center rounded-full font-label-md text-label-md tabular-nums",
-                      step.done ? "bg-status-confirmed-bg text-status-confirmed" : "bg-primary text-on-primary",
-                    )}
-                  >
-                    {step.done ? <Icon name="check" className="text-[16px]" /> : index + 1}
-                  </span>
-                  <span className={cn("min-w-0 flex-1 font-label-md text-label-md text-on-surface", step.done && "line-through decoration-on-surface-variant/50")}>
-                    {step.label}
-                  </span>
-                  {!step.done && <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />}
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </Card>
-      )}
+      {/* Paso a paso + interruptor del turnero en UN contenedor que siempre se
+          renderiza: al prender el turnero el checklist se completa y desaparece,
+          pero el TurneroSwitch queda en la misma posición del árbol y conserva
+          su estado -- si viviera adentro del checklist se desmontaría con el
+          refresh y la celebración "¡Turnero habilitado!" nunca se vería. */}
+      <div
+        className={cn(
+          "space-y-3",
+          setupDone < setupTotal && "rounded-card border border-primary/20 bg-primary/5 p-lg shadow-card",
+        )}
+      >
+        {setupDone < setupTotal && (
+          <>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-headline-sm text-headline-sm text-on-surface">Terminá de preparar tu turnero</p>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant">Cuatro pasos cortos y ya podés compartir tu link.</p>
+                </div>
+                <span className="shrink-0 rounded-pill bg-surface px-2.5 py-1 font-label-xs text-label-xs tabular-nums text-secondary">
+                  {setupDone}/{setupTotal}
+                </span>
+              </div>
+              <ol className="space-y-2">
+                {setupSteps.map((step, index) => (
+                  <li key={step.label}>
+                    <Link
+                      href={step.href}
+                      className={cn(
+                        "flex min-h-12 items-center gap-3 rounded-inner bg-surface px-3 py-2 transition-colors hover:bg-surface-container-low",
+                        step.done && "opacity-70",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "grid h-7 w-7 shrink-0 place-items-center rounded-full font-label-md text-label-md tabular-nums",
+                          step.done ? "bg-status-confirmed-bg text-status-confirmed" : "bg-primary text-on-primary",
+                        )}
+                      >
+                        {step.done ? <Icon name="check" className="text-[16px]" /> : index + 1}
+                      </span>
+                      <span className={cn("min-w-0 flex-1 font-label-md text-label-md text-on-surface", step.done && "line-through decoration-on-surface-variant/50")}>
+                        {step.label}
+                      </span>
+                      {!step.done && <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />}
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+          </>
+        )}
+        <TurneroSwitch tenantSlug={tenantSlug} enabled={turneroOn} ready={paymentsReady} publicUrl={publicUrl} className={setupDone < setupTotal ? "bg-surface" : "bg-surface shadow-sm"} />
+      </div>
 
       {/* Métricas: "Cobrado hoy" es la protagonista (degradé, número
           grande, ancho completo en mobile); el resto en 2x2. grid-cols-2

@@ -6,7 +6,6 @@ import { paymentDocument, type PaymentMethod } from "@/domain/money/payment";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { requireTenantAccess } from "@/server/firebase/tenants";
-import { clearPendingTransfer } from "@/server/public-booking/transfer";
 import { planFeatures } from "@/lib/plans";
 
 export type CajaActionState = { error: string | null };
@@ -90,14 +89,17 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
     const { user, tenant } = await access(tenantSlug);
     const db = firebaseAdmin().db;
     const appointmentRef = db.collection("tenants").doc(tenant.id).collection("appointments").doc(appointmentId);
-    let clearsTransfer = false;
     await db.runTransaction(async (transaction) => {
-      // La transacción se puede reintentar: el flag se recalcula en cada intento.
-      clearsTransfer = false;
       const appointment = await transaction.get(appointmentRef);
       if (!appointment.exists) throw new Error("El turno no existe");
       const data = appointment.data()!;
       if (["cancelled", "no_show", "expired"].includes(String(data.status))) throw new Error("Este turno está cancelado o ausente, no se puede cobrar");
+      // Una seña por transferencia se confirma solo por confirmTransferDeposit
+      // (monto exacto de la seña, ficha de la clienta, contadores, fin del
+      // pendiente). Cobrarla acá como "saldo" la salteaba.
+      if (data.status === "pending_payment" && data.awaitingTransfer === true) {
+        throw new Error("Confirmá primero la transferencia en Transferencias");
+      }
       const currentBalance = Number(data.balance ?? data.total ?? 0);
       if (amount > currentBalance + 0.01) throw new Error("El monto supera el saldo pendiente");
       const productSnapshot = productId
@@ -127,15 +129,6 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
         // que entra con el turno pendiente es la seña (así, si después se
         // cancela, se pregunta qué hacer con ella).
         if (Number(data.depositPaid ?? 0) === 0) update.depositPaid = amount;
-        // Si esperaba una transferencia, ya no: el pago entró por caja. Antes
-        // quedaba `awaitingTransfer: true` en un turno confirmado (con su doc
-        // en pendingTransfers vivo) y figuraba como transferencia pendiente.
-        if (data.awaitingTransfer === true) {
-          update.awaitingTransfer = false;
-          update.transferConfirmedAt = FieldValue.serverTimestamp();
-          update.transferConfirmedBy = user.uid;
-          clearsTransfer = true;
-        }
         const historyRef = appointmentRef.collection("statusHistory").doc();
         transaction.create(historyRef, { id: historyRef.id, from: "pending_payment", to: "confirmed", reason: "Cobrado en caja", depositDisposition: null, changedBy: user.uid, createdAt: FieldValue.serverTimestamp() });
       }
@@ -150,9 +143,6 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
         transaction.create(movementRef, { id: movementRef.id, type: "in", amount: grossAmount, method, reason: `Cobro turno · ${String(data.clientName ?? "")}`.trim(), appointmentId, createdAt: FieldValue.serverTimestamp() });
       }
     });
-    // pendingTransfers es una colección raíz (la lee el cron de vencidas):
-    // se limpia después del commit, igual que en changeStatus.
-    if (clearsTransfer) await clearPendingTransfer(tenant.id, appointmentId);
     revalidateMoney(tenantSlug);
     revalidatePath(`/app/${tenantSlug}/agenda`);
     return { error: null };

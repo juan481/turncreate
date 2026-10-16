@@ -7,6 +7,11 @@ import {
   publicPaymentMethods,
   TRANSFER_CONFIRM_WINDOW_HOURS,
   transferAllowedFor,
+  transferSlotOfferable,
+  activePendingIds,
+  MAX_PENDING_TRANSFERS_PER_PHONE,
+  MAX_PENDING_TRANSFERS_PER_TENANT,
+  PUBLIC_HOLD_MINUTES,
   transferDeadline,
   transferReceiptMessage,
   transferTimeLeftLabel,
@@ -114,5 +119,35 @@ describe("moneyLabel / moneyToCopy", () => {
     expect(moneyLabel(1234.5)).toBe("$1.234,5");
     expect(moneyToCopy(5000)).toBe("5000");
     expect(moneyToCopy(1234.5)).toBe("1234,5");
+  });
+});
+
+describe("transferSlotOfferable", () => {
+  it("exige la anticipación mínima MÁS lo que dura el hold", () => {
+    const minutes = (value: number) => new Date(NOW.getTime() + value * 60_000);
+    expect(transferSlotOfferable(minutes(120), NOW)).toBe(false);
+    expect(transferSlotOfferable(minutes(120 + PUBLIC_HOLD_MINUTES - 1), NOW)).toBe(false);
+    expect(transferSlotOfferable(minutes(120 + PUBLIC_HOLD_MINUTES), NOW)).toBe(true);
+  });
+
+  it("todo horario ofrecible sigue siendo válido al confirmar al final del hold", () => {
+    const start = new Date(NOW.getTime() + (120 + PUBLIC_HOLD_MINUTES) * 60_000);
+    const atHoldEnd = new Date(NOW.getTime() + PUBLIC_HOLD_MINUTES * 60_000);
+    expect(transferSlotOfferable(start, NOW)).toBe(true);
+    expect(transferDeadline(start, atHoldEnd)).not.toBeNull();
+  });
+});
+
+describe("activePendingIds", () => {
+  it("cuenta solo las entradas que no vencieron", () => {
+    const now = NOW.getTime();
+    expect(activePendingIds({ a: now + 1000, b: now - 1, c: now, d: "x" }, now)).toEqual(["a"]);
+    expect(activePendingIds(null, now)).toEqual([]);
+    expect(activePendingIds(undefined, now)).toEqual([]);
+  });
+
+  it("los topes son chicos y el del local es mayor que el del teléfono", () => {
+    expect(MAX_PENDING_TRANSFERS_PER_PHONE).toBeGreaterThan(0);
+    expect(MAX_PENDING_TRANSFERS_PER_TENANT).toBeGreaterThan(MAX_PENDING_TRANSFERS_PER_PHONE);
   });
 });

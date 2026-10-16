@@ -5,6 +5,7 @@ import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { requireTenantAccess } from "@/server/firebase/tenants";
 import { minutesToInstant } from "@/server/availability";
 import { createInternalAppointment } from "@/server/firebase/booking";
+import { rescheduleBlockReason } from "@/domain/booking/reschedule";
 
 export type MoveAppointmentResult = { error: string | null };
 
@@ -38,9 +39,10 @@ export async function moveAppointment(
   if (!appointmentDoc.exists) return { error: "El turno no existe" };
   const appointment = appointmentDoc.data()!;
 
-  if (appointment.status !== "confirmed" && appointment.status !== "pending_payment") {
-    return { error: "Solo se pueden mover turnos pendientes o confirmados" };
-  }
+  // Chequeo temprano para el mensaje; la transacción de
+  // createInternalAppointment lo vuelve a validar con el turno releído.
+  const blocked = rescheduleBlockReason(appointment);
+  if (blocked) return { error: blocked };
 
   const items = (appointment.items ?? []) as { serviceId: string; name: string; price: number }[];
   const serviceId = items[0]?.serviceId;
@@ -61,6 +63,7 @@ export async function moveAppointment(
       clientEmail: appointment.clientEmail ?? null,
       depositAmount: Number(appointment.depositPaid ?? 0),
       rescheduledFromId: params.appointmentId,
+      changedBy: user.uid,
     });
   } catch (error) {
     return { error: error instanceof Error ? error.message : "No se pudo mover el turno" };

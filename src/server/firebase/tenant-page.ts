@@ -19,5 +19,8 @@ export const requireTenantPage = cache(async (slug: string) => {
   if (!user) redirect(`/login?next=${encodeURIComponent(`/app/${slug}`)}`);
   const member = await getTenantMember(user.uid, tenant.id);
   if (!member || member.status !== "active") notFound();
+  // Local apagado desde /platform: ni el panel ni sus datos (el turnero
+  // público ya se cierra por status en getPublicTenant/createHold).
+  if (tenant.status === "suspended") redirect(`/cuenta-suspendida?local=${encodeURIComponent(slug)}`);
   return { tenant, user, member };
 });

@@ -4,6 +4,9 @@ import { requireTenantPage } from "@/server/firebase/tenant-page";
 import { listAvailableStarts } from "@/server/firebase/booking";
 import { addDaysISO, formatTimeInTz, isDateISO, todayISO } from "@/lib/dates";
 import { Icon } from "@/components/ui/icon";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { rescheduleBlockReason } from "@/domain/booking/reschedule";
 import { TurnoForm } from "./turno-form";
 import { resolveStaffId, type DepositRule, type ServiceOption, type StaffOption } from "./booking-rules";
 
@@ -22,15 +25,23 @@ export default async function NuevoTurnoPage({
   // El día del que se vino (?date= de la agenda) es el día por defecto.
   const dateISO = isDateISO(requestedDate) && requestedDate >= firstDateISO && requestedDate <= lastDateISO ? requestedDate : firstDateISO;
   const clientId = typeof sp.clientId === "string" && sp.clientId ? sp.clientId : undefined;
-  const rescheduleFrom = typeof sp.rescheduleFrom === "string" ? sp.rescheduleFrom : undefined;
+  const rescheduleFrom = typeof sp.rescheduleFrom === "string" && sp.rescheduleFrom ? sp.rescheduleFrom : undefined;
   const keepDeposit = sp.keepDeposit !== "false";
 
   const { db } = firebaseAdmin();
-  const [staffSnapshot, servicesSnapshot, clientsSnapshot] = await Promise.all([
+  const [staffSnapshot, servicesSnapshot, clientsSnapshot, rescheduleSnapshot] = await Promise.all([
     db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
     db.collection("tenants").doc(tenant.id).collection("services").where("active", "==", true).get(),
     db.collection("tenants").doc(tenant.id).collection("clients").where("archivedAt", "==", null).get(),
+    rescheduleFrom && /^[A-Za-z0-9_-]{1,64}$/.test(rescheduleFrom)
+      ? db.collection("tenants").doc(tenant.id).collection("appointments").doc(rescheduleFrom).get()
+      : null,
   ]);
+  // ?rescheduleFrom= de un turno cancelado/vencido/esperando transferencia:
+  // no se arma el formulario (la transacción lo rechazaría igual al final).
+  const rescheduleBlocked = rescheduleFrom
+    ? rescheduleBlockReason(rescheduleSnapshot?.exists ? rescheduleSnapshot.data() : null)
+    : null;
 
   const staffList: StaffOption[] = staffSnapshot.docs.map((doc) => ({
     id: doc.id,
@@ -92,13 +103,27 @@ export default async function NuevoTurnoPage({
             <h1 className="truncate font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
               {rescheduleFrom ? "Reprogramar turno" : "Nuevo turno"}
             </h1>
-            {rescheduleFrom && (
+            {rescheduleFrom && !rescheduleBlocked && (
               <p className="mt-1 font-body-sm text-body-sm text-on-surface-variant">
                 {keepDeposit ? "Se mantiene la seña ya pagada del turno original." : "El turno nuevo arranca sin seña."}
               </p>
             )}
           </div>
 
+          {rescheduleBlocked ? (
+            <div className="space-y-md">
+              <p role="alert" className="flex items-start gap-2 rounded-inner bg-status-alert-bg px-3 py-2.5 font-body-sm text-body-sm text-status-alert">
+                <Icon name="warning" className="mt-0.5 shrink-0 text-[16px]" />
+                <span className="min-w-0">{rescheduleBlocked}</span>
+              </p>
+              <Link
+                href={rescheduleSnapshot?.exists ? `/app/${tenantSlug}/agenda/${rescheduleFrom}` : closeHref}
+                className={cn(buttonVariants({ variant: "secondary" }), "w-full justify-center")}
+              >
+                {rescheduleSnapshot?.exists ? "Volver al turno" : "Volver a la agenda"}
+              </Link>
+            </div>
+          ) : (
           <TurnoForm
             tenantSlug={tenantSlug}
             todayISO={firstDateISO}
@@ -120,6 +145,7 @@ export default async function NuevoTurnoPage({
             rescheduleFrom={rescheduleFrom}
             keepDeposit={keepDeposit}
           />
+          )}
         </div>
       </div>
     </div>

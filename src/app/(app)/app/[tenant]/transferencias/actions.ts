@@ -22,6 +22,8 @@ function refresh(slug: string, appointmentId: string) {
   revalidatePath(`/app/${slug}/transferencias`);
   revalidatePath(`/app/${slug}/agenda/${appointmentId}`);
   revalidatePath(`/app/${slug}/agenda`);
+  revalidatePath(`/app/${slug}/caja`);
+  revalidatePath(`/app/${slug}/reportes`);
   revalidatePath(`/app/${slug}`);
 }
 
