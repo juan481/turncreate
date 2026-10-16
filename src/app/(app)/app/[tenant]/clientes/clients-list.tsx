@@ -72,7 +72,7 @@ export function ClientsList({ tenantSlug, clients }: { tenantSlug: string; clien
               type="button"
               onClick={() => setSort(s.key)}
               className={cn(
-                "rounded-pill px-3 py-1.5 font-label-sm text-label-sm transition-all duration-200",
+                "flex h-11 items-center rounded-pill px-4 font-label-sm text-label-sm transition-all duration-200",
                 sort === s.key ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface",
               )}
             >

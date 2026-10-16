@@ -119,7 +119,7 @@ export default async function AgendaSemanaPage({
                         <div key={staffId} className="flex min-w-0 items-center gap-1.5">
                           <span
                             className="h-1.5 w-1.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: staff?.color ?? "#767582" }}
+                            style={{ backgroundColor: staff?.color ?? "var(--color-on-surface-variant)" }}
                           />
                           <span className="truncate font-body-sm text-body-sm text-on-surface-variant">
                             {staff?.displayName} ({count})

@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { preload } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { cn } from "@/lib/utils";
-import { checkSlugAvailability, createTenantAction } from "./actions";
-import { CreatingOverlay, JUST_CREATE_ICON } from "./creating-overlay";
 import { HoursEditor } from "@/components/ui/hours-editor";
 import { daysToHours, defaultWeek, weekError, type DayHours } from "@/components/ui/hours-editor-model";
+import { byGender, type Gender } from "@/lib/gender";
+import { cn } from "@/lib/utils";
+import { checkSlugAvailability, createTenantAction } from "./actions";
+import { CreatingOverlay } from "./creating-overlay";
+import { ImagePicker } from "./image-picker";
 
 type BusinessType = {
   id: string;
@@ -24,16 +25,22 @@ type BusinessType = {
 export type OwnerDefaults = {
   fullName: string;
   email: string;
-  gender: "female" | "male" | "unspecified" | null;
+  gender: Gender | null;
   age: string;
   avatarUrl: string | null;
 };
 
 const STEPS = [
-  { title: "Contanos de tu local", subtitle: "Con esto armamos tu turnero público." },
-  { title: "¿Cuál es tu rubro?", subtitle: "Elegí el que mejor describa tu negocio." },
-  { title: "Ahora, sobre vos", subtitle: "Estos datos identifican a la persona que atiende." },
-  { title: "¿Cuándo abrís?", subtitle: "Configurá tus días y horarios de atención." },
+  { label: "Tu local", title: "Contanos de tu local", subtitle: "Con esto armamos tu turnero público." },
+  { label: "Rubro", title: "¿Cuál es tu rubro?", subtitle: "Elegí el que mejor describa tu negocio." },
+  { label: "Vos", title: "Ahora, sobre vos", subtitle: "Así te mostramos en la agenda y sabemos cómo hablarte." },
+  { label: "Horarios", title: "¿Cuándo abrís?", subtitle: "Configurá tus días y horarios de atención." },
+];
+
+const GENDER_OPTIONS: ReadonlyArray<readonly [Gender, string]> = [
+  ["female", "Mujer"],
+  ["male", "Hombre"],
+  ["unspecified", "Prefiero no decir"],
 ];
 
 // Mínimo que se ve la pantalla de "creando": aunque Firestore responda en
@@ -41,6 +48,8 @@ const STEPS = [
 // que se armó para vos.
 const MIN_CREATING_MS = 2200;
 const DONE_MS = 900;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // "Uñas Lumière" -> "unas-lumiere": sin acentos ni eñes, que es lo que
 // acepta la URL del turnero (si no, el alta fallaba con "solo letras,
@@ -54,8 +63,17 @@ function toSlug(value: string) {
     .replace(/^-+/, "");
 }
 
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function ageProblem(value: string) {
+  if (!value.trim()) return null;
+  const age = Number(value);
+  return Number.isInteger(age) && age >= 14 && age <= 99 ? null : "Revisá tu edad (entre 14 y 99).";
+}
+
 export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]; owner: OwnerDefaults }) {
-  preload(JUST_CREATE_ICON, { as: "image" });
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [creating, setCreating] = useState(false);
@@ -69,15 +87,57 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
   const [slugTouched, setSlugTouched] = useState(false);
   const [businessTypeId, setBusinessTypeId] = useState(businessTypes[0]?.id || "");
   const [address, setAddress] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
   const [ownerName, setOwnerName] = useState(owner.fullName);
   const [ownerEmail, setOwnerEmail] = useState(owner.email);
-  const [ownerGender, setOwnerGender] = useState<"female" | "male" | "unspecified">(owner.gender ?? "unspecified");
+  const [emailTouched, setEmailTouched] = useState(false);
+  // Sin preselección: el copy se adapta a lo que elija y no a lo que supongamos.
+  const [ownerGender, setOwnerGender] = useState<Gender | null>(owner.gender);
   const [ownerAge, setOwnerAge] = useState(owner.age);
+  // Arranca con la foto que ya tenía (de un local anterior); una nueva la reemplaza.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(owner.avatarUrl);
   const [teamMode, setTeamMode] = useState<"solo" | "team">("solo");
 
   const [hours, setHours] = useState<DayHours[]>(defaultWeek);
 
   const router = useRouter();
+  // Doble envío: el estado `creating` deshabilita el botón recién en el
+  // próximo render; este ref corta un segundo toque que llegue antes.
+  const submittingRef = useRef(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const shownStep = useRef(step);
+
+  // Al cambiar de paso: arriba de todo (el de horarios es largo) y foco en
+  // el título, para que el lector de pantalla anuncie el paso nuevo. Compara
+  // con el paso ya mostrado (y no con un flag de "primer render") para que el
+  // doble efecto de StrictMode no le robe el autofocus al nombre del local.
+  useEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    headingRef.current?.focus({ preventScroll: true });
+  }, [step]);
+
+  const cleanSlug = slug.replace(/-+$/, "");
+  const firstName = ownerName.trim().split(/\s+/)[0] ?? "";
+  const emailValid = EMAIL_PATTERN.test(ownerEmail.trim());
+  const ageError = ageProblem(ownerAge);
+  const step1Valid = name.trim().length >= 2 && cleanSlug.length >= 3;
+
+  const step3Missing = [
+    ownerName.trim().length < 2 && "tu nombre",
+    ownerGender === null && "tu sexo",
+    !emailValid && "un correo válido",
+  ].filter((item): item is string => Boolean(item));
+  const step3Valid = step3Missing.length === 0 && !ageError;
+
+  const g = ownerGender;
+  const welcome = byGender(g, {
+    female: firstName ? `¡Bienvenida, ${firstName}!` : "¡Bienvenida!",
+    male: firstName ? `¡Bienvenido, ${firstName}!` : "¡Bienvenido!",
+    neutral: firstName ? `¡Te damos la bienvenida, ${firstName}!` : "¡Te damos la bienvenida!",
+  });
 
   const goTo = (next: number) => {
     setDirection(next > step ? "forward" : "back");
@@ -88,7 +148,7 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
     if (step !== 1) return goTo(step + 1);
     setCheckingSlug(true);
     setSlugError(null);
-    const { error } = await checkSlugAvailability(slug.replace(/-+$/, ""));
+    const { error } = await checkSlugAvailability(cleanSlug);
     setCheckingSlug(false);
     if (error) {
       setSlugError(error);
@@ -103,37 +163,50 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
   };
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setCreating(true);
     setSubmitError(null);
     const startedAt = Date.now();
     try {
-      const activeHours = daysToHours(hours);
       const result = await createTenantAction({
         business: {
           name,
-          slug: slug.replace(/-+$/, ""),
+          slug: cleanSlug,
           businessTypeId,
           address,
-          logoUrl: null,
+          logoUrl,
         },
         owner: {
           fullName: ownerName || name,
-          email: ownerEmail,
-          gender: ownerGender,
-          age: ownerAge ? Number(ownerAge) : null,
-          avatarUrl: owner.avatarUrl,
+          email: ownerEmail.trim(),
+          gender: ownerGender ?? "unspecified",
+          age: ownerAge.trim() ? Number(ownerAge) : null,
+          avatarUrl,
           teamMode,
         },
-        businessHours: activeHours,
+        businessHours: daysToHours(hours),
       });
-      if ("error" in result) throw new Error(result.error);
-      const newSlug = result.slug;
+      if ("error" in result) {
+        submittingRef.current = false;
+        setCreating(false);
+        // La URL se ocupó mientras cargaba el resto: de vuelta al paso 1, con
+        // el aviso al lado del campo, sin perder nada de lo cargado.
+        if (result.field === "slug") {
+          setSlugError(result.error);
+          goTo(1);
+        } else {
+          setSubmitError(result.error);
+        }
+        return;
+      }
       await new Promise((resolve) => setTimeout(resolve, Math.max(0, MIN_CREATING_MS - (Date.now() - startedAt))));
       setCreated(true);
       await new Promise((resolve) => setTimeout(resolve, DONE_MS));
-      router.push(`/app/${newSlug}`);
+      router.push(`/app/${result.slug}`);
     } catch (error) {
       console.error(error);
+      submittingRef.current = false;
       setSubmitError(error instanceof Error ? error.message : "Hubo un error al crear el local.");
       setCreating(false);
     }
@@ -141,34 +214,56 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
 
   const current = STEPS[step - 1];
   const stepAnimation = direction === "forward" ? "animate-step-in-right" : "animate-step-in-left";
+  const hoursError = weekError(hours);
 
   return (
     <>
       {/* Fuera de la Card a propósito: un ancestro con transform (la animación
           de cada paso) haría que este `fixed` se acomode a él y no a la pantalla. */}
-      {creating && <CreatingOverlay done={created} />}
+      {creating && <CreatingOverlay done={created} gender={ownerGender} firstName={firstName} />}
 
       <div className="mb-lg space-y-2">
-        <div className="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
-          <span>Paso {step} de {STEPS.length}</span>
-          <span>{Math.round((step / STEPS.length) * 100)}%</span>
+        <div className="flex min-w-0 items-baseline justify-between gap-3 font-label-md text-label-md">
+          <span className="shrink-0 text-on-surface">Paso {step} de {STEPS.length}</span>
+          <span className="min-w-0 truncate text-on-surface-variant">{current.label}</span>
         </div>
-        <div className="flex gap-1.5" aria-hidden>
-          {STEPS.map((_, index) => (
-            <div key={index} className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-muted">
-              <div
-                className="h-full rounded-pill bg-secondary transition-[width] duration-500 ease-out"
-                style={{ width: index < step ? "100%" : "0%" }}
-              />
+        <div
+          role="progressbar"
+          aria-label="Progreso del alta"
+          aria-valuemin={1}
+          aria-valuemax={STEPS.length}
+          aria-valuenow={step}
+          aria-valuetext={`Paso ${step} de ${STEPS.length}: ${current.label}`}
+          className="grid grid-cols-4 gap-1.5"
+        >
+          {STEPS.map((item, index) => (
+            <div key={item.label} className="min-w-0 space-y-1">
+              <div className="h-1.5 overflow-hidden rounded-pill bg-surface-container-high">
+                <div
+                  className="h-full rounded-pill bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                  style={{ width: index < step ? "100%" : "0%" }}
+                />
+              </div>
+              <span
+                aria-hidden
+                className={cn(
+                  "block truncate font-label-xs text-label-xs transition-colors",
+                  index < step ? "text-primary" : "text-on-surface-variant",
+                )}
+              >
+                {item.label}
+              </span>
             </div>
           ))}
         </div>
       </div>
 
-      <Card hoverLift={false} className="overflow-hidden">
-        <div key={step} className={cn("space-y-lg motion-reduce:animate-none", stepAnimation)}>
+      <Card hoverLift={false} className="overflow-hidden p-lg sm:p-xl">
+        <div key={step} className={cn("min-w-0 space-y-lg motion-reduce:animate-none", stepAnimation)}>
           <div className="space-y-1">
-            <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">{current.title}</h1>
+            <h1 ref={headingRef} tabIndex={-1} className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface outline-none">
+              {current.title}
+            </h1>
             <p className="font-body-md text-body-md text-on-surface-variant">{current.subtitle}</p>
           </div>
 
@@ -177,7 +272,7 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
               <>
                 <div className="space-y-1.5">
                   <label htmlFor="onboarding-name" className="font-label-md text-label-md text-on-surface-variant">Nombre del local</label>
-                  <Input id="onboarding-name" placeholder="Studio Lumière" value={name} onChange={handleNameChange} autoFocus />
+                  <Input id="onboarding-name" placeholder="Studio Lumière" value={name} onChange={handleNameChange} autoFocus autoComplete="organization" />
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="onboarding-slug" className="font-label-md text-label-md text-on-surface-variant">URL del turnero</label>
@@ -193,19 +288,29 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
+                    aria-invalid={slugError ? true : undefined}
+                    aria-describedby="onboarding-slug-preview"
                   />
-                  <p className="flex min-w-0 items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant">
+                  <p id="onboarding-slug-preview" className="flex min-w-0 items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant">
                     <Icon name="link" className="shrink-0 text-[14px] text-secondary" />
                     <span className="min-w-0 truncate">
-                      turn.justcreate.com.ar/<strong className="font-semibold text-on-surface">{slug.replace(/-+$/, "") || "tu-local"}</strong>
+                      turn.justcreate.com.ar/<strong className="font-semibold text-on-surface">{cleanSlug || "tu-local"}</strong>
                     </span>
                   </p>
                   {slugError && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{slugError}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="onboarding-address" className="font-label-md text-label-md text-on-surface-variant">Dirección (opcional)</label>
-                  <Input id="onboarding-address" placeholder="Barrio, ciudad o dirección" value={address} onChange={(event) => setAddress(event.target.value)} />
+                  <Input id="onboarding-address" placeholder="Barrio, ciudad o dirección" value={address} onChange={(event) => setAddress(event.target.value)} autoComplete="street-address" />
                 </div>
+                <ImagePicker
+                  shape="square"
+                  value={logoUrl}
+                  onChange={setLogoUrl}
+                  label="Logo del local (opcional)"
+                  hint="PNG, JPG o WebP de hasta 2 MB. Lo podés cambiar cuando quieras."
+                  fallbackIcon="storefront"
+                />
               </>
             )}
 
@@ -221,7 +326,7 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
                       aria-checked={selected}
                       onClick={() => setBusinessTypeId(type.id)}
                       className={cn(
-                        "relative flex min-h-[4.5rem] items-center gap-3 rounded-inner border-2 p-3 text-left transition-all duration-200 active:scale-[0.98]",
+                        "relative flex min-h-[4.5rem] min-w-0 items-center gap-3 rounded-inner border-2 p-3 text-left transition-all duration-200 active:scale-[0.98] motion-reduce:transition-none",
                         selected
                           ? "border-secondary bg-secondary-soft shadow-card"
                           : "border-border bg-surface hover:border-secondary/40 hover:bg-surface-container-low",
@@ -240,7 +345,7 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
                         <span className="block truncate font-body-sm text-body-sm text-on-surface-variant">{type.hint}</span>
                       </span>
                       {selected && (
-                        <span className="grid h-6 w-6 shrink-0 animate-pop-in place-items-center rounded-full bg-secondary text-on-primary">
+                        <span className="grid h-6 w-6 shrink-0 animate-pop-in place-items-center rounded-full bg-secondary text-on-primary motion-reduce:animate-none">
                           <Icon name="check" className="text-[14px]" />
                         </span>
                       )}
@@ -252,37 +357,134 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
 
             {step === 3 && (
               <div className="space-y-md">
+                <ImagePicker
+                  shape="round"
+                  value={avatarUrl}
+                  onChange={setAvatarUrl}
+                  title={welcome}
+                  label="Tu foto (opcional)"
+                  hint="Así te reconocen en la agenda."
+                  fallbackName={ownerName}
+                  fallbackIcon="person"
+                />
+
                 <div className="space-y-1.5">
                   <label htmlFor="onboarding-owner-name" className="font-label-md text-label-md text-on-surface-variant">Tu nombre</label>
                   <Input id="onboarding-owner-name" value={ownerName} onChange={(event) => setOwnerName(event.target.value)} autoComplete="name" />
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label htmlFor="onboarding-owner-email" className="font-label-md text-label-md text-on-surface-variant">Email de contacto</label>
-                    <Input id="onboarding-owner-email" type="email" value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)} autoComplete="email" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="onboarding-owner-age" className="font-label-md text-label-md text-on-surface-variant">Edad (opcional)</label>
-                    <Input id="onboarding-owner-age" type="number" min="14" max="99" value={ownerAge} onChange={(event) => setOwnerAge(event.target.value)} inputMode="numeric" />
-                  </div>
-                </div>
-                <fieldset className="space-y-2">
-                  <legend className="font-label-md text-label-md text-on-surface-variant">¿Cómo te hablamos?</legend>
-                  <div className="grid grid-cols-3 gap-2">
-                    {([
-                      ["female", "Femenino"],
-                      ["male", "Masculino"],
-                      ["unspecified", "Neutral"],
-                    ] as const).map(([value, label]) => (
-                      <button key={value} type="button" onClick={() => setOwnerGender(value)} className={cn("min-h-11 rounded-pill border px-2 font-label-sm text-label-sm", ownerGender === value ? "border-secondary bg-secondary-soft text-secondary" : "border-border text-on-surface-variant")}>{label}</button>
-                    ))}
+
+                <fieldset className="min-w-0 space-y-2">
+                  <legend className="mb-2 font-label-md text-label-md text-on-surface-variant">Sexo</legend>
+                  <div role="radiogroup" aria-label="Sexo" className="grid grid-cols-3 gap-2">
+                    {GENDER_OPTIONS.map(([value, label]) => {
+                      const selected = ownerGender === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setOwnerGender(value)}
+                          className={cn(
+                            "min-h-11 min-w-0 rounded-pill border px-2 py-1.5 font-label-md text-label-md leading-tight transition-colors duration-200 motion-reduce:transition-none",
+                            selected
+                              ? "border-secondary bg-secondary-soft text-secondary"
+                              : "border-border bg-surface text-on-surface-variant hover:border-secondary/40",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </fieldset>
-                <fieldset className="space-y-2">
-                  <legend className="font-label-md text-label-md text-on-surface-variant">¿Trabajás sola o con equipo?</legend>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setTeamMode("solo")} className={cn("min-h-14 rounded-inner border p-3 text-left", teamMode === "solo" ? "border-secondary bg-secondary-soft" : "border-border")}><strong className="block font-label-md text-label-md">Trabajo sola</strong><span className="font-body-sm text-body-sm text-on-surface-variant">Plan Solo, sin arqueo ni selector de profesional.</span></button>
-                    <button type="button" onClick={() => setTeamMode("team")} className={cn("min-h-14 rounded-inner border p-3 text-left", teamMode === "team" ? "border-secondary bg-secondary-soft" : "border-border")}><strong className="block font-label-md text-label-md">Tengo equipo</strong><span className="font-body-sm text-body-sm text-on-surface-variant">Agenda y caja para varias personas.</span></button>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,7rem)_minmax(0,1fr)]">
+                  <div className="min-w-0 space-y-1.5">
+                    <label htmlFor="onboarding-owner-age" className="font-label-md text-label-md text-on-surface-variant">Edad (opcional)</label>
+                    <Input
+                      id="onboarding-owner-age"
+                      type="number"
+                      min="14"
+                      max="99"
+                      inputMode="numeric"
+                      value={ownerAge}
+                      onChange={(event) => setOwnerAge(event.target.value)}
+                      aria-invalid={ageError ? true : undefined}
+                      className="tabular-nums"
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-1.5">
+                    <label htmlFor="onboarding-owner-email" className="font-label-md text-label-md text-on-surface-variant">Correo de contacto</label>
+                    <Input
+                      id="onboarding-owner-email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      value={ownerEmail}
+                      onChange={(event) => setOwnerEmail(event.target.value)}
+                      onBlur={() => setEmailTouched(true)}
+                      aria-invalid={emailTouched && !emailValid ? true : undefined}
+                    />
+                  </div>
+                </div>
+                {ageError && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{ageError}</p>}
+                {emailTouched && !emailValid && (
+                  <p role="alert" className="font-body-sm text-body-sm text-status-alert">Revisá el correo, parece incompleto.</p>
+                )}
+
+                <fieldset className="min-w-0 space-y-2">
+                  <legend className="mb-2 font-label-md text-label-md text-on-surface-variant">
+                    {byGender(g, {
+                      female: "¿Trabajás sola o con equipo?",
+                      male: "¿Trabajás solo o con equipo?",
+                      neutral: "¿Trabajás con equipo?",
+                    })}
+                  </legend>
+                  <div role="radiogroup" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {([
+                      {
+                        value: "solo",
+                        icon: "person",
+                        title: byGender(g, { female: "Trabajo sola", male: "Trabajo solo", neutral: "Trabajo sin equipo" }),
+                        description: "Plan Solo: tu agenda, sin arqueo de caja ni selector de profesional.",
+                      },
+                      {
+                        value: "team",
+                        icon: "groups",
+                        title: "Tengo equipo",
+                        description: "Plan Equipo: agenda y caja para varias personas.",
+                      },
+                    ] as const).map((option) => {
+                      const selected = teamMode === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setTeamMode(option.value)}
+                          className={cn(
+                            "flex min-h-14 min-w-0 items-start gap-3 rounded-inner border-2 p-3 text-left transition-colors duration-200 motion-reduce:transition-none",
+                            selected ? "border-secondary bg-secondary-soft" : "border-border bg-surface hover:border-secondary/40",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "grid h-9 w-9 shrink-0 place-items-center rounded-full",
+                              selected ? "bg-secondary text-on-primary" : "bg-surface-container-low text-secondary",
+                            )}
+                          >
+                            <Icon name={option.icon} className="text-[18px]" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <strong className="block font-label-lg text-label-lg text-on-surface">{option.title}</strong>
+                            <span className="block font-body-sm text-body-sm text-on-surface-variant">{option.description}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </fieldset>
               </div>
@@ -291,7 +493,7 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
             {step === 4 && (
               <div className="space-y-3">
                 <HoursEditor value={hours} onChange={setHours} />
-                {weekError(hours) && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{weekError(hours)}</p>}
+                {hoursError && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{hoursError}</p>}
               </div>
             )}
 
@@ -301,20 +503,29 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
 
         <div className="mt-lg flex gap-3">
           {step > 1 && (
-            <Button variant="secondary" className="flex-1" onClick={() => goTo(step - 1)} disabled={creating}>
+            <Button variant="secondary" className="min-w-0 flex-1" onClick={() => goTo(step - 1)} disabled={creating}>
               Atrás
             </Button>
           )}
           {step < STEPS.length ? (
-            <Button className="flex-1" onClick={continueFromStep} disabled={checkingSlug || (step === 1 && (!name.trim() || slug.replace(/-+$/, "").length < 3)) || (step === 3 && (!ownerName.trim() || !ownerEmail.includes("@")))}>
+            <Button
+              className="min-w-0 flex-1"
+              onClick={continueFromStep}
+              disabled={checkingSlug || (step === 1 && !step1Valid) || (step === 3 && !step3Valid)}
+            >
               {checkingSlug ? "Verificando…" : "Continuar"}
             </Button>
           ) : (
-            <Button className="flex-1" onClick={handleSubmit} disabled={creating || Boolean(weekError(hours))}>
-              Crear mi turnero
+            <Button className="min-w-0 flex-1" onClick={handleSubmit} disabled={creating || Boolean(hoursError)}>
+              {creating ? "Creando…" : "Crear mi turnero"}
             </Button>
           )}
         </div>
+        {step === 3 && step3Missing.length > 0 && (
+          <p className="mt-3 text-center font-body-sm text-body-sm text-on-surface-variant">
+            Para seguir, nos falta {step3Missing.join(", ").replace(/, ([^,]*)$/, " y $1")}.
+          </p>
+        )}
       </Card>
     </>
   );

@@ -76,7 +76,7 @@ export function HorizontalBarList({
               key={row.id ?? i}
               type="button"
               onClick={() => onItemClick(row.id!)}
-              className="block w-full text-left"
+              className="flex min-h-11 w-full flex-col justify-center text-left"
             >
               {body}
             </button>

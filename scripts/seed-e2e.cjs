@@ -70,11 +70,12 @@ async function main() {
 
   batch.set(tenantRef, {
     id: TENANT_ID, name: "E2E Nails", slug: SLUG, businessTypeId: "estetica-unas",
-    timezone: TIMEZONE, currency: "ARS", status: "active",
+    timezone: TIMEZONE, currency: "ARS", status: "active", whatsappNumber: "+5491155550000",
     settings: {
       slotIntervalMin: 15, minNoticeMin: 0, maxBookingDays: 60, booksByStaff: false,
       depositType: "fixed", depositValue: 10000, depositMin: 10000,
       mpFeeMode: "absorbed", mpFeePercent: 0, publicBookingEnabled: true,
+      payments: { mercadopagoEnabled: true, transfer: { enabled: true, alias: "e2e.nails.mp", cbu: "0000003100000000000001", holderName: "E2E Nails", bankName: "Banco E2E" } },
     },
     businessHours: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opensAt: "00:00", closesAt: "23:45" })),
     updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),

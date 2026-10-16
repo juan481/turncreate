@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
+import { isStorableImageDataUrl } from "@/server/firebase/tenants";
 import { isGender } from "@/lib/gender";
 import { todayISO } from "@/lib/dates";
 import { Wizard, type OwnerDefaults } from "./wizard";
@@ -27,7 +28,9 @@ export default async function OnboardingPage() {
     email: String(profile.contactEmail ?? profile.email ?? user.email ?? "").trim(),
     gender: isGender(profile.gender) ? profile.gender : null,
     age: birthYear ? String(currentYear - birthYear) : "",
-    avatarUrl: typeof profile.avatarUrl === "string" ? profile.avatarUrl : null,
+    // Solo lo que el alta acepta de vuelta: si no, el submit fallaría por una
+    // foto que la dueña ni eligió en esta pantalla.
+    avatarUrl: isStorableImageDataUrl(profile.avatarUrl) ? profile.avatarUrl : null,
   };
 
   return <Wizard businessTypes={BUSINESS_TYPES} owner={owner} />;

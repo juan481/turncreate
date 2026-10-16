@@ -51,7 +51,7 @@ export function SectionHeaderNew({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low"
               aria-label="Cerrar"
             >
               <Icon name="close" className="text-[16px]" />

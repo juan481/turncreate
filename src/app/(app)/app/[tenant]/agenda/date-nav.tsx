@@ -1,25 +1,28 @@
 import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { Icon } from "@/components/ui/icon";
-import { cn } from "@/lib/utils";
-import { addDaysISO, monthLabel, shortWeekdayLabel, todayISO, toDateISOInTz, weekRange } from "@/lib/dates";
+import { DayDial, type DayDialItem } from "@/components/ui/day-dial";
+import { addDaysISO, dayRange, monthLabel, todayISO, toDateISOInTz } from "@/lib/dates";
+
+/** Días a cada lado de hoy que ofrece el dial (siempre incluye el día elegido). */
+const DIAL_RANGE_DAYS = 60;
+/**
+ * Días a cada lado del día elegido para los que se cuentan turnos (el
+ * puntito del dial). No se cuenta todo el dial: serían ~120 días de
+ * turnos leídos de Firestore en cada carga de la agenda.
+ */
+const COUNT_RANGE_DAYS = 10;
 
 /**
- * Tira de días de la semana + navegación, arriba de la vista Día.
- * Reemplaza el viejo "‹ Día de la semana ›" (que solo movía de a un día
- * y no daba ninguna pista de qué otros días tenían turnos -- parte del
- * "no se entiende el calendario" que reportó el dueño). Ahora:
- * - Las flechas mueven la SEMANA completa (el selector de día puntual ya
- *   lo dan las 7 pills de abajo).
- * - Cada pill muestra día+número+contador chico de turnos: de un vistazo
- *   se ve qué días de la semana tienen algo agendado, sin entrar a cada
- *   uno.
- * - "Mes" da vuelta fácil al calendario completo sin pasar por ViewToggle.
+ * Navegación de días arriba de la vista Día: un "dial" horizontal con
+ * scroll-snap (±60 días alrededor de hoy) en vez de la vieja tira fija
+ * de la semana + flechas. El día elegido queda centrado y resaltado, hoy
+ * lleva un anillo, y un puntito marca los días que tienen turnos
+ * (cancelados/vencidos no cuentan, mismo criterio que la vista Día).
  *
- * Es un Server Component async (no "use client"): hace su propia consulta
- * de conteos por día de la semana, igual que `semana/page.tsx` hace para
- * su propia grilla -- así `page.tsx` (vista Día) no necesita cargar toda
- * la semana solo para pintar esta tira.
+ * Server Component: hace su propia consulta de conteos, así `page.tsx`
+ * no carga turnos de otros días solo para pintar esta tira. El dial en sí
+ * (scroll, centrado) es la primitiva cliente `DayDial`.
  */
 export async function DateNav({
   tenantId,
@@ -32,24 +35,21 @@ export async function DateNav({
   timezone: string;
   dateISO: string;
 }) {
-  const { startISO: weekStartISO, start, end } = weekRange(dateISO, timezone);
-  const days = Array.from({ length: 7 }, (_, i) => addDaysISO(weekStartISO, i));
   const today = todayISO(timezone);
-  const prevWeekISO = addDaysISO(dateISO, -7);
-  const nextWeekISO = addDaysISO(dateISO, 7);
+  const minDialISO = [addDaysISO(today, -DIAL_RANGE_DAYS), addDaysISO(dateISO, -7)].sort()[0];
+  const maxDialISO = [addDaysISO(today, DIAL_RANGE_DAYS), addDaysISO(dateISO, 7)].sort()[1];
 
+  const countFromISO = addDaysISO(dateISO, -COUNT_RANGE_DAYS);
+  const countToISO = addDaysISO(dateISO, COUNT_RANGE_DAYS);
   const { db } = firebaseAdmin();
   const snapshot = await db
     .collection("tenants")
     .doc(tenantId)
     .collection("appointments")
-    .where("startsAt", ">=", start)
-    .where("startsAt", "<", end)
+    .where("startsAt", ">=", dayRange(countFromISO, timezone).start)
+    .where("startsAt", "<", dayRange(countToISO, timezone).end)
     .get();
 
-  // Mismo criterio que la vista Día: un turno cancelado/vencido no cuenta
-  // como "algo agendado" en el contador de la pill (si no, un turno
-  // reprogramado infla el conteo del día viejo Y del nuevo a la vez).
   const countByDay = new Map<string, number>();
   for (const doc of snapshot.docs) {
     const data = doc.data();
@@ -58,31 +58,24 @@ export async function DateNav({
     countByDay.set(dISO, (countByDay.get(dISO) ?? 0) + 1);
   }
 
+  const items: DayDialItem[] = [];
+  for (let iso = minDialISO; iso <= maxDialISO; iso = addDaysISO(iso, 1)) {
+    const inCountRange = iso >= countFromISO && iso <= countToISO;
+    items.push({
+      dateISO: iso,
+      href: `/app/${tenantSlug}/agenda?date=${iso}`,
+      count: inCountRange ? countByDay.get(iso) ?? 0 : undefined,
+    });
+  }
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
-          <Link
-            href={`/app/${tenantSlug}/agenda?date=${prevWeekISO}`}
-            aria-label="Semana anterior"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-high"
-          >
-            <Icon name="chevron_left" className="text-[18px]" />
-          </Link>
-          <span className="truncate font-label-md text-label-md capitalize text-on-surface-variant">
-            {monthLabel(dateISO)}
-          </span>
-          <Link
-            href={`/app/${tenantSlug}/agenda?date=${nextWeekISO}`}
-            aria-label="Semana siguiente"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-high"
-          >
-            <Icon name="chevron_right" className="text-[18px]" />
-          </Link>
-        </div>
+    <div className="min-w-0 space-y-2">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate font-label-lg text-label-lg text-on-surface">{monthLabel(dateISO)}</span>
         <div className="flex shrink-0 items-center gap-1.5">
           <Link
             href={`/app/${tenantSlug}/agenda?date=${today}`}
+            aria-current={dateISO === today ? "date" : undefined}
             className="flex h-11 items-center rounded-pill bg-surface-container-low px-3.5 font-label-sm text-label-sm text-on-surface transition-colors hover:bg-surface-container-high"
           >
             Hoy
@@ -98,44 +91,7 @@ export async function DateNav({
         </div>
       </div>
 
-      <div className="flex gap-1">
-        {days.map((dISO) => {
-          const isSelected = dISO === dateISO;
-          const isToday = dISO === today;
-          const count = countByDay.get(dISO) ?? 0;
-          return (
-            <Link
-              key={dISO}
-              href={`/app/${tenantSlug}/agenda?date=${dISO}`}
-              className={cn(
-                "flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-inner py-1.5 transition-colors",
-                isSelected
-                  ? "bg-primary text-on-primary"
-                  : isToday
-                    ? "border-2 border-primary text-primary"
-                    : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high",
-              )}
-            >
-              <span className="font-label-xs text-label-xs uppercase">
-                {shortWeekdayLabel(dISO).slice(0, 1)}
-              </span>
-              <span className="font-label-lg text-label-lg font-semibold tabular-nums">
-                {Number(dISO.slice(8, 10))}
-              </span>
-              {count > 0 && (
-                <span
-                  className={cn(
-                    "font-label-xs text-label-xs tabular-nums",
-                    isSelected ? "text-on-primary/85" : "text-on-surface-variant",
-                  )}
-                >
-                  {count}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </div>
+      <DayDial items={items} selectedISO={dateISO} todayISO={today} />
     </div>
   );
 }

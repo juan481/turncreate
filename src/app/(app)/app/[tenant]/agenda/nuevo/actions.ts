@@ -7,8 +7,8 @@ import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { requireTenantAccess } from "@/server/firebase/tenants";
 import { createInternalAppointment } from "@/server/firebase/booking";
 import { sendAppointmentConfirmation } from "@/server/email";
-import { createClientSchema } from "@/lib/schemas/client";
-import { formatTimeInTz, longDayLabel } from "@/lib/dates";
+import { birthYearFromAge, createClientSchema } from "@/lib/schemas/client";
+import { formatTimeInTz, longDayLabel, todayISO } from "@/lib/dates";
 
 export type ConfirmAppointmentState = { error: string | null };
 
@@ -16,12 +16,13 @@ export type ConfirmAppointmentState = { error: string | null };
 // manual no debería requerir salir del flujo a /clientes primero).
 export async function createClientQuick(
   tenantSlug: string,
-  data: { fullName: string; phoneE164: string; email: string },
+  data: { fullName: string; phoneE164: string; email: string; age?: string },
 ): Promise<{ id: string } | { error: string }> {
   const parsed = createClientSchema.safeParse({
     fullName: data.fullName,
     phone: data.phoneE164,
     email: data.email || "",
+    age: data.age ?? "",
   });
 
   if (!parsed.success) {
@@ -35,6 +36,9 @@ export async function createClientQuick(
     const { db } = firebaseAdmin();
     const clientRef = db.collection("tenants").doc(tenant.id).collection("clients").doc();
     const phoneRef = db.collection("tenantClientPhones").doc(`${tenant.id}_${parsed.data.phone.replace(/[^0-9]/g, "")}`);
+    // Solo se guarda el año (aproximado), igual que en clientes/actions.ts.
+    const currentYear = Number(todayISO(tenant.timezone).slice(0, 4));
+    const birthYear = parsed.data.age ? birthYearFromAge(parsed.data.age, currentYear) : null;
 
     await db.runTransaction(async (transaction) => {
       if ((await transaction.get(phoneRef)).exists) throw new Error("Ya existe un cliente con ese teléfono");
@@ -45,6 +49,7 @@ export async function createClientQuick(
         fullNameNormalized: parsed.data.fullName.toLocaleLowerCase("es-AR"),
         phoneE164: parsed.data.phone,
         email: parsed.data.email || null,
+        birthYear,
         noShowCount: 0,
         appointmentsCount: 0,
         totalSpent: 0,

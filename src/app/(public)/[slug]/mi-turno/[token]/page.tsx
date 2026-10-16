@@ -1,17 +1,22 @@
 import { notFound } from "next/navigation";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { getTransferInstructions } from "@/server/public-booking/transfer";
+import { moneyLabel } from "@/server/public-booking/payment-methods";
 import { formatInTz } from "@/lib/dates";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
 import { cancelAppointmentAction } from "./actions";
+import { TransferInstructions } from "../../transfer-instructions";
+import { buildTransferPanel } from "../../transfer-panel";
 
 export default async function MiTurnoPage({
   params,
 }: PageProps<"/[slug]/mi-turno/[token]">) {
   const { slug, token } = await params;
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(token)) notFound();
   const tenant = await getTenantBySlugFromFirebase(slug);
   const result = await firebaseAdmin().db.collectionGroup("appointments").where("token", "==", token).limit(1).get();
   if (!tenant || result.empty || result.docs[0].data().tenantId !== tenant.id) notFound();
@@ -20,11 +25,13 @@ export default async function MiTurnoPage({
   const client = { full_name: String(data.clientName ?? "") };
   const staff = { display_name: String(data.staffName ?? "") };
   const items: { id: string; name: string; price: number }[] = (data.items ?? []).map((item: { name?: string; price?: number }, index: number) => ({ id: String(index), name: item.name ?? "Servicio", price: Number(item.price ?? data.total ?? 0) }));
+  const awaitingTransfer = appointment.status === "pending_payment" && data.awaitingTransfer === true && data.source === "public_transfer";
+  const transferInstructions = awaitingTransfer ? await getTransferInstructions(tenant, token) : null;
+  const transferPanel = transferInstructions ? buildTransferPanel(tenant, slug, token, transferInstructions) : null;
 
   const isFuture = new Date(appointment.starts_at) > new Date();
   const canCancel = isFuture && (appointment.status === "confirmed" || appointment.status === "pending_payment");
 
-  // Map appointment status to StatusPill status
   let statusColor: StatusPillStatus = "draft";
   let statusLabel = appointment.status;
 
@@ -35,7 +42,7 @@ export default async function MiTurnoPage({
       break;
     case "pending_payment":
       statusColor = "pending";
-      statusLabel = "Pago Pendiente";
+      statusLabel = awaitingTransfer ? "Esperando transferencia" : "Pago pendiente";
       break;
     case "cancelled":
       statusColor = "alert";
@@ -71,78 +78,90 @@ export default async function MiTurnoPage({
     : null;
 
   return (
-    <div className="container max-w-[42rem] py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold">Detalle de tu turno</h1>
-        <p className="text-gray-500">
-          En {tenant.name}
-        </p>
+    <div className="space-y-lg">
+      {transferPanel && <TransferInstructions panel={transferPanel} showMiTurnoLink={false} />}
+
+      <div className="min-w-0 space-y-1 px-1">
+        {transferPanel ? (
+          <h2 className="font-headline-sm text-headline-sm text-on-surface">Detalle de tu turno</h2>
+        ) : (
+          <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Detalle de tu turno</h1>
+        )}
+        <p className="truncate font-body-md text-body-md text-on-surface-variant">En {tenant.name}</p>
       </div>
 
-      <Card className="p-6 mb-6">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-xl font-semibold capitalize">{formattedDate}</h2>
-            <p className="text-3xl font-bold mt-2">{formattedTime}</p>
+      <Card hoverLift={false} className="space-y-lg p-lg">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-headline-sm text-headline-sm text-on-surface first-letter:uppercase">{formattedDate}</p>
+            <p className="mt-1 font-headline-xl-mobile text-headline-xl-mobile tabular-nums text-on-surface">{formattedTime}</p>
           </div>
-          <StatusPill status={statusColor}>{statusLabel}</StatusPill>
+          <StatusPill status={statusColor} className="shrink-0">{statusLabel}</StatusPill>
         </div>
 
         <div className="space-y-4">
-          <div>
-            <p className="text-sm text-gray-500">Profesional</p>
-            <p className="font-medium">{staff.display_name}</p>
+          {staff.display_name && (
+            <div className="min-w-0">
+              <p className="font-label-md text-label-md text-on-surface-variant">Profesional</p>
+              <p className="truncate font-label-lg text-label-lg text-on-surface">{staff.display_name}</p>
+            </div>
+          )}
+
+          <div className="min-w-0">
+            <p className="font-label-md text-label-md text-on-surface-variant">Cliente</p>
+            <p className="truncate font-label-lg text-label-lg text-on-surface">{client.full_name}</p>
           </div>
 
           <div>
-            <p className="text-sm text-gray-500">Cliente</p>
-            <p className="font-medium">{client.full_name}</p>
-          </div>
-
-          <div>
-            <p className="text-sm text-gray-500 mb-2">Servicios</p>
+            <p className="mb-2 font-label-md text-label-md text-on-surface-variant">Servicios</p>
             <ul className="space-y-2">
               {items.map((item) => (
-                <li key={item.id} className="flex justify-between text-sm">
-                  <span>{item.name}</span>
-                  <span className="font-medium">${item.price}</span>
+                <li key={item.id} className="flex justify-between gap-3 font-body-md text-body-md text-on-surface">
+                  <span className="min-w-0 break-words">{item.name}</span>
+                  <span className="shrink-0 tabular-nums">{moneyLabel(item.price)}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-            <span className="font-medium text-gray-500">Total</span>
-            <span className="text-xl font-bold">${appointment.total}</span>
+          <div className="flex items-center justify-between border-t border-border pt-4">
+            <span className="font-label-lg text-label-lg text-on-surface-variant">Total</span>
+            <span className="font-headline-sm text-headline-sm tabular-nums text-on-surface">{moneyLabel(appointment.total)}</span>
           </div>
 
-          {appointment.balance > 0 && (
-            <div className="flex justify-between items-center text-red-600">
-              <span className="font-medium">Saldo pendiente</span>
-              <span className="font-bold">${appointment.balance}</span>
+          {appointment.balance > 0 && appointment.status !== "cancelled" && (
+            <div className="flex items-center justify-between text-status-pending">
+              <span className="font-label-lg text-label-lg">Saldo pendiente</span>
+              <span className="font-label-lg text-label-lg tabular-nums">{moneyLabel(appointment.balance)}</span>
             </div>
+          )}
+
+          {appointment.status === "cancelled" && data.cancelReason && (
+            <p className="rounded-inner bg-surface-container-low px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">
+              Motivo: {String(data.cancelReason)}
+            </p>
           )}
         </div>
       </Card>
 
       {canCancel && (
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row">
           {rescheduleHref && (
             <a
               href={rescheduleHref}
               target="_blank"
               rel="noopener noreferrer"
-              className={cn(buttonVariants({ variant: "secondary" }), "flex-1")}
+              className={cn(buttonVariants({ variant: "secondary" }), "w-full sm:flex-1")}
             >
               Pedir reprogramación
             </a>
           )}
           <form
-            className="flex-1"
+            className="sm:flex-1"
             action={cancelAppointmentAction.bind(null, token, slug)}
           >
-            <Button variant="secondary" className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" type="submit">
-              Cancelar Turno
+            <Button variant="secondary" className="w-full text-status-alert" type="submit">
+              Cancelar turno
             </Button>
           </form>
         </div>

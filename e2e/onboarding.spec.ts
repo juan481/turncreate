@@ -40,17 +40,26 @@ test("alta de un local nuevo: registro, onboarding mobile, pantalla de creación
   await expect(page.getByRole("radio", { name: /Uñas y pestañas/ })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "Continuar" }).click();
 
-  // Paso 3: datos de la dueña y modalidad del local.
+  // Paso 3: datos de la dueña y modalidad del local. Sin sexo elegido no se
+  // puede seguir, y el copy se adapta a lo que elige.
   await expect(page.getByText("Paso 3 de 4")).toBeVisible();
   await expect(page.getByLabel("Tu nombre")).toHaveValue("Dueña E2E");
-  await page.getByRole("button", { name: /Trabajo sola/ }).click();
+  await expect(page.getByRole("button", { name: "Continuar" })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: "Trabajo sin equipo" })).toBeVisible();
+  await page.getByRole("radio", { name: "Mujer" }).click();
+  await expect(page.getByText("¡Bienvenida, Dueña!")).toBeVisible();
+  await page.getByRole("radio", { name: /Trabajo sola/ }).click();
+  await expect(page.getByRole("radio", { name: /Trabajo sola/ })).toHaveAttribute("aria-checked", "true");
+  await expectNoHorizontalScroll(page);
   await page.getByRole("button", { name: "Continuar" }).click();
 
-  // Paso 4 y creación con la pantalla de Just Create.
+  // Paso 4 y creación con la pantalla de TurnCreate.
   await expect(page.getByText("Paso 4 de 4")).toBeVisible();
   await page.getByRole("button", { name: "Crear mi turnero" }).click();
-  await expect(page.getByText("Estamos creando tu turnero")).toBeVisible();
-  await expect(page.getByRole("img", { name: "Just Create" })).toBeVisible();
+  const creating = page.getByRole("status");
+  await expect(creating).toBeVisible();
+  await expect(creating.getByRole("img", { name: "TurnCreate" })).toBeVisible();
+  await expect(creating).toContainText(/Bienvenida, Dueña|Tu turnero está listo/);
 
   // Inicio: checklist simple de 3 pasos.
   await expect(page).toHaveURL(new RegExp(`/app/unas-lumiere-${stamp.toLowerCase()}$`), { timeout: 15_000 });

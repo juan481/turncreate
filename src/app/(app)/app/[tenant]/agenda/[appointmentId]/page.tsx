@@ -11,6 +11,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { StatusActions } from "./status-actions";
 import { RescheduleButton } from "./reschedule-button";
+import { TransferDecision } from "../../transferencias/transfer-decision";
+import { moneyLabel, transferTimeLeftLabel } from "@/server/public-booking/payment-methods";
 
 const STATUS_LABEL: Record<string, { label: string; pill: StatusPillStatus }> = {
   pending_payment: { label: "Pendiente de pago", pill: "pending" },
@@ -54,7 +56,13 @@ export default async function AppointmentDetailPage({
   const durationMin = Math.round((endsAt.getTime() - startsAt.getTime()) / 60000);
   const items = (appointment.items ?? []) as { serviceId?: string; name: string }[];
   const originalServiceId = String(items[0]?.serviceId ?? "");
-  const canCharge = balance > 0 && (appointment.status === "confirmed" || appointment.status === "pending_payment");
+  // Seña por transferencia del turnero público esperando el comprobante:
+  // en vez de "Registrar pago"/"Cobrar"/"Reprogramar" se muestran las dos
+  // acciones de la transferencia (confirmar o rechazar).
+  const awaitingTransfer = appointment.status === "pending_payment" && appointment.awaitingTransfer === true;
+  const transferExpiresAt: Date | null = appointment.transferExpiresAt?.toDate?.() ?? null;
+  const depositDue = Number(appointment.depositDue ?? 0);
+  const canCharge = !awaitingTransfer && balance > 0 && (appointment.status === "confirmed" || appointment.status === "pending_payment");
 
   return (
     <div className="mx-auto max-w-[32rem] space-y-lg">
@@ -196,15 +204,37 @@ export default async function AppointmentDetailPage({
           </Link>
         )}
 
-        <StatusActions
-          tenantSlug={tenantSlug}
-          appointmentId={appointmentDoc.id}
-          dateISO={dateISO}
-          status={appointment.status}
-          depositPaid={depositPaid}
-        />
+        {awaitingTransfer ? (
+          <div className="space-y-md rounded-inner border border-status-pending/30 bg-status-pending-bg p-lg">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface text-status-pending">
+                <Icon name="hourglass_top" className="text-[20px]" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-label-lg text-label-lg text-on-surface">Esperando transferencia</p>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                  Reservó desde tu link y eligió transferir la seña de <strong className="tabular-nums text-on-surface">{moneyLabel(depositDue)}</strong>. Confirmala cuando veas el comprobante.
+                </p>
+                {transferExpiresAt && (
+                  <p className="mt-1 font-label-md text-label-md text-status-pending">
+                    {transferTimeLeftLabel(transferExpiresAt)} · si no la confirmás, se cancela sola
+                  </p>
+                )}
+              </div>
+            </div>
+            <TransferDecision tenantSlug={tenantSlug} appointmentId={appointmentDoc.id} amountLabel={moneyLabel(depositDue)} />
+          </div>
+        ) : (
+          <StatusActions
+            tenantSlug={tenantSlug}
+            appointmentId={appointmentDoc.id}
+            dateISO={dateISO}
+            status={appointment.status}
+            depositPaid={depositPaid}
+          />
+        )}
 
-        {(appointment.status === "confirmed" || appointment.status === "pending_payment") && (
+        {!awaitingTransfer && (appointment.status === "confirmed" || appointment.status === "pending_payment") && (
           <RescheduleButton
             tenantSlug={tenantSlug}
             appointmentId={appointmentDoc.id}

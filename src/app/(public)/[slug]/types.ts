@@ -10,6 +10,8 @@ export type PublicTenant = {
   logo_url: string | null;
   timezone: string;
   booking_enabled: boolean;
+  /** Medios con los que la clienta puede pagar la seña (al menos uno si booking_enabled). */
+  payment_methods: { mercadopago: boolean; transfer: boolean };
   books_by_staff: boolean;
   max_booking_days: number;
   description: string | null;
@@ -71,4 +73,30 @@ export type ClientFormData = {
   full_name: string;
   phone_e164: string;
   email: string;
+};
+
+/**
+ * Errores esperables de las acciones públicas: viajan como valor (en
+ * producción Next oculta el mensaje de un `throw` en una server action).
+ */
+export type PublicActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+/** Pantalla "Turno reservado — pendiente de confirmación" (turnero y Mi turno). */
+export type TransferPanelData = {
+  tenantName: string;
+  clientName: string;
+  serviceName: string;
+  /** "sábado 10 de octubre a las 10:00" en la zona del local. */
+  whenLabel: string;
+  amount: number;
+  amountLabel: string;
+  amountToCopy: string;
+  /** "sábado 10/10 a las 22:00" -- hasta cuándo se espera el comprobante. */
+  deadlineLabel: string | null;
+  alias: string | null;
+  cbu: string | null;
+  holderName: string | null;
+  bankName: string | null;
+  whatsappHref: string | null;
+  miTurnoHref: string;
 };

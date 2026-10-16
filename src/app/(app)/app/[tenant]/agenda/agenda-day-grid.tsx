@@ -152,7 +152,7 @@ function StaffColumn({
             {staff.displayName}
           </p>
           <span className="flex min-w-0 items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: staff.color ?? "#767582" }} />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: staff.color ?? "var(--color-on-surface-variant)" }} />
             <span className="truncate">
               {staff.specialty ? `${staff.specialty} · ` : ""}
               {appointments.length} turno{appointments.length === 1 ? "" : "s"}
@@ -365,7 +365,7 @@ function TeamDayMobileList({
           >
             <span
               className="h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: selectedStaffId === s.id ? "#ffffff" : s.color ?? "#767582" }}
+              style={{ backgroundColor: selectedStaffId === s.id ? "var(--color-surface)" : s.color ?? "var(--color-on-surface-variant)" }}
             />
             <span className="max-w-[9rem] truncate">{s.displayName}</span>
             <span className="tabular-nums">({countByStaff.get(s.id) ?? 0})</span>

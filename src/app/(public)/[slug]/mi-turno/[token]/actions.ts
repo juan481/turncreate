@@ -7,6 +7,7 @@ import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { clearPendingTransfer } from "@/server/public-booking/transfer";
 
 export async function cancelAppointmentAction(token: string, slug: string) {
+  if (typeof token !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(token)) return;
   const tenant = await getTenantBySlugFromFirebase(slug);
   if (!tenant) return;
   const db = firebaseAdmin().db;
@@ -27,6 +28,8 @@ export async function cancelAppointmentAction(token: string, slug: string) {
       status: "cancelled",
       cancelReason: "Cancelado por la clienta",
       depositDisposition: disposition,
+      // Si esperaba una transferencia, deja de esperarla (no aparece más en la lista de la dueña).
+      awaitingTransfer: false,
       cancelledAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

@@ -6,6 +6,7 @@ import { paymentDocument, type PaymentMethod } from "@/domain/money/payment";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { requireTenantAccess } from "@/server/firebase/tenants";
+import { clearPendingTransfer } from "@/server/public-booking/transfer";
 import { planFeatures } from "@/lib/plans";
 
 export type CajaActionState = { error: string | null };
@@ -15,7 +16,15 @@ const METHODS = new Set<PaymentMethod>(["cash", "transfer", "card_posnet", "merc
 async function access(slug: string) {
   const user = await getCurrentFirebaseUser();
   if (!user) throw new Error("Tu sesión venció. Volvé a iniciar sesión.");
-  return requireTenantAccess(user.uid, slug);
+  return { user, ...(await requireTenantAccess(user.uid, slug)) };
+}
+
+/** Todo lo que muestra plata del día: Caja (Hoy + Historial), Reportes y la home. */
+function revalidateMoney(slug: string) {
+  revalidatePath(`/app/${slug}/caja`);
+  revalidatePath(`/app/${slug}/caja/historial`);
+  revalidatePath(`/app/${slug}/reportes`);
+  revalidatePath(`/app/${slug}`);
 }
 
 export async function openCash(tenantSlug: string, _prev: CajaActionState, formData: FormData): Promise<CajaActionState> {
@@ -29,7 +38,7 @@ export async function openCash(tenantSlug: string, _prev: CajaActionState, formD
     if (!open.empty) return { error: "Ya hay una caja abierta" };
     const ref = db.collection("tenants").doc(tenant.id).collection("cashSessions").doc();
     await ref.create({ id: ref.id, openingAmount, openedAt: FieldValue.serverTimestamp(), closedAt: null, expectedAmount: 0, createdAt: FieldValue.serverTimestamp() });
-    revalidatePath(`/app/${tenantSlug}/caja`);
+    revalidateMoney(tenantSlug);
     return { error: null };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo abrir la caja" }; }
 }
@@ -46,7 +55,7 @@ export async function closeCash(tenantSlug: string, sessionId: string, _prev: Ca
     const counted = Number(formData.get("countedAmount") ?? 0);
     if (!Number.isFinite(counted) || counted < 0) return { error: "Ingresá un efectivo contado válido" };
     await ref.update({ closedAt: FieldValue.serverTimestamp(), expectedAmount: expected, countedAmount: counted, difference: counted - expected, differenceReason: String(formData.get("differenceReason") || "") || null });
-    revalidatePath(`/app/${tenantSlug}/caja`);
+    revalidateMoney(tenantSlug);
     return { error: null };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo cerrar la caja" }; }
 }
@@ -65,7 +74,7 @@ export async function addCashMovement(tenantSlug: string, sessionId: string, _pr
       const ref = sessionRef.collection("movements").doc();
       transaction.create(ref, { id: ref.id, type, amount, method: "cash", reason: String(formData.get("reason") || ""), createdAt: FieldValue.serverTimestamp() });
     });
-    revalidatePath(`/app/${tenantSlug}/caja`);
+    revalidateMoney(tenantSlug);
     return { error: null };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo registrar el movimiento" }; }
 }
@@ -78,10 +87,13 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
   const productId = typeof formData.get("productId") === "string" ? String(formData.get("productId")) : "";
   if (typeof appointmentId !== "string" || !METHODS.has(method) || !Number.isFinite(amount) || amount <= 0) return { error: "Faltan datos para cobrar" };
   try {
-    const { tenant } = await access(tenantSlug);
+    const { user, tenant } = await access(tenantSlug);
     const db = firebaseAdmin().db;
     const appointmentRef = db.collection("tenants").doc(tenant.id).collection("appointments").doc(appointmentId);
+    let clearsTransfer = false;
     await db.runTransaction(async (transaction) => {
+      // La transacción se puede reintentar: el flag se recalcula en cada intento.
+      clearsTransfer = false;
       const appointment = await transaction.get(appointmentRef);
       if (!appointment.exists) throw new Error("El turno no existe");
       const data = appointment.data()!;
@@ -108,8 +120,26 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
       });
       // Pagar y prestar el servicio son hechos distintos: saldo cero no
       // significa que el turno ya se realizó. Solo sale de pending_payment.
-      const nextStatus = data.status === "pending_payment" ? "confirmed" : data.status;
-      transaction.update(appointmentRef, { balance, status: nextStatus, updatedAt: FieldValue.serverTimestamp() });
+      const confirming = data.status === "pending_payment";
+      const update: Record<string, unknown> = { balance, status: confirming ? "confirmed" : data.status, updatedAt: FieldValue.serverTimestamp() };
+      if (confirming) {
+        // Mismo criterio que "Registrar pago" en el detalle del turno: lo
+        // que entra con el turno pendiente es la seña (así, si después se
+        // cancela, se pregunta qué hacer con ella).
+        if (Number(data.depositPaid ?? 0) === 0) update.depositPaid = amount;
+        // Si esperaba una transferencia, ya no: el pago entró por caja. Antes
+        // quedaba `awaitingTransfer: true` en un turno confirmado (con su doc
+        // en pendingTransfers vivo) y figuraba como transferencia pendiente.
+        if (data.awaitingTransfer === true) {
+          update.awaitingTransfer = false;
+          update.transferConfirmedAt = FieldValue.serverTimestamp();
+          update.transferConfirmedBy = user.uid;
+          clearsTransfer = true;
+        }
+        const historyRef = appointmentRef.collection("statusHistory").doc();
+        transaction.create(historyRef, { id: historyRef.id, from: "pending_payment", to: "confirmed", reason: "Cobrado en caja", depositDisposition: null, changedBy: user.uid, createdAt: FieldValue.serverTimestamp() });
+      }
+      transaction.update(appointmentRef, update);
       if (data.clientId) transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { totalSpent: FieldValue.increment(grossAmount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       if (productSnapshot) {
         const saleRef = db.collection("tenants").doc(tenant.id).collection("productSales").doc();
@@ -120,7 +150,10 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
         transaction.create(movementRef, { id: movementRef.id, type: "in", amount: grossAmount, method, reason: `Cobro turno · ${String(data.clientName ?? "")}`.trim(), appointmentId, createdAt: FieldValue.serverTimestamp() });
       }
     });
-    revalidatePath(`/app/${tenantSlug}/caja`);
+    // pendingTransfers es una colección raíz (la lee el cron de vencidas):
+    // se limpia después del commit, igual que en changeStatus.
+    if (clearsTransfer) await clearPendingTransfer(tenant.id, appointmentId);
+    revalidateMoney(tenantSlug);
     revalidatePath(`/app/${tenantSlug}/agenda`);
     return { error: null };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo cobrar el turno" }; }

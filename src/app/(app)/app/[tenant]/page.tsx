@@ -2,16 +2,21 @@ import Link from "next/link";
 import { addMonthsISO, dayRange, formatTimeInTz, longDayLabel, monthRange, todayISO, weekRange } from "@/lib/dates";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
+import { getUserProfileSnapshot } from "@/server/firebase/user-profile";
 import { getDaySummary, getPaymentSummary, getRangeSummary } from "@/server/firebase/stats";
 import { Card } from "@/components/ui/card";
 import { MenuTile } from "@/components/ui/menu-tile";
+import { KpiTile } from "@/components/ui/kpi-tile";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { TenantTypeInfoButton } from "./tenant-type-info";
 import { PublicLink } from "./public-link";
+import { HomeGreeting } from "./home-greeting";
+import { currentDayPart, firstNameOf, greetingLines } from "./greeting";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { DEMO_USER_EMAIL } from "@/lib/demo";
 import { getMpConnection } from "@/server/mercadopago/connections";
+import { countPendingTransfers } from "@/server/public-booking/transfer";
 import { planFeatures } from "@/lib/plans";
 
 // Fuera del componente a propósito: el linter de React trata cualquier
@@ -25,25 +30,25 @@ function isUpcoming(startsAtISO: string): boolean {
   return new Date(startsAtISO).getTime() >= Date.now();
 }
 
-function Stat({ label, value, hint, hintTone = "neutral" }: { label: string; value: string | number; hint?: string; hintTone?: "neutral" | "positive" | "warning" }) {
-  return (
-    <div className="min-w-0 bg-surface-container-lowest px-4 py-3">
-      <p className="truncate font-label-xs text-label-xs uppercase tracking-wide text-on-surface-variant">{label}</p>
-      <p className="mt-0.5 truncate font-headline-sm text-headline-sm tabular-nums text-on-surface">{value}</p>
-      {hint && (
-        <p className={cn("truncate font-label-xs text-label-xs", hintTone === "positive" ? "text-status-confirmed" : hintTone === "warning" ? "text-status-draft" : "text-on-surface-variant")}>
-          {hint}
-        </p>
-      )}
-    </div>
-  );
+function money(amount: number): string {
+  return `$${amount.toLocaleString("es-AR")}`;
+}
+
+/**
+ * Plata para los tiles chicos de la grilla 2x2: a 320px cada uno tiene
+ * ~105px útiles y "$1.250.000" no entra sin truncar. Desde el millón se
+ * abrevia ("$1,25 M"); el valor completo queda en el `title` del tile.
+ */
+function compactMoney(amount: number): string {
+  if (Math.abs(amount) < 1_000_000) return money(amount);
+  return `$${(amount / 1_000_000).toLocaleString("es-AR", { maximumFractionDigits: 2 })} M`;
 }
 
 export default async function TenantDashboardPage({
   params,
 }: PageProps<"/app/[tenant]">) {
   const { tenant: tenantSlug } = await params;
-  const { tenant } = await requireTenantPage(tenantSlug);
+  const { tenant, user } = await requireTenantPage(tenantSlug);
 
   const dateISO = todayISO(tenant.timezone);
   const monthISO = dateISO.slice(0, 7);
@@ -68,6 +73,8 @@ export default async function TenantDashboardPage({
     monthPayments,
     previousMonthPayments,
     mpConnection,
+    profileSnapshot,
+    pendingTransfers,
   ] = await Promise.all([
     getDaySummary(tenant.id, dateISO, tenant.timezone),
     getRangeSummary(tenant.id, weekRange(dateISO, tenant.timezone)),
@@ -89,9 +96,20 @@ export default async function TenantDashboardPage({
     getPaymentSummary(tenant.id, monthRange(monthFirstDayISO, tenant.timezone)),
     getPaymentSummary(tenant.id, monthRange(previousMonthFirstDayISO, tenant.timezone)),
     getMpConnection(tenant.id),
+    getUserProfileSnapshot(user.uid),
+    countPendingTransfers(tenant.id),
   ]);
 
   const isDemoUser = currentUser?.email === DEMO_USER_EMAIL;
+  const profile = profileSnapshot.data();
+  // Franja del día en la zona del LOCAL (el VPS corre en UTC).
+  const dayPart = currentDayPart(tenant.timezone);
+  const greeting = greetingLines({
+    dayPart,
+    firstName: firstNameOf(profile?.fullName) || firstNameOf(user.name),
+    gender: profile?.gender,
+    tenantName: tenant.name,
+  });
   const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://turn.justcreate.com.ar"}/${tenantSlug}`;
 
   const totalStaff = staffSnapshot.size;
@@ -106,27 +124,43 @@ export default async function TenantDashboardPage({
   const logoUrl = (tenant as typeof tenant & { logoUrl?: string | null }).logoUrl ?? null;
   const mpConnected = mpConnection?.status === "connected";
   const setupSteps = [
-    { label: "Cargá tu logo", done: Boolean(logoUrl), href: `/app/${tenantSlug}/configuracion` },
+    { label: "Cargá tu logo", done: Boolean(logoUrl), href: `/app/${tenantSlug}/configuracion/local` },
     { label: "Cargá tus servicios y precios", done: servicesCount > 0, href: `/app/${tenantSlug}/servicios` },
-    { label: "Conectá tu cuenta de Mercado Pago", done: mpConnected, href: `/app/${tenantSlug}/configuracion#mercadopago` },
+    { label: "Conectá tu cuenta de Mercado Pago", done: mpConnected, href: `/app/${tenantSlug}/configuracion/pagos` },
   ];
   const setupDone = setupSteps.filter((step) => step.done).length;
 
   const monthChangePct =
-    previousMonthPayments.applied > 0
-      ? Math.round(((monthPayments.applied - previousMonthPayments.applied) / previousMonthPayments.applied) * 100)
-      : monthPayments.applied > 0
+    previousMonthPayments.gross > 0
+      ? Math.round(((monthPayments.gross - previousMonthPayments.gross) / previousMonthPayments.gross) * 100)
+      : monthPayments.gross > 0
         ? 100
         : null;
 
   return (
     <div className="space-y-lg">
-      <div>
-        <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface md:font-headline-lg md:text-headline-lg">
-          Hoy en {tenant.name}
-        </h1>
-        <p className="font-body-sm text-body-sm capitalize text-on-surface-variant">{longDayLabel(dateISO)}</p>
-      </div>
+      <HomeGreeting dayPart={dayPart} icon={greeting.icon} title={greeting.title} subtitle={greeting.subtitle} dateLabel={longDayLabel(dateISO)} />
+
+      {/* Señas por transferencia esperando el OK de la dueña: es plata
+          trabada y un turno sin confirmar, así que va arriba de todo. */}
+      {pendingTransfers > 0 && (
+        <Link
+          href={`/app/${tenantSlug}/transferencias`}
+          className="flex min-h-14 min-w-0 items-center gap-3 rounded-card border border-status-draft-dot/40 bg-status-draft-bg px-4 py-3 shadow-card transition-transform motion-safe:active:scale-[0.99]"
+        >
+          <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-status-draft-dot text-[20px] text-on-primary">
+            <Icon name="account_balance" />
+            <span aria-hidden className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-status-alert-dot ring-2 ring-status-draft-bg motion-safe:animate-breathe" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-label-lg text-label-lg text-status-draft">
+              Transferencias por confirmar <span className="tabular-nums">({pendingTransfers})</span>
+            </span>
+            <span className="block truncate font-label-sm text-label-sm text-status-draft/80">Revisá los comprobantes y confirmá las señas</span>
+          </span>
+          <Icon name="chevron_right" className="shrink-0 text-[20px] text-status-draft" />
+        </Link>
+      )}
 
       {setupDone < setupSteps.length && (
         <Card hoverLift={false} className="space-y-3 border-primary/20 bg-primary/5 p-lg">
@@ -168,32 +202,63 @@ export default async function TenantDashboardPage({
         </Card>
       )}
 
-      {/* Contadores: chicos y en una sola tarjeta, para que la pantalla no
-          se la coman los números. `gap-px` sobre `bg-border` dibuja las
-          líneas divisorias sin bordes por celda. */}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-border bg-border shadow-card lg:grid-cols-4">
-        <Stat
+      {/* Métricas: "Cobrado hoy" es la protagonista (degradé, número
+          grande, ancho completo en mobile); el resto en 2x2. grid-cols-2
+          explícito como base y lg:grid-cols-6 (2 + 4x1) en desktop. */}
+      <section aria-label="Resumen" className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <KpiTile
+          emphasis
+          className="col-span-2"
+          icon={<Icon name="payments" />}
           label="Cobrado hoy"
-          value={`$${todayPayments.applied.toLocaleString("es-AR")}`}
-          hint={daySummary.porCobrar > 0 ? `$${daySummary.porCobrar.toLocaleString("es-AR")} por cobrar` : undefined}
+          value={money(todayPayments.gross)}
+          hint={
+            daySummary.porCobrar > 0
+              ? `${money(daySummary.porCobrar)} por cobrar todavía`
+              : daySummary.turnos > 0
+                ? "Todo lo de hoy, al día"
+                : "Sin turnos para cobrar hoy"
+          }
+          href={`/app/${tenantSlug}/caja`}
         />
-        <Stat
+        <KpiTile
+          icon={<Icon name="event" />}
           label="Turnos hoy"
           value={daySummary.turnos}
-          hint={atendidosHoy > 0 ? `${atendidosHoy} atendido${atendidosHoy === 1 ? "" : "s"}` : undefined}
+          hint={
+            atendidosHoy > 0
+              ? `${atendidosHoy} atendido${atendidosHoy === 1 ? "" : "s"}`
+              : upcoming.length > 0
+                ? `${upcoming.length} por venir`
+                : undefined
+          }
+          href={`/app/${tenantSlug}/agenda`}
         />
-        <Stat
+        <KpiTile
+          icon={<Icon name="pending_actions" />}
+          label="Por cobrar"
+          value={compactMoney(daySummary.porCobrar)}
+          title={money(daySummary.porCobrar)}
+          hint="De los turnos de hoy"
+          hintTone={daySummary.porCobrar > 0 ? "warning" : "neutral"}
+        />
+        <KpiTile
+          icon={<Icon name="bar_chart" />}
           label="Esta semana"
-          value={`$${weekPayments.applied.toLocaleString("es-AR")}`}
+          value={compactMoney(weekPayments.gross)}
+          title={money(weekPayments.gross)}
           hint={`${weekSummary.turnos} turno${weekSummary.turnos === 1 ? "" : "s"}`}
         />
-        <Stat
+        <KpiTile
+          icon={<Icon name="trending_up" />}
           label="Este mes"
-          value={`$${monthPayments.applied.toLocaleString("es-AR")}`}
+          value={compactMoney(monthPayments.gross)}
+          title={money(monthPayments.gross)}
           hint={monthChangePct === null ? undefined : `${monthChangePct >= 0 ? "+" : ""}${monthChangePct}% vs. mes pasado`}
           hintTone={monthChangePct === null ? "neutral" : monthChangePct >= 0 ? "positive" : "warning"}
+          href={`/app/${tenantSlug}/reportes`}
         />
-      </div>
+      </section>
 
       {/* Turnos pendientes de hoy: tarjetitas verticales (Cliente, Servicio,
           Horario) en una fila que se desliza. Si no queda ninguno, la
@@ -240,7 +305,7 @@ export default async function TenantDashboardPage({
       )}
 
       {/* Botonera -- un solo tap a cada sección, cada una con un dato vivo.
-          Misma lógica de base explícita que la grilla de KPIs de arriba. */}
+          Misma lógica de base explícita que la grilla de métricas de arriba. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <MenuTile
           href={`/app/${tenantSlug}/agenda`}
@@ -266,7 +331,7 @@ export default async function TenantDashboardPage({
           title="Caja"
           subtitle={
             !features.cashSessions
-              ? `$${todayPayments.applied.toLocaleString("es-AR")} cobrado hoy`
+              ? `$${todayPayments.gross.toLocaleString("es-AR")} cobrado hoy`
               : openCashSession
               ? `Abierta · $${Number(openCashSession.openingAmount ?? 0).toLocaleString("es-AR")}`
               : "Cerrada"
@@ -303,6 +368,13 @@ export default async function TenantDashboardPage({
         <MenuTile href={`/app/${tenantSlug}/configuracion`} icon={<Icon name="settings" />} title="Configuración" />
         <MenuTile href={`/app/${tenantSlug}/bot`} icon={<Icon name="smart_toy" />} title="IA" subtitle="Beta" />
       </div>
+
+      {/* Contenido de TurnCreate para la dueña (no del local): aparte de la
+          botonera para que no se lea como una sección más del negocio. */}
+      <section aria-label="Aprendé y enterate" className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <MenuTile href={`/app/${tenantSlug}/novedades`} icon={<Icon name="newspaper" />} title="Novedades" subtitle="Lo nuevo de TurnCreate" />
+        <MenuTile href={`/app/${tenantSlug}/tutorial`} icon={<Icon name="play_circle" />} title="Tutorial" subtitle="Cómo sacarle el jugo" />
+      </section>
     </div>
   );
 }

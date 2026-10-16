@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanPublicClient } from "./client";
+import { cleanPublicClient, tenantPhoneKey } from "./client";
 
 describe("cleanPublicClient", () => {
   it("normaliza el WhatsApp como lo escriba la clienta", () => {
@@ -15,5 +15,18 @@ describe("cleanPublicClient", () => {
     expect(() => cleanPublicClient({ full_name: "L", phone_e164: "1122334455", email: "" })).toThrow("nombre");
     expect(() => cleanPublicClient({ full_name: "Lu", phone_e164: "123", email: "" })).toThrow("WhatsApp");
     expect(() => cleanPublicClient({ full_name: "Lu", phone_e164: "1122334455", email: "no-es-mail" })).toThrow("email");
+  });
+});
+
+describe("cleanPublicClient con datos que no vienen del formulario", () => {
+  it("no revienta con tipos raros: los trata como vacíos", () => {
+    const weird = { full_name: 123, phone_e164: { a: 1 }, email: null } as unknown as Parameters<typeof cleanPublicClient>[0];
+    expect(() => cleanPublicClient(weird)).toThrow("nombre");
+  });
+});
+
+describe("tenantPhoneKey", () => {
+  it("usa solo los dígitos, igual que tenantClientPhones", () => {
+    expect(tenantPhoneKey("t1", "+5491122334455")).toBe("t1_5491122334455");
   });
 });

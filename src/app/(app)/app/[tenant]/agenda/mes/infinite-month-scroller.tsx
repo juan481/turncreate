@@ -1,12 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addMonths, format } from "date-fns";
+import { addMonthsISO } from "@/lib/dates";
 import { Icon } from "@/components/ui/icon";
 import type { MonthData } from "@/server/agenda-month";
 import { loadMonth } from "./actions";
 import { MonthGrid } from "./month-grid";
 
+/**
+ * Lista infinita de meses hacia adelante.
+ *
+ * El rótulo del mes ya NO es un pill global sticky alimentado por un
+ * IntersectionObserver: ese observer solo miraba las entradas que acababan
+ * de cambiar en cada callback (no todas las secciones visibles), así que
+ * mientras se scrolleaba quedaba mostrando el mes equivocado -- y encima
+ * cada MonthGrid pintaba su propio título, con lo que se veían dos meses a
+ * la vez. Ahora el título de CADA mes es sticky dentro de su propia
+ * sección (ver MonthGrid): el navegador lo deja pegado arriba mientras su
+ * mes está en pantalla y el del mes siguiente lo empuja al llegar. Un solo
+ * rótulo visible, siempre el correcto, sin JS de por medio.
+ */
 export function InfiniteMonthScroller({
   tenantSlug,
   initialMonth,
@@ -20,89 +33,59 @@ export function InfiniteMonthScroller({
 }) {
   const [months, setMonths] = useState<MonthData[]>([initialMonth]);
   const [loading, setLoading] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [error, setError] = useState(false);
   const monthsRef = useRef(months);
-  const loadingRef = useRef(loading);
+  const loadingRef = useRef(false);
   useEffect(() => {
     monthsRef.current = months;
-    loadingRef.current = loading;
-  }, [months, loading]);
+  }, [months]);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const sectionRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const loadNext = useCallback(async () => {
     if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
+    setError(false);
     const last = monthsRef.current[monthsRef.current.length - 1];
-    const nextMonthDate = addMonths(new Date(`${last.monthISO}T12:00:00`), 1);
-    const nextMonthISO = format(nextMonthDate, "yyyy-MM-dd");
+    const nextMonthISO = addMonthsISO(last.monthISO, 1);
     try {
       const data = await loadMonth(tenantSlug, nextMonthISO);
-      setMonths((prev) => [...prev, data]);
+      setMonths((prev) => (prev.some((m) => m.monthISO === data.monthISO) ? prev : [...prev, data]));
+    } catch {
+      setError(true);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [tenantSlug]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (!sentinel || error) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) loadNext();
+        if (entries.some((entry) => entry.isIntersecting)) loadNext();
       },
       { rootMargin: "800px" },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadNext]);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        let bestIdx: number | null = null;
-        let bestRatio = 0;
-        for (const entry of entries) {
-          const idx = Number((entry.target as HTMLElement).dataset.index);
-          if (entry.intersectionRatio > bestRatio) {
-            bestRatio = entry.intersectionRatio;
-            bestIdx = idx;
-          }
-        }
-        if (bestIdx !== null) setActiveIndex(bestIdx);
-      },
-      { threshold: [0.15, 0.3, 0.5, 0.75] },
-    );
-    sectionRefs.current.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [months.length]);
-
-  const activeMonth = months[activeIndex] ?? months[0];
+    // months.length: re-observar después de cada carga hace que, si el
+    // sentinel sigue dentro del margen (pantallas altas), se pida el
+    // siguiente mes sin esperar a que el usuario scrollee.
+  }, [loadNext, months.length, error]);
 
   return (
     <div className="space-y-xl">
-      <div className="sticky top-[4.75rem] z-10 flex justify-center md:top-[5.25rem]">
-        <div className="flex items-center gap-2 rounded-pill border border-border bg-surface-container-lowest/95 px-4 py-2 shadow-card backdrop-blur-xl">
-          <Icon name="event" className="text-[16px] text-secondary" />
-          <span className="font-label-md text-label-md capitalize text-on-surface">{activeMonth.label}</span>
-          <span className="rounded-pill bg-secondary-soft px-2.5 py-0.5 font-label-sm text-label-sm text-secondary">
-            {activeMonth.totalCount} turno{activeMonth.totalCount === 1 ? "" : "s"}
-          </span>
-        </div>
-      </div>
-
-      {months.map((month, idx) => (
-        <div
+      {months.map((month) => (
+        <MonthGrid
           key={month.monthISO}
-          ref={(el) => {
-            if (el) sectionRefs.current.set(idx, el);
-            else sectionRefs.current.delete(idx);
-          }}
-          data-index={idx}
-        >
-          <MonthGrid tenantSlug={tenantSlug} month={month} todayISO={todayISO} selectedISO={selectedISO} />
-        </div>
+          tenantSlug={tenantSlug}
+          month={month}
+          todayISO={todayISO}
+          selectedISO={selectedISO}
+        />
       ))}
 
       <div ref={sentinelRef} className="h-4" />
@@ -111,6 +94,18 @@ export function InfiniteMonthScroller({
           <Icon name="progress_activity" className="animate-spin text-[16px]" />
           Cargando el próximo mes…
         </p>
+      )}
+      {error && !loading && (
+        <div className="flex justify-center py-4">
+          <button
+            type="button"
+            onClick={() => loadNext()}
+            className="flex min-h-11 items-center gap-1.5 rounded-pill bg-surface-container-low px-4 py-2 text-center font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-high"
+          >
+            <Icon name="autorenew" className="text-[16px]" />
+            No se pudo cargar el próximo mes. Reintentar
+          </button>
+        </div>
       )}
     </div>
   );

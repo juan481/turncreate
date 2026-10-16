@@ -49,7 +49,9 @@ export async function changeStatus(slug: string, appointmentId: string, dateISO:
         const applied = requestedAmount;
         const paymentRef = appointmentRef.collection("payments").doc();
         transaction.create(paymentRef, paymentDocument({ id: paymentRef.id, kind: Number(data.depositPaid ?? 0) > 0 ? "balance" : "deposit", method: requestedMethod, status: "approved", grossAmount: requestedAmount, appliedAmount: applied, feeAmount: 0, surchargeAmount: 0, netAmount: requestedAmount, paidAt: new Date(), source: "admin", tenantId: tenant.id, appointmentId }));
-        if (data.clientId) transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { totalSpent: FieldValue.increment(applied), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        // Un turno por transferencia todavía no contó como visita (ver
+        // server/public-booking/transfer.ts): se suma recién al confirmarlo.
+        if (data.clientId) transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { totalSpent: FieldValue.increment(applied), ...(data.awaitingTransfer === true ? { appointmentsCount: FieldValue.increment(1) } : {}), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
         update.balance = Math.max(0, currentBalance - applied);
         if (Number(data.depositPaid ?? 0) === 0) update.depositPaid = applied;
         if (requestedMethod === "cash" && openCashSessionId) {
@@ -62,6 +64,7 @@ export async function changeStatus(slug: string, appointmentId: string, dateISO:
           update.transferConfirmedBy = user.uid;
         }
       }
+      if (status === "cancelled" && data.awaitingTransfer === true) update.awaitingTransfer = false;
       transaction.update(appointmentRef, update);
       if (data.clientId && status === "no_show") transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { noShowCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       if (data.clientId && status === "completed") transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { lastVisitAt: data.startsAt, updatedAt: FieldValue.serverTimestamp() }, { merge: true });

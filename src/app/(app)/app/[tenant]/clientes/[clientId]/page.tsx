@@ -8,6 +8,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
+import { ageFromBirthYear } from "@/lib/schemas/client";
+import { todayISO } from "@/lib/dates";
 import { ClientNotes } from "./client-notes";
 
 const STATUS_LABEL: Record<string, { label: string; tone: StatusPillStatus }> = {
@@ -69,6 +71,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/app/[tena
   // completados (un servicio puede quedar con saldo pendiente).
   const totalSpent = Number(client.totalSpent ?? 0);
   const noShowCount = allAppointments.filter((app) => app.status === "no_show").length;
+  const age = ageFromBirthYear(client.birthYear, Number(todayISO(tenant.timezone).slice(0, 4)));
 
   return (
     <div className="space-y-lg">
@@ -98,6 +101,13 @@ export default async function ClientDetailPage({ params }: PageProps<"/app/[tena
               <div className="flex min-w-0 items-center gap-2 font-body-md text-body-md text-on-surface">
                 <Icon name="mail" className="text-[18px] text-on-surface-variant" />
                 <span className="truncate">{client.email as string}</span>
+              </div>
+            )}
+            {age !== null && (
+              <div className="flex min-w-0 items-center gap-2 font-body-md text-body-md text-on-surface">
+                <Icon name="cake" className="text-[18px] text-on-surface-variant" />
+                {/* Se guarda solo el año: la edad puede correr ±1 según si ya cumplió. */}
+                <span className="truncate tabular-nums">{age} años</span>
               </div>
             )}
             <div className="flex justify-between border-t border-border pt-4">

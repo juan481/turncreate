@@ -1,8 +1,12 @@
 import "server-only";
+import { cache } from "react";
 import { firebaseAdmin } from "./admin";
 import { dayRange } from "@/lib/dates";
 import {
+  POR_COBRAR_STATUSES,
+  isRefundDue,
   normalizePayment,
+  summarizeAppointments,
   summarizePayments,
   toPaymentSummary,
   type NormalizedPayment,
@@ -30,8 +34,12 @@ export type DaySummary = {
   appointments: DayAppointment[];
   turnos: number;
   facturado: number;
+  /** Definición única de "Cobrado" (ver stats-model.ts): bruto de pagos aprobados por `paidAt`. */
   cobrado: number;
+  /** Definición única de "Por cobrar" (ver stats-model.ts). */
   porCobrar: number;
+  /** Señas de turnos cancelados que hay que devolver (no suman en `cobrado`). */
+  aDevolver: number;
 };
 
 export type RangeSummary = {
@@ -39,52 +47,77 @@ export type RangeSummary = {
   facturado: number;
   cobrado: number;
   porCobrar: number;
+  aDevolver: number;
 };
 
 export type { PaymentBreakdown, PaymentSummary } from "./stats-model";
 
-export async function getPayments(tenantId: string, range: { start: Date; end: Date }): Promise<NormalizedPayment[]> {
+// `cache` = una sola lectura por request aunque la home pida el mismo rango
+// por dos caminos (getRangeSummary + getPaymentSummary). La clave tiene que
+// ser primitiva: dos `Date` iguales son objetos distintos para `cache`.
+const fetchPayments = cache(async (tenantId: string, startMs: number, endMs: number): Promise<NormalizedPayment[]> => {
   const snapshot = await firebaseAdmin().db.collectionGroup("payments")
     .where("tenantId", "==", tenantId)
-    .where("paidAt", ">=", range.start)
-    .where("paidAt", "<", range.end)
+    .where("paidAt", ">=", new Date(startMs))
+    .where("paidAt", "<", new Date(endMs))
     .get();
   return snapshot.docs
     .map((doc) => normalizePayment(doc.id, doc.data()))
     .filter((payment): payment is NormalizedPayment => payment !== null);
+});
+
+/** Pagos aprobados con `paidAt` en [start, end). El array es compartido dentro del request: no lo mutes. */
+export async function getPayments(tenantId: string, range: { start: Date; end: Date }): Promise<NormalizedPayment[]> {
+  return fetchPayments(tenantId, range.start.getTime(), range.end.getTime());
 }
 
+/**
+ * Turnos con plata "a devolver" (ver `isRefundDue`). Query de igualdad sobre
+ * un solo campo (índice automático, sin índice compuesto) y solo los campos
+ * necesarios: son pocos turnos y se comparte en todo el request.
+ */
+export const getRefundDueAppointmentIds = cache(async (tenantId: string): Promise<ReadonlySet<string>> => {
+  const snapshot = await firebaseAdmin().db.collection("tenants").doc(tenantId).collection("appointments")
+    .where("depositDisposition", "==", "refund_required")
+    .select("status", "depositDisposition", "depositRefunded")
+    .get();
+  return new Set(snapshot.docs.filter((doc) => isRefundDue(doc.data())).map((doc) => doc.id));
+});
+
 export async function getPaymentBreakdown(tenantId: string, range: { start: Date; end: Date }): Promise<PaymentBreakdown> {
-  return summarizePayments(await getPayments(tenantId, range));
+  const [payments, refundDueIds] = await Promise.all([getPayments(tenantId, range), getRefundDueAppointmentIds(tenantId)]);
+  return summarizePayments(payments, refundDueIds);
 }
 
 export async function getPaymentSummary(tenantId: string, range: { start: Date; end: Date }): Promise<PaymentSummary> {
   return toPaymentSummary(await getPaymentBreakdown(tenantId, range));
 }
 
-// Mismos estados en todos lados: cancelado y vencido nunca suman turno,
-// nunca suman plata. Antes cada pantalla (home, Caja, agenda) traía los
-// turnos del día con su propio criterio -- ninguno filtraba por estado,
-// así que un turno cancelado podía aparecer en la lista Y sumar a "a
-// cobrar hoy" en más de un lado.
-const ACTIVE_STATUSES = new Set(["confirmed", "completed"]);
+const DAY_FIELDS = [
+  "startsAt", "status", "total", "balance", "clientId", "clientName", "clientPhoto",
+  "staffId", "staffName", "staffPhoto", "items",
+] as const;
 
 /**
- * Turnos activos de un día + los totales que de ahí se derivan
- * (facturado = suma de `total`, cobrado = facturado - balance, por
- * cobrar = suma de `balance`). Única fuente de verdad para que Home,
- * Caja y Reportes no muestren números distintos para "lo mismo".
+ * Turnos firmes (confirmed/completed) de un día + los totales con las
+ * definiciones únicas de stats-model.ts: facturado = suma de `total`,
+ * por cobrar = `porCobrarOf`, cobrado = bruto de pagos aprobados del día.
+ * Única fuente de verdad para que Home, Caja y Reportes no muestren
+ * números distintos para "lo mismo".
  */
 export async function getDaySummary(tenantId: string, dateISO: string, timezone: string): Promise<DaySummary> {
-  const { start, end } = dayRange(dateISO, timezone);
+  const range = dayRange(dateISO, timezone);
   const { db } = firebaseAdmin();
-  const tenantRef = db.collection("tenants").doc(tenantId);
-  const snapshot = await tenantRef
-    .collection("appointments")
-    .where("startsAt", ">=", start)
-    .where("startsAt", "<", end)
-    .orderBy("startsAt")
-    .get();
+  const [snapshot, payments] = await Promise.all([
+    db.collection("tenants").doc(tenantId)
+      .collection("appointments")
+      .where("startsAt", ">=", range.start)
+      .where("startsAt", "<", range.end)
+      .orderBy("startsAt")
+      .select(...DAY_FIELDS)
+      .get(),
+    getPaymentBreakdown(tenantId, range),
+  ]);
 
   const appointments: DayAppointment[] = snapshot.docs
     .map((doc) => {
@@ -104,50 +137,39 @@ export async function getDaySummary(tenantId: string, dateISO: string, timezone:
         serviceNames: Array.isArray(data.items) ? data.items.map((item: { name?: string }) => item.name ?? "").join(", ") : "",
       };
     })
-    .filter((a) => ACTIVE_STATUSES.has(a.status));
+    .filter((a) => POR_COBRAR_STATUSES.has(a.status));
 
-  const facturado = appointments.reduce((sum, a) => sum + a.total, 0);
-  const porCobrar = appointments.reduce((sum, a) => sum + a.balance, 0);
-
+  const totals = summarizeAppointments(appointments);
   return {
     dateISO,
     appointments,
-    turnos: appointments.length,
-    facturado,
-    cobrado: facturado - porCobrar,
-    porCobrar,
+    turnos: totals.turnos,
+    facturado: totals.facturado,
+    cobrado: payments.gross,
+    porCobrar: totals.porCobrar,
+    aDevolver: payments.refundDue.gross,
   };
 }
 
 /**
- * Mismo criterio que `getDaySummary` (estados activos, facturado/cobrado/
- * por cobrar) pero para un rango arbitrario -- pensado para semana/mes de
- * la home. Pasale `{ start, end }` ya armado con `weekRange`/`monthRange`
- * de `lib/dates.ts`, nunca fechas sueltas. No devuelve el array de turnos
- * (en un mes serían cientos): si otra pantalla necesita el detalle turno
- * por turno de un rango largo, que haga su propia query, esto es solo
- * para los 2-3 números de un KPI.
+ * Mismas definiciones que `getDaySummary` pero para un rango arbitrario --
+ * pensado para semana/mes de la home. Pasale `{ start, end }` ya armado con
+ * `weekRange`/`monthRange` de `lib/dates.ts`, nunca fechas sueltas. No
+ * devuelve el array de turnos (en un mes serían cientos): es solo para los
+ * 2-3 números de un KPI. `cobrado` sale de los pagos (por `paidAt`), no de
+ * `total - balance`: así coincide con Caja y Reportes.
  */
 export async function getRangeSummary(tenantId: string, range: { start: Date; end: Date }): Promise<RangeSummary> {
   const { db } = firebaseAdmin();
-  const tenantRef = db.collection("tenants").doc(tenantId);
-  const snapshot = await tenantRef
-    .collection("appointments")
-    .where("startsAt", ">=", range.start)
-    .where("startsAt", "<", range.end)
-    .select("status", "total", "balance")
-    .get();
-
-  let turnos = 0;
-  let facturado = 0;
-  let porCobrar = 0;
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    if (!ACTIVE_STATUSES.has(String(data.status ?? ""))) continue;
-    turnos += 1;
-    facturado += Number(data.total ?? 0);
-    porCobrar += Number(data.balance ?? 0);
-  }
-
-  return { turnos, facturado, cobrado: facturado - porCobrar, porCobrar };
+  const [snapshot, payments] = await Promise.all([
+    db.collection("tenants").doc(tenantId)
+      .collection("appointments")
+      .where("startsAt", ">=", range.start)
+      .where("startsAt", "<", range.end)
+      .select("status", "total", "balance")
+      .get(),
+    getPaymentBreakdown(tenantId, range),
+  ]);
+  const totals = summarizeAppointments(snapshot.docs.map((doc) => doc.data()));
+  return { ...totals, cobrado: payments.gross, aDevolver: payments.refundDue.gross };
 }

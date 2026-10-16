@@ -27,7 +27,10 @@ export async function compressImageToDataUrl(file: File, maxSidePx = 512): Promi
     if (!context) throw new Error("No pudimos procesar la imagen");
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const webp = canvas.toDataURL("image/webp", 0.85);
-    return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/png");
+    if (webp.startsWith("data:image/webp")) return webp;
+    // Safari viejo no codifica WebP: PNG solo si el original es PNG (logos con
+    // transparencia); una foto en PNG pesa varias veces más que en JPEG.
+    return file.type === "image/png" ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.85);
   } finally {
     URL.revokeObjectURL(url);
   }

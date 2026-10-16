@@ -1,14 +1,16 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useId, useState } from "react";
 import { formatInTz, formatTimeInTz } from "@/lib/dates";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusPill } from "@/components/ui/status-pill";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/empty-state";
+import { KpiTile } from "@/components/ui/kpi-tile";
 import { cn } from "@/lib/utils";
 import {
   openCash,
@@ -20,7 +22,7 @@ import {
 } from "./actions";
 
 type Session = { id: string; opened_at: string; opening_amount: number } | null;
-type AppointmentDue = {
+export type AppointmentDue = {
   id: string;
   startsAt: string;
   total: number;
@@ -37,6 +39,8 @@ type LastClosedSession = {
   countedAmount: number;
   difference: number;
 } | null;
+/** Mismas definiciones que la home y Reportes (src/server/firebase/stats-model.ts). */
+export type DayTotals = { cobrado: number; porCobrar: number; aDevolver: number; aDevolverCount: number };
 
 const initialCajaState: CajaActionState = { error: null };
 const initialChargeState: ChargeActionState = { error: null };
@@ -46,25 +50,68 @@ const METHOD_LABEL: Record<string, { label: string; icon: string }> = {
   card_posnet: { label: "Posnet", icon: "credit_card" },
   transfer: { label: "Transferencia", icon: "swap_horiz" },
   mercadopago: { label: "Mercado Pago", icon: "account_balance_wallet" },
+  other: { label: "Otros", icon: "payments" },
 };
 
-function formatHour(instant: string, timezone: string) {
-  return formatTimeInTz(instant, timezone);
+const SELECT_CLASS = "h-11 w-full min-w-0 rounded-pill border-0 bg-surface px-3 font-body-lg text-body-lg text-on-surface";
+
+function money(n: number) {
+  return `$${n.toLocaleString("es-AR")}`;
 }
 
-/** Encabezado chico para cada paso del flujo (Cobrar / Cerrar), con el
- * número en un círculo -- así "Caja" se lee como 3 pasos (Abrir → Cobrar →
- * Cerrar) en vez de una pila de cards sin jerarquía. */
-function StepHeader({ step, title, hint }: { step: number; title: string; hint?: string }) {
+/** Valor de KpiTile que nunca desborda: a 320px baja un tamaño y, en el peor caso, trunca (con el número completo en `title`). */
+function MoneyValue({ amount, className }: { amount: number; className?: string }) {
+  return (
+    <span title={money(amount)} className={cn("block truncate text-headline-sm sm:text-headline-md", className)}>
+      {money(amount)}
+    </span>
+  );
+}
+
+/** Encabezado chico para cada paso del flujo (Abrir → Cobrar → Cerrar), con el número en un círculo. */
+function StepHeader({ step, title, hint }: { step?: number; title: string; hint?: string }) {
   return (
     <div className="flex items-start gap-2.5">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary font-label-sm text-label-sm text-on-primary">
-        {step}
-      </span>
+      {step !== undefined && (
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary font-label-sm text-label-sm text-on-primary">
+          {step}
+        </span>
+      )}
       <div className="min-w-0">
         <h2 className="font-headline-sm text-headline-sm text-on-surface">{title}</h2>
         {hint && <p className="font-body-sm text-body-sm text-on-surface-variant">{hint}</p>}
       </div>
+    </div>
+  );
+}
+
+/** Cobrado hoy / Por cobrar hoy (+ "A devolver" si hay): los mismos números que la home. */
+function DayTotalsTiles({ totals }: { totals: DayTotals }) {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-md">
+        <KpiTile
+          className="min-w-0"
+          label="Cobrado hoy"
+          icon={<Icon name="payments" className="text-[14px]" />}
+          value={<MoneyValue amount={totals.cobrado} className="text-status-confirmed" />}
+        />
+        <KpiTile
+          className="min-w-0"
+          label="Por cobrar hoy"
+          icon={<Icon name="pending_actions" className="text-[14px]" />}
+          value={<MoneyValue amount={totals.porCobrar} className="text-secondary" />}
+        />
+      </div>
+      {totals.aDevolver > 0 && (
+        <p className="flex min-w-0 items-start gap-2 rounded-inner bg-status-alert-bg px-3 py-2.5 font-body-sm text-body-sm text-status-alert">
+          <Icon name="warning" className="mt-0.5 shrink-0 text-[14px]" />
+          <span className="min-w-0">
+            <span className="tabular-nums">{money(totals.aDevolver)}</span> a devolver ({totals.aDevolverCount} seña
+            {totals.aDevolverCount === 1 ? "" : "s"} de turnos cancelados). No suma en lo cobrado.
+          </span>
+        </p>
+      )}
     </div>
   );
 }
@@ -74,24 +121,25 @@ function OpenCashForm({
   appointments,
   timezone,
   lastClosedSession,
+  totals,
 }: {
   tenantSlug: string;
   appointments: AppointmentDue[];
   timezone: string;
   lastClosedSession: LastClosedSession;
+  totals: DayTotals;
 }) {
   const [state, formAction, pending] = useActionState(openCash.bind(null, tenantSlug), initialCajaState);
-  const pendingTotal = appointments.reduce((sum, a) => sum + a.balance, 0);
 
   return (
     <div className="mx-auto max-w-[36rem] space-y-lg">
-      <Card className="space-y-md p-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant">
+      <Card hoverLift={false} className="space-y-md p-lg">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant">
               <Icon name="point_of_sale" className="text-[18px]" />
             </span>
-            <h2 className="font-headline-sm text-headline-sm text-on-surface">Estado de caja</h2>
+            <h2 className="min-w-0 font-headline-sm text-headline-sm text-on-surface [overflow-wrap:anywhere]">Caja del día</h2>
           </div>
           <StatusPill status="alert">Cerrada</StatusPill>
         </div>
@@ -101,27 +149,24 @@ function OpenCashForm({
             <label htmlFor="openingAmount" className="font-label-sm text-label-sm text-on-surface">
               Saldo inicial
             </label>
-            <Input id="openingAmount" name="openingAmount" type="number" placeholder="0.00" required min="0" step="0.01" />
+            <Input id="openingAmount" name="openingAmount" type="number" inputMode="decimal" placeholder="0.00" required min="0" step="0.01" />
           </div>
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? "Abriendo…" : "Abrir caja"}
           </Button>
-          {state.error && <p className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
+          {state.error && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
         </form>
       </Card>
 
+      <DayTotalsTiles totals={totals} />
+
       {appointments.length > 0 && (
         <Card hoverLift={false} className="space-y-2 p-lg">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="font-label-lg text-label-lg text-on-surface">Te esperan hoy</h3>
-            <span className="shrink-0 rounded-pill bg-secondary-soft px-3 py-0.5 font-label-sm text-label-sm tabular-nums text-secondary">
-              ${pendingTotal.toLocaleString("es-AR")} por cobrar
-            </span>
-          </div>
+          <h3 className="font-label-lg text-label-lg text-on-surface">Te esperan hoy</h3>
           <div className="space-y-1">
             {appointments.slice(0, 4).map((a) => (
               <div key={a.id} className="flex min-w-0 items-center gap-2 font-body-sm text-body-sm text-on-surface-variant">
-                <span className="w-12 shrink-0 text-on-surface">{formatHour(a.startsAt, timezone)}</span>
+                <span className="w-12 shrink-0 tabular-nums text-on-surface">{formatTimeInTz(a.startsAt, timezone)}</span>
                 <span className="truncate">{a.clientName} · {a.serviceNames}</span>
               </div>
             ))}
@@ -140,7 +185,7 @@ function OpenCashForm({
             <p className="font-label-md text-label-md text-on-surface">Último cierre</p>
             <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
               {formatInTz(lastClosedSession.closedAt, timezone, { dateStyle: "short" })} · esperado{" "}
-              <span className="tabular-nums">${lastClosedSession.expectedAmount.toLocaleString("es-AR")}</span>
+              <span className="tabular-nums">{money(lastClosedSession.expectedAmount)}</span>
             </p>
           </div>
           <span
@@ -151,9 +196,7 @@ function OpenCashForm({
                 : "bg-status-alert-bg text-status-alert",
             )}
           >
-            {lastClosedSession.difference === 0
-              ? "Cuadró"
-              : `Diferencia $${lastClosedSession.difference.toLocaleString("es-AR")}`}
+            {lastClosedSession.difference === 0 ? "Cuadró" : `Diferencia ${money(lastClosedSession.difference)}`}
           </span>
         </Card>
       )}
@@ -181,6 +224,7 @@ function ChargeForm({
   const [productId, setProductId] = useState("");
   const product = products.find((p) => p.id === productId);
   const total = appointment.balance + (product?.price ?? 0);
+  const fieldId = useId();
 
   return (
     <form action={formAction} className="space-y-3 rounded-inner bg-surface-container-low p-3">
@@ -196,49 +240,157 @@ function ChargeForm({
       )}
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label className="font-label-sm text-label-sm text-on-surface-variant">Método</label>
-          <select
-            name="method"
-            className="h-9 w-full rounded-pill border-0 bg-surface px-3 font-body-sm text-body-sm text-on-surface"
-          >
+        <div className="min-w-0 space-y-1">
+          <label htmlFor={`${fieldId}-method`} className="font-label-sm text-label-sm text-on-surface-variant">Método</label>
+          <select id={`${fieldId}-method`} name="method" className={SELECT_CLASS}>
             <option value="cash">Efectivo</option>
             <option value="card_posnet">Posnet</option>
             <option value="transfer">Transferencia</option>
           </select>
         </div>
-        <div className="space-y-1">
-          <label className="font-label-sm text-label-sm text-on-surface-variant">Agregar producto</label>
-          <select
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="h-9 w-full rounded-pill border-0 bg-surface px-3 font-body-sm text-body-sm text-on-surface"
-          >
-            <option value="">Ninguno</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} · ${p.price.toLocaleString("es-AR")}
-              </option>
-            ))}
-          </select>
-        </div>
+        {products.length > 0 && (
+          <div className="min-w-0 space-y-1">
+            <label htmlFor={`${fieldId}-product`} className="font-label-sm text-label-sm text-on-surface-variant">Agregar producto</label>
+            <select id={`${fieldId}-product`} value={productId} onChange={(e) => setProductId(e.target.value)} className={SELECT_CLASS}>
+              <option value="">Ninguno</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {money(p.price)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <span className="font-label-md text-label-md tabular-nums text-on-surface">
-          Total a cobrar: ${total.toLocaleString("es-AR")}
-        </span>
+        <span className="font-label-lg text-label-lg tabular-nums text-on-surface">Total a cobrar: {money(total)}</span>
         <div className="flex gap-2">
-          <Button type="button" variant="secondary" size="sm" className="flex-1 sm:flex-none" onClick={onDone}>
+          <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={onDone}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" className="flex-1 sm:flex-none" disabled={pending}>
+          <Button type="submit" className="flex-1 sm:flex-none" disabled={pending}>
             {pending ? "Cobrando…" : "Confirmar cobro"}
           </Button>
         </div>
       </div>
-      {state.error && <p className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
+      {state.error && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
     </form>
+  );
+}
+
+/** Fila de turno con saldo + botón Cobrar (que despliega el ChargeForm). Igual en Solo y con arqueo. */
+function ChargeRow({
+  appointment,
+  timezone,
+  tenantSlug,
+  sessionId,
+  products,
+  charging,
+  onCharge,
+  onDone,
+  showStaff,
+  awaitingDeposit = false,
+}: {
+  appointment: AppointmentDue;
+  timezone: string;
+  tenantSlug: string;
+  sessionId: string;
+  products: Product[];
+  charging: boolean;
+  onCharge: () => void;
+  onDone: () => void;
+  showStaff: boolean;
+  awaitingDeposit?: boolean;
+}) {
+  return (
+    <div className="space-y-2 rounded-inner bg-surface-container-low p-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar name={appointment.clientName} size="sm" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-label-lg text-label-lg text-on-surface">
+            <span className="tabular-nums">{formatTimeInTz(appointment.startsAt, timezone)}</span> · {appointment.clientName}
+          </p>
+          <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
+            {appointment.serviceNames}
+            {showStaff && appointment.staffName ? ` · ${appointment.staffName}` : ""}
+          </p>
+          {awaitingDeposit && <StatusDot tone="pending">Esperando la seña</StatusDot>}
+        </div>
+        <span className="shrink-0 font-label-lg text-label-lg tabular-nums text-on-surface">{money(appointment.balance)}</span>
+      </div>
+      {charging ? (
+        <ChargeForm tenantSlug={tenantSlug} sessionId={sessionId} appointment={appointment} products={products} onDone={onDone} />
+      ) : (
+        <Button className="w-full sm:w-auto" variant={awaitingDeposit ? "secondary" : "primary"} onClick={onCharge}>
+          Cobrar
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Lista de cobros del día. "Por cobrar" (confirmados/completados con saldo)
+ * arriba; abajo, aparte, los que todavía esperan la seña (no suman en "Por
+ * cobrar", pero si la clienta paga acá, el turno queda confirmado).
+ */
+function ChargeList({
+  appointments,
+  awaitingDeposit,
+  timezone,
+  tenantSlug,
+  sessionId,
+  products,
+  showStaff,
+  emptyDescription,
+}: {
+  appointments: AppointmentDue[];
+  awaitingDeposit: AppointmentDue[];
+  timezone: string;
+  tenantSlug: string;
+  sessionId: string;
+  products: Product[];
+  showStaff: boolean;
+  emptyDescription: string;
+}) {
+  const [chargingId, setChargingId] = useState<string | null>(null);
+  const row = (appointment: AppointmentDue, isAwaiting: boolean) => (
+    <ChargeRow
+      key={appointment.id}
+      appointment={appointment}
+      timezone={timezone}
+      tenantSlug={tenantSlug}
+      sessionId={sessionId}
+      products={products}
+      showStaff={showStaff}
+      awaitingDeposit={isAwaiting}
+      charging={chargingId === appointment.id}
+      onCharge={() => setChargingId(appointment.id)}
+      onDone={() => setChargingId(null)}
+    />
+  );
+
+  return (
+    <Card hoverLift={false} className="space-y-3 p-lg">
+      {appointments.map((appointment) => row(appointment, false))}
+      {appointments.length === 0 && (
+        <EmptyState
+          className="py-6"
+          icon={<Icon name="check_circle" className="text-[24px]" />}
+          title="No tenés cobros pendientes"
+          description={emptyDescription}
+        />
+      )}
+      {awaitingDeposit.length > 0 && (
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="font-label-md text-label-md text-on-surface-variant">
+            Esperan la seña · no suman en &quot;por cobrar&quot;
+          </p>
+          {awaitingDeposit.map((appointment) => row(appointment, true))}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -251,26 +403,45 @@ function AddMovementForm({ tenantSlug, sessionId, onDone }: { tenantSlug: string
   return (
     <form action={formAction} className="space-y-2 rounded-inner bg-surface-container-low p-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_1fr]">
-        <select
-          name="type"
-          className="h-9 rounded-pill border-0 bg-surface px-3 font-body-sm text-body-sm text-on-surface"
-        >
+        <select name="type" aria-label="Tipo de movimiento" className={SELECT_CLASS}>
           <option value="out">Retiro / gasto</option>
           <option value="in">Ingreso suelto</option>
         </select>
-        <Input name="amount" type="number" min="0.01" step="0.01" placeholder="Monto" required className="h-9" />
-        <Input name="reason" placeholder="Motivo (ej: compra de insumos)" required className="h-9" />
+        <Input name="amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="Monto" aria-label="Monto" required />
+        <Input name="reason" placeholder="Motivo (ej: compra de insumos)" aria-label="Motivo" required />
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onDone}>
+        <Button type="button" variant="secondary" onClick={onDone}>
           Cancelar
         </Button>
-        <Button type="submit" size="sm" disabled={pending}>
+        <Button type="submit" disabled={pending}>
           {pending ? "Guardando…" : "Registrar"}
         </Button>
       </div>
-      {state.error && <p className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
+      {state.error && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{state.error}</p>}
     </form>
+  );
+}
+
+function MethodGrid({ paymentsByMethod }: { paymentsByMethod: Record<string, number> }) {
+  const methods = ["cash", "transfer", "card_posnet", "mercadopago", ...((paymentsByMethod.other ?? 0) > 0 ? ["other"] : [])];
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {methods.map((method) => {
+        const info = METHOD_LABEL[method];
+        return (
+          <div key={method} className="min-w-0 rounded-inner bg-surface-container-low p-3">
+            <div className="flex min-w-0 items-center gap-1.5 text-on-surface-variant">
+              <Icon name={info.icon} className="shrink-0 text-[15px]" />
+              <span className="truncate font-label-sm text-label-sm">{info.label}</span>
+            </div>
+            <p className="mt-1 truncate font-label-lg text-label-lg tabular-nums text-on-surface">
+              {money(paymentsByMethod[method] ?? 0)}
+            </p>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -278,93 +449,43 @@ function DirectCaja({
   tenantSlug,
   timezone,
   appointments,
+  awaitingDeposit,
   products,
   paymentsByMethod,
+  totals,
 }: {
   tenantSlug: string;
   timezone: string;
   appointments: AppointmentDue[];
+  awaitingDeposit: AppointmentDue[];
   products: Product[];
   paymentsByMethod: Record<string, number>;
+  totals: DayTotals;
 }) {
-  const [chargingId, setChargingId] = useState<string | null>(null);
-  const chargedToday = Object.values(paymentsByMethod).reduce((sum, amount) => sum + amount, 0);
-  const pendingTotal = appointments.reduce((sum, appointment) => sum + appointment.balance, 0);
-
   return (
     <div className="space-y-lg">
-      <div className="grid grid-cols-2 gap-md">
-        <Card hoverLift={false} className="p-lg">
-          <p className="font-label-sm text-label-sm text-on-surface-variant">Cobrado hoy</p>
-          <p className="mt-1 font-headline-md text-headline-md tabular-nums text-status-confirmed">
-            ${chargedToday.toLocaleString("es-AR")}
-          </p>
-        </Card>
-        <Card hoverLift={false} className="p-lg">
-          <p className="font-label-sm text-label-sm text-on-surface-variant">Por cobrar hoy</p>
-          <p className="mt-1 font-headline-md text-headline-md tabular-nums text-secondary">
-            ${pendingTotal.toLocaleString("es-AR")}
-          </p>
-        </Card>
-      </div>
+      <DayTotalsTiles totals={totals} />
 
       <Card hoverLift={false} className="space-y-3 p-lg">
         <div>
           <h2 className="font-headline-sm text-headline-sm text-on-surface">Cobros de hoy</h2>
           <p className="font-body-sm text-body-sm text-on-surface-variant">Sin apertura ni cierre de caja: registrá cada cobro cuando lo recibís.</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {Object.entries(METHOD_LABEL).map(([method, info]) => (
-            <div key={method} className="min-w-0 rounded-inner bg-surface-container-low p-3">
-              <div className="flex items-center gap-1.5 text-on-surface-variant">
-                <Icon name={info.icon} className="shrink-0 text-[15px]" />
-                <span className="truncate font-label-sm text-label-sm">{info.label}</span>
-              </div>
-              <p className="mt-1 font-label-lg text-label-lg tabular-nums text-on-surface">
-                ${(paymentsByMethod[method] ?? 0).toLocaleString("es-AR")}
-              </p>
-            </div>
-          ))}
-        </div>
+        <MethodGrid paymentsByMethod={paymentsByMethod} />
       </Card>
 
       <section className="space-y-sm">
-        <StepHeader step={1} title="Cobros pendientes" hint="Tocá Cobrar cuando la clienta te paga." />
-        <Card hoverLift={false} className="space-y-3 p-lg">
-          {appointments.map((appointment) => (
-            <div key={appointment.id} className="space-y-2 rounded-inner bg-surface-container-low p-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar name={appointment.clientName} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-label-md text-label-md text-on-surface">
-                    {formatHour(appointment.startsAt, timezone)} · {appointment.clientName}
-                  </p>
-                  <p className="truncate font-body-sm text-body-sm text-on-surface-variant">{appointment.serviceNames}</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-label-md text-label-md tabular-nums text-on-surface">${appointment.balance.toLocaleString("es-AR")}</p>
-                  {chargingId !== appointment.id && <Button size="sm" onClick={() => setChargingId(appointment.id)}>Cobrar</Button>}
-                </div>
-              </div>
-              {chargingId === appointment.id && (
-                <ChargeForm
-                  tenantSlug={tenantSlug}
-                  sessionId=""
-                  appointment={appointment}
-                  products={products}
-                  onDone={() => setChargingId(null)}
-                />
-              )}
-            </div>
-          ))}
-          {appointments.length === 0 && (
-            <EmptyState
-              icon={<Icon name="check_circle" className="text-[24px]" />}
-              title="No tenés cobros pendientes"
-              description="Los saldos de los turnos de hoy van a aparecer acá."
-            />
-          )}
-        </Card>
+        <StepHeader title="Cobros pendientes" hint="Tocá Cobrar cuando la clienta te paga." />
+        <ChargeList
+          appointments={appointments}
+          awaitingDeposit={awaitingDeposit}
+          timezone={timezone}
+          tenantSlug={tenantSlug}
+          sessionId=""
+          products={products}
+          showStaff={false}
+          emptyDescription="Los saldos de los turnos de hoy van a aparecer acá."
+        />
       </section>
     </div>
   );
@@ -376,39 +497,53 @@ export function CajaClient({
   timezone,
   session,
   appointments,
+  awaitingDeposit,
   products,
   movements,
   lastClosedSession,
   paymentsByMethod,
+  totals,
 }: {
   cashSessionsEnabled: boolean;
   tenantSlug: string;
   timezone: string;
   session: Session;
   appointments: AppointmentDue[];
+  awaitingDeposit: AppointmentDue[];
   products: Product[];
   movements: Movement[];
   lastClosedSession: LastClosedSession;
   paymentsByMethod: Record<string, number>;
+  totals: DayTotals;
 }) {
-  const [chargingId, setChargingId] = useState<string | null>(null);
   const [addingMovement, setAddingMovement] = useState(false);
   const [closeState, closeAction, closePending] = useActionState(
-    session ? closeCash.bind(null, tenantSlug, session.id) : closeCash.bind(null, tenantSlug, ""),
+    closeCash.bind(null, tenantSlug, session?.id ?? ""),
     initialCajaState,
   );
 
   if (!cashSessionsEnabled) {
-    return <DirectCaja tenantSlug={tenantSlug} timezone={timezone} appointments={appointments} products={products} paymentsByMethod={paymentsByMethod} />;
+    return (
+      <DirectCaja
+        tenantSlug={tenantSlug}
+        timezone={timezone}
+        appointments={appointments}
+        awaitingDeposit={awaitingDeposit}
+        products={products}
+        paymentsByMethod={paymentsByMethod}
+        totals={totals}
+      />
+    );
   }
 
   if (!session) {
-    return <OpenCashForm tenantSlug={tenantSlug} appointments={appointments} timezone={timezone} lastClosedSession={lastClosedSession} />;
+    return <OpenCashForm tenantSlug={tenantSlug} appointments={appointments} timezone={timezone} lastClosedSession={lastClosedSession} totals={totals} />;
   }
 
   const totalIn = movements.filter((m) => m.type === "in").reduce((sum, m) => sum + m.amount, 0);
   const totalOut = movements.filter((m) => m.type === "out").reduce((sum, m) => sum + m.amount, 0);
   const expected = session.opening_amount + totalIn - totalOut;
+  const usedMethods = Object.entries(paymentsByMethod).filter(([, amount]) => amount > 0);
 
   return (
     <div className="space-y-lg">
@@ -420,64 +555,49 @@ export function CajaClient({
       </div>
 
       {/* Estado claro, arriba de todo: cuándo se abrió y cuánta plata hay
-          en este momento -- antes esto estaba repartido en un <h1>, un
-          párrafo chico y una StatusPill, sin que nada dijera "hay $X en
-          caja" de forma directa. */}
+          en este momento. */}
       <Card hoverLift={false} className="flex items-center gap-3 p-lg">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-status-confirmed-bg text-status-confirmed">
           <Icon name="point_of_sale" className="text-[20px]" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-headline-sm text-headline-sm text-on-surface">
-            Caja abierta desde {formatHour(session.opened_at, timezone)}
+            Caja abierta desde <span className="tabular-nums">{formatTimeInTz(session.opened_at, timezone)}</span>
           </p>
           <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
-            Hay <span className="tabular-nums">${expected.toLocaleString("es-AR")}</span> en caja ahora mismo
+            Hay <span className="tabular-nums">{money(expected)}</span> en efectivo ahora mismo
           </p>
         </div>
       </Card>
 
+      <DayTotalsTiles totals={totals} />
+
+      {/* Arqueo: solo efectivo (apertura + entradas - salidas). */}
       <div className="grid grid-cols-2 gap-md md:grid-cols-4">
-        <Card hoverLift={false} className="flex flex-col gap-xs p-lg">
-          <p className="font-label-sm text-label-sm text-on-surface-variant">Apertura</p>
-          <p className="font-headline-sm text-headline-sm tabular-nums text-on-surface">
-            ${session.opening_amount.toLocaleString("es-AR")}
-          </p>
-        </Card>
-        <Card hoverLift={false} className="flex flex-col gap-xs p-lg">
-          <p className="font-label-sm text-label-sm text-on-surface-variant">Entradas</p>
-          <p className="font-headline-sm text-headline-sm tabular-nums text-status-confirmed">
-            +${totalIn.toLocaleString("es-AR")}
-          </p>
-        </Card>
-        <Card hoverLift={false} className="flex flex-col gap-xs p-lg">
-          <p className="font-label-sm text-label-sm text-on-surface-variant">Salidas</p>
-          <p className="font-headline-sm text-headline-sm tabular-nums text-status-alert">
-            -${totalOut.toLocaleString("es-AR")}
-          </p>
-        </Card>
-        <Card hoverLift={false} className="flex flex-col gap-xs p-lg">
-          <p className="flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
-            <Icon name="payments" className="text-[14px]" />
-            Esperado
-          </p>
-          <p className="font-headline-sm text-headline-sm tabular-nums text-primary">${expected.toLocaleString("es-AR")}</p>
-        </Card>
+        <KpiTile className="min-w-0" label="Apertura" value={<MoneyValue amount={session.opening_amount} />} />
+        <KpiTile className="min-w-0" label="Entradas" value={<MoneyValue amount={totalIn} className="text-status-confirmed" />} />
+        <KpiTile className="min-w-0" label="Salidas" value={<MoneyValue amount={totalOut} className="text-status-alert" />} />
+        <KpiTile
+          className="min-w-0"
+          label="Esperado"
+          icon={<Icon name="payments" className="text-[14px]" />}
+          value={<MoneyValue amount={expected} className="text-primary" />}
+        />
       </div>
 
-      {Object.keys(paymentsByMethod).length > 0 && (
+      {usedMethods.length > 0 && (
         <Card hoverLift={false} className="space-y-2 p-lg">
           <p className="font-label-md text-label-md text-on-surface-variant">Cobrado hoy por método</p>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(paymentsByMethod).map(([method, amount]) => {
+            {usedMethods.map(([method, amount]) => {
               const info = METHOD_LABEL[method] ?? { label: method, icon: "payments" };
               return (
                 <span
                   key={method}
-                  className="flex items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface"
+                  className="flex max-w-full min-w-0 items-center gap-1.5 rounded-pill bg-surface-container-low px-3 py-1.5 font-label-sm text-label-sm text-on-surface"
                 >
-                  <Icon name={info.icon} className="text-[14px] text-on-surface-variant" />
-                  {info.label}: <span className="tabular-nums">${amount.toLocaleString("es-AR")}</span>
+                  <Icon name={info.icon} className="shrink-0 text-[14px] text-on-surface-variant" />
+                  <span className="truncate">{info.label}:</span> <span className="shrink-0 tabular-nums">{money(amount)}</span>
                 </span>
               );
             })}
@@ -488,58 +608,23 @@ export function CajaClient({
       {/* Paso 2: cobrar los turnos de hoy. */}
       <section className="space-y-sm">
         <StepHeader step={2} title="Cobrar turnos de hoy" hint="Tocá Cobrar en cada turno cuando el cliente te paga." />
-        <Card hoverLift={false} className="space-y-3 p-lg">
-          {appointments.map((appointment) => (
-            <div key={appointment.id} className="space-y-2 rounded-inner bg-surface-container-low p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar name={appointment.clientName} size="sm" />
-                  <div className="min-w-0">
-                    <p className="truncate font-label-md text-label-md text-on-surface">
-                      {formatHour(appointment.startsAt, timezone)} · {appointment.clientName}
-                    </p>
-                    <p className="truncate font-body-sm text-body-sm text-on-surface-variant">
-                      {appointment.serviceNames} · {appointment.staffName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="font-label-md text-label-md tabular-nums text-on-surface">
-                    ${appointment.balance.toLocaleString("es-AR")}
-                  </span>
-                  {chargingId !== appointment.id && (
-                    <Button size="sm" onClick={() => setChargingId(appointment.id)}>
-                      Cobrar
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {chargingId === appointment.id && (
-                <ChargeForm
-                  tenantSlug={tenantSlug}
-                  sessionId={session.id}
-                  appointment={appointment}
-                  products={products}
-                  onDone={() => setChargingId(null)}
-                />
-              )}
-            </div>
-          ))}
-          {appointments.length === 0 && (
-            <EmptyState
-              icon={<Icon name="check_circle" className="text-[24px]" />}
-              title="No tenés turnos pendientes de cobro"
-              description="Los turnos confirmados de hoy van a aparecer acá para que los cobres apenas el cliente pague."
-            />
-          )}
-        </Card>
+        <ChargeList
+          appointments={appointments}
+          awaitingDeposit={awaitingDeposit}
+          timezone={timezone}
+          tenantSlug={tenantSlug}
+          sessionId={session.id}
+          products={products}
+          showStaff
+          emptyDescription="Los turnos confirmados de hoy van a aparecer acá para que los cobres apenas el cliente pague."
+        />
       </section>
 
       <Card hoverLift={false} className="space-y-3 p-lg">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-headline-sm text-headline-sm text-on-surface">Movimientos de caja</h2>
           {!addingMovement && (
-            <Button variant="secondary" size="sm" onClick={() => setAddingMovement(true)}>
+            <Button variant="secondary" onClick={() => setAddingMovement(true)}>
               <Icon name="add" className="text-[16px]" />
               Movimiento suelto
             </Button>
@@ -553,7 +638,7 @@ export function CajaClient({
         )}
         <div className="divide-y divide-border">
           {movements.map((m) => (
-            <div key={m.id} className="flex items-center gap-3 py-2">
+            <div key={m.id} className="flex min-w-0 items-center gap-3 py-2">
               <span
                 className={cn(
                   "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
@@ -564,9 +649,7 @@ export function CajaClient({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-label-md text-label-md text-on-surface">{m.reason}</p>
-                <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  {formatHour(m.createdAt, timezone)}
-                </p>
+                <p className="font-body-sm text-body-sm tabular-nums text-on-surface-variant">{formatTimeInTz(m.createdAt, timezone)}</p>
               </div>
               <span
                 className={cn(
@@ -574,7 +657,7 @@ export function CajaClient({
                   m.type === "in" ? "text-status-confirmed" : "text-status-alert",
                 )}
               >
-                {m.type === "in" ? "+" : "-"}${m.amount.toLocaleString("es-AR")}
+                {m.type === "in" ? "+" : "-"}{money(m.amount)}
               </span>
             </div>
           ))}
@@ -596,22 +679,22 @@ export function CajaClient({
         <Card hoverLift={false} className="space-y-3 p-lg">
           <form action={closeAction} className="space-y-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className="font-label-sm text-label-sm text-on-surface-variant">Efectivo contado</label>
-                <Input name="countedAmount" type="number" min="0" step="0.01" required />
+              <div className="min-w-0 space-y-1">
+                <label htmlFor="countedAmount" className="font-label-sm text-label-sm text-on-surface-variant">Efectivo contado</label>
+                <Input id="countedAmount" name="countedAmount" type="number" inputMode="decimal" min="0" step="0.01" required />
               </div>
-              <div className="space-y-1">
-                <label className="font-label-sm text-label-sm text-on-surface-variant">
+              <div className="min-w-0 space-y-1">
+                <label htmlFor="differenceReason" className="font-label-sm text-label-sm text-on-surface-variant">
                   Motivo (si hay diferencia)
                 </label>
-                <Input name="differenceReason" placeholder="Vuelto de más, error de conteo..." />
+                <Input id="differenceReason" name="differenceReason" placeholder="Vuelto de más, error de conteo..." />
               </div>
             </div>
             <Button type="submit" variant="secondary" disabled={closePending}>
               {closePending ? "Cerrando…" : "Cerrar caja"}
             </Button>
             {closeState.error && (
-              <p className="font-body-sm text-body-sm text-status-alert">{closeState.error}</p>
+              <p role="alert" className="font-body-sm text-body-sm text-status-alert">{closeState.error}</p>
             )}
           </form>
         </Card>

@@ -15,18 +15,19 @@ export default async function PublicBookingPage({
   }
 
   if (!tenant.booking_enabled) {
-    return <Card hoverLift={false} className="mx-auto max-w-[30rem] space-y-4 p-6 text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-container-low text-primary"><Icon name="event_busy" className="text-[26px]" /></span><h1 className="font-headline-lg-mobile text-headline-lg-mobile">Reservas online en preparación</h1><p className="font-body-md text-body-md text-on-surface-variant">{tenant.name} todavía no habilitó el pago de la seña. Podés comunicarte directamente con el negocio para pedir un turno.</p></Card>;
+    return <Card hoverLift={false} className="mx-auto max-w-[30rem] space-y-4 p-6 text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-container-low text-primary"><Icon name="event_busy" className="text-[26px]" /></span><h1 className="font-headline-lg-mobile text-headline-lg-mobile">Reservas online en preparación</h1><p className="font-body-md text-body-md text-on-surface-variant">{tenant.name} todavía no habilitó las reservas online. Podés comunicarte directamente con el negocio para pedir un turno.</p></Card>;
   }
 
   return (
     <div className="space-y-lg">
-      {(tenant.description || tenant.address) && <div className="space-y-1 px-1"><h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Reservá tu turno</h1>{tenant.description && <p className="font-body-md text-body-md text-on-surface-variant">{tenant.description}</p>}{tenant.address && <p className="flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant"><Icon name="location_on" className="text-[16px]" />{tenant.address}</p>}</div>}
+      {(tenant.description || tenant.address) && <div className="min-w-0 space-y-1 px-1"><h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Reservá tu turno</h1>{tenant.description && <p className="break-words font-body-md text-body-md text-on-surface-variant">{tenant.description}</p>}{tenant.address && <p className="flex items-start gap-1.5 font-body-sm text-body-sm text-on-surface-variant"><Icon name="location_on" className="mt-px shrink-0 text-[16px]" /><span className="min-w-0 break-words">{tenant.address}</span></p>}</div>}
       <BookingFlow
         tenantId={tenant.id}
         slug={slug}
         timezone={tenant.timezone || "America/Argentina/Buenos_Aires"}
         booksByStaff={tenant.books_by_staff}
         maxBookingDays={tenant.max_booking_days}
+        paymentMethods={tenant.payment_methods}
       />
     </div>
   );

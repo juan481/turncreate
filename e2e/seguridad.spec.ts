@@ -6,7 +6,7 @@ import { SLUG } from "./fixtures";
 // de la página podía traer la lista de clientes de cualquier local. Cada
 // página pasa ahora por requireTenantPage (src/server/firebase/tenant-page.ts).
 const FAKE_SESSION = "turncreate_session=cookie-inventada";
-const PRIVATE_PAGES = ["clientes", "clientes/e2e_client_fixture", "caja", "reportes", "configuracion", "agenda"];
+const PRIVATE_PAGES = ["clientes", "clientes/e2e_client_fixture", "caja", "reportes", "configuracion", "configuracion/local", "configuracion/pagos", "configuracion/link", "agenda", "transferencias"];
 
 for (const path of PRIVATE_PAGES) {
   test(`sin sesión válida, /app/${SLUG}/${path} no filtra datos del local en el RSC`, async ({ request }) => {

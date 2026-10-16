@@ -7,6 +7,10 @@ import { flatHoursError } from "@/components/ui/hours-editor-model";
 import { todayISO } from "@/lib/dates";
 
 const TIMEZONE = "America/Argentina/Buenos_Aires";
+// Mismo texto que tira createTenantForOwner si la URL se ocupó entre el
+// paso 1 y el final (no se exporta: un archivo "use server" solo puede
+// exportar funciones async).
+const SLUG_TAKEN_MESSAGE = "Esa URL de turnero ya está en uso, probá con otra";
 
 // Se consulta al pasar del paso 1: si la URL ya existe, la dueña se entera
 // ahí mismo y no recién al final, después de cargar todo lo demás.
@@ -14,17 +18,18 @@ export async function checkSlugAvailability(slug: string): Promise<{ error: stri
   const user = await getCurrentFirebaseUser();
   if (!user) return { error: "Tu sesión expiró. Iniciá sesión nuevamente." };
   try {
-    if (await isTenantSlugTaken(slug)) return { error: "Esa URL de turnero ya está en uso, probá con otra" };
+    if (await isTenantSlugTaken(slug)) return { error: SLUG_TAKEN_MESSAGE };
     return { error: null };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "No pudimos verificar la URL" };
   }
 }
 
-const imageField = z
-  .string()
-  .nullable()
-  .refine((value) => value === null || isStorableImageDataUrl(value), "La imagen no es válida. Probá con un PNG, JPG o WebP de hasta 2 MB.");
+const imageField = (what: string) =>
+  z
+    .string()
+    .nullable()
+    .refine((value) => value === null || isStorableImageDataUrl(value), `${what} no se pudo guardar. Probá con otra imagen PNG, JPG o WebP de hasta 2 MB.`);
 
 const onboardingSchema = z.object({
   business: z.object({
@@ -32,14 +37,14 @@ const onboardingSchema = z.object({
     slug: z.string().trim().min(3, "La URL necesita al menos 3 caracteres").max(60, "La URL es muy larga"),
     businessTypeId: z.string().trim().min(1, "Elegí un rubro").max(40),
     address: z.string().trim().max(160, "La dirección es muy larga"),
-    logoUrl: imageField,
+    logoUrl: imageField("El logo"),
   }),
   owner: z.object({
     gender: z.enum(["female", "male", "unspecified"], "Contanos cómo te tratamos"),
     fullName: z.string().trim().min(2, "Ingresá tu nombre").max(80, "Tu nombre es muy largo"),
     email: z.email("Ingresá un correo válido"),
     age: z.number().int().min(14, "Revisá tu edad").max(99, "Revisá tu edad").nullable(),
-    avatarUrl: imageField,
+    avatarUrl: imageField("Tu foto"),
     teamMode: z.enum(["solo", "team"], "Contanos si trabajás con equipo"),
   }),
   businessHours: z
@@ -50,8 +55,11 @@ const onboardingSchema = z.object({
 export type OnboardingInput = z.input<typeof onboardingSchema>;
 
 // Devuelve el error en vez de tirarlo: en producción Next reemplaza el
-// mensaje de una excepción de server action por uno genérico.
-export async function createTenantAction(input: OnboardingInput): Promise<{ slug: string } | { error: string }> {
+// mensaje de una excepción de server action por uno genérico. `field: "slug"`
+// le avisa al wizard que vuelva al paso 1 a elegir otra URL.
+export async function createTenantAction(
+  input: OnboardingInput,
+): Promise<{ slug: string } | { error: string; field?: "slug" }> {
   const user = await getCurrentFirebaseUser();
   if (!user) return { error: "Tu sesión expiró. Iniciá sesión nuevamente." };
 
@@ -87,6 +95,7 @@ export async function createTenantAction(input: OnboardingInput): Promise<{ slug
     });
     return { slug: tenant.slug };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Hubo un error al crear el local." };
+    const message = error instanceof Error ? error.message : "Hubo un error al crear el local.";
+    return message === SLUG_TAKEN_MESSAGE ? { error: message, field: "slug" } : { error: message };
   }
 }

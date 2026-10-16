@@ -1,5 +1,7 @@
 import { cn } from "@/lib/utils";
 
+// Único lugar del código con los colores de marca de Mercado Pago: el resto
+// de las pantallas usa tokens del theme y, si necesita la marca, este logo.
 const MP_LIGHT_BLUE = "#00B1EA";
 const MP_DARK_BLUE = "#2D3277";
 
@@ -7,21 +9,28 @@ const MP_DARK_BLUE = "#2D3277";
  * Isotipo de Mercado Pago (apretón de manos en el óvalo celeste) en SVG
  * inline, sin pedir ningún asset. `withWordmark` suma "mercado pago" al
  * lado para los lugares donde la marca es protagonista (Configuración).
+ * `chip` lo monta sobre una pastilla clara, para ponerlo adentro de un
+ * botón de color sin que el óvalo celeste se pierda contra el fondo.
  * Por default es decorativo: el texto del botón/título ya dice "Mercado Pago".
  */
 export function MercadoPagoLogo({
   className,
   withWordmark = false,
+  chip = false,
   label,
 }: {
   className?: string;
   withWordmark?: boolean;
+  chip?: boolean;
   /** Si se pasa, el logo se anuncia (role="img") en vez de quedar oculto. */
   label?: string;
 }) {
   const a11y = label ? { role: "img" as const, "aria-label": label } : { "aria-hidden": true as const };
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1.5", className)} {...a11y}>
+    <span
+      className={cn("inline-flex shrink-0 items-center gap-1.5", chip && "rounded-pill bg-surface px-1.5 py-0.5", className)}
+      {...a11y}
+    >
       <svg viewBox="0 0 48 32" className="h-[1.25em] w-auto" focusable="false">
         <ellipse cx="24" cy="16" rx="22.5" ry="14.5" fill={MP_LIGHT_BLUE} stroke={MP_DARK_BLUE} strokeWidth="2" />
         <path

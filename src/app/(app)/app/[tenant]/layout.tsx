@@ -5,12 +5,14 @@ import { Logo } from "@/components/ui/logo";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { PageTransition } from "@/components/ui/page-transition";
+import { JustCreateFooter } from "@/components/ui/just-create-footer";
 import { ToastProvider } from "@/components/ui/toast";
 import { RememberRouteSearch } from "@/components/ui/back-button";
 import { planFeatures } from "@/lib/plans";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantMembershipsForUser } from "@/server/firebase/tenants";
 import { requireTenantPage } from "@/server/firebase/tenant-page";
+import { getUserProfileSnapshot } from "@/server/firebase/user-profile";
 import { signOut } from "./actions";
 import { NavPills } from "./nav-pills";
 import { MobileMenuButton } from "./mobile-menu";
@@ -47,7 +49,7 @@ export default async function TenantAppLayout({
 
   const [tenantOptions, profile, staffSnapshot] = await Promise.all([
     getTenantMembershipsForUser(user.uid),
-    firebaseAdmin().db.collection("users").doc(user.uid).get(),
+    getUserProfileSnapshot(user.uid),
     firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
   ]);
   if (profile.data()?.mustChangePassword === true) redirect("/cambiar-clave");
@@ -109,12 +111,22 @@ export default async function TenantAppLayout({
         {/* pt-5 en mobile: sin aire bajo el AppBar sticky, los botones del
             tope de cada pantalla ("Nuevo servicio", etc.) quedaban pegados
             al header. En lg+ el header-pill flotante ya reserva su lugar. */}
-        <main className="mx-auto w-full max-w-[1440px] px-gutter pb-24 pt-5 lg:px-gutter-desktop lg:pb-2xl lg:pt-28">
+        {/* pb mobile = barra inferior (h-16 + el + que asoma) + el inset
+            real de abajo, así el footer de Just Create (último hijo) nunca
+            queda tapado por la barra en un iPhone con home indicator. */}
+        <main className="mx-auto w-full max-w-[1440px] px-gutter pb-[calc(5.5rem+var(--safe-b))] pt-5 lg:px-gutter-desktop lg:pb-lg lg:pt-28">
           <PageTransition>{children}</PageTransition>
+          <JustCreateFooter className="pb-2" />
         </main>
         <Suspense fallback={null}>
           <RememberRouteSearch />
-          <MobileBottomNav tenantSlug={tenantSlug} />
+          <MobileBottomNav
+            tenantSlug={tenantSlug}
+            showStaff={features.maxStaff > 1}
+            signOutAction={signOut}
+            tenantOptions={tenantOptions.length ? tenantOptions : undefined}
+            currentTenant={currentTenantOption}
+          />
         </Suspense>
         <NewAppointmentFab tenantSlug={tenantSlug} />
       </div>

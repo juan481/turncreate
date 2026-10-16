@@ -4,6 +4,7 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { requireMercadoPagoOAuthEnv } from "./config";
 import { refreshSellerToken } from "./oauth";
+import { isTransferReady } from "@/server/public-booking/payment-methods";
 
 export type MpConnectionStatus = "connected" | "reconnect_required" | "disconnected";
 export type MpConnection = {
@@ -132,6 +133,11 @@ export async function disconnectMp(tenantId: string) {
     const sellerId = current.data()?.sellerId ? String(current.data()!.sellerId) : null;
     const sellerRef = sellerId ? db.collection("mpSellers").doc(sellerId) : null;
     const seller = sellerRef ? await transaction.get(sellerRef) : null;
+    const tenantRef = db.collection("tenants").doc(tenantId);
+    const tenant = await transaction.get(tenantRef);
+    // Con la transferencia lista el turnero sigue andando sin Mercado Pago:
+    // solo se pausa si no queda ningún medio para cobrar la seña.
+    const transferReady = isTransferReady(tenant.data()?.settings?.payments?.transfer);
 
     transaction.set(ref, {
       status: "disconnected",
@@ -139,10 +145,12 @@ export async function disconnectMp(tenantId: string) {
       refreshTokenEncrypted: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    transaction.update(db.collection("tenants").doc(tenantId), {
-      "settings.publicBookingEnabled": false,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    if (!transferReady) {
+      transaction.update(tenantRef, {
+        "settings.publicBookingEnabled": false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
     if (sellerRef && seller?.data()?.tenantId === tenantId) {
       transaction.set(sellerRef, {
         status: "disconnected",

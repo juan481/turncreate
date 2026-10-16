@@ -35,10 +35,84 @@ export type NormalizedPayment = {
 };
 
 export type MethodTotals = { gross: number; net: number; fees: number; count: number };
+export type RefundDueTotals = { gross: number; net: number; count: number };
 export type PaymentBreakdown = PaymentSummary & {
   byMethod: Record<MethodKey, MethodTotals>;
   feeUnknownCount: number;
+  /**
+   * "A devolver": pagos aprobados de turnos cancelados con la seña marcada
+   * para devolver (`depositDisposition: "refund_required"`) que todavía no
+   * se devolvieron. NO suman en gross/applied/net/byMethod: esa plata no es
+   * tuya, la tenés que devolver. Se muestran aparte.
+   */
+  refundDue: RefundDueTotals;
 };
+
+/* ------------------------------------------------------------------ */
+/* Definiciones únicas de "Cobrado" y "Por cobrar"                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * COBRADO (de un rango) = suma de `grossAmount` (lo que pagó la clienta,
+ * con recargo y productos incluidos) de los pagos `approved` cuyo `paidAt`
+ * cae en el rango [start, end) armado en la zona del local. Los pagos
+ * `refunded` (u otro estado) no cuentan, y los "a devolver" (ver
+ * `refundDue`) van aparte. Es `PaymentBreakdown.gross` -- Home, Caja y
+ * Reportes leen ese mismo campo.
+ *
+ * POR COBRAR (de un rango) = suma de `balance > 0` de los turnos con
+ * `startsAt` en el rango cuyo estado es `confirmed` o `completed`. Quedan
+ * afuera `cancelled`, `no_show` y `expired` (no se van a cobrar) y
+ * `pending_payment` (el turno todavía espera la seña -- MP o transferencia --
+ * y si no llega se cae solo: no es plata que "te deben" todavía).
+ */
+export const POR_COBRAR_STATUSES: ReadonlySet<string> = new Set(["confirmed", "completed"]);
+
+/** Turnos que todavía esperan la seña para quedar firmes. */
+export function awaitsDeposit(appointment: { status?: unknown }): boolean {
+  return appointment.status === "pending_payment";
+}
+
+/** Saldo que suma a "Por cobrar" (0 si el turno no entra en la definición). */
+export function porCobrarOf(appointment: { status?: unknown; balance?: unknown }): number {
+  if (!POR_COBRAR_STATUSES.has(String(appointment.status ?? ""))) return 0;
+  const balance = money(appointment.balance);
+  return balance > 0 ? balance : 0;
+}
+
+export type AppointmentTotals = { turnos: number; facturado: number; porCobrar: number };
+
+/**
+ * Turnos firmes (confirmed/completed) de un rango: cuántos son, cuánto
+ * suman sus `total` y cuánto queda por cobrar. Mismo filtro para los tres.
+ */
+export function summarizeAppointments(appointments: Iterable<{ status?: unknown; total?: unknown; balance?: unknown }>): AppointmentTotals {
+  let turnos = 0;
+  let facturado = 0;
+  let porCobrar = 0;
+  for (const appointment of appointments) {
+    if (!POR_COBRAR_STATUSES.has(String(appointment.status ?? ""))) continue;
+    turnos += 1;
+    facturado += money(appointment.total);
+    porCobrar += porCobrarOf(appointment);
+  }
+  return { turnos, facturado: roundMoney(facturado), porCobrar: roundMoney(porCobrar) };
+}
+
+/**
+ * ¿El turno tiene plata cobrada que hay que devolver? Cancelado + seña
+ * marcada "Devolver" + todavía no devuelta (`depositRefunded` lo pone el
+ * webhook de MP cuando el reintegro se concreta; en ese caso el pago ya
+ * figura `refunded` y ni siquiera llega acá).
+ */
+export function isRefundDue(appointment: { status?: unknown; depositDisposition?: unknown; depositRefunded?: unknown }): boolean {
+  return appointment.status === "cancelled" && appointment.depositDisposition === "refund_required" && appointment.depositRefunded !== true;
+}
+
+/** ¿El instante cae en [start, end)? Los rangos salen de dayRange/weekRange/monthRange (zona del local). */
+export function inRange(instant: Date | null, range: { start: Date; end: Date }): boolean {
+  return instant !== null && instant >= range.start && instant < range.end;
+}
 
 function money(value: unknown): number {
   const n = Number(value);
@@ -90,9 +164,22 @@ function emptyMethodTotals(): Record<MethodKey, MethodTotals> {
   return Object.fromEntries(keys.map((key) => [key, { gross: 0, net: 0, fees: 0, count: 0 }])) as Record<MethodKey, MethodTotals>;
 }
 
-export function summarizePayments(payments: Iterable<NormalizedPayment>): PaymentBreakdown {
-  const result: PaymentBreakdown = { gross: 0, applied: 0, fees: 0, surcharges: 0, net: 0, count: 0, byMethod: emptyMethodTotals(), feeUnknownCount: 0 };
+/**
+ * `refundDueAppointmentIds`: turnos para los que `isRefundDue` da true. Sus
+ * pagos van a `refundDue` y no suman en el resto de los totales.
+ */
+export function summarizePayments(payments: Iterable<NormalizedPayment>, refundDueAppointmentIds: ReadonlySet<string> = new Set()): PaymentBreakdown {
+  const result: PaymentBreakdown = {
+    gross: 0, applied: 0, fees: 0, surcharges: 0, net: 0, count: 0,
+    byMethod: emptyMethodTotals(), feeUnknownCount: 0, refundDue: { gross: 0, net: 0, count: 0 },
+  };
   for (const payment of payments) {
+    if (payment.appointmentId && refundDueAppointmentIds.has(payment.appointmentId)) {
+      result.refundDue.gross += payment.gross;
+      result.refundDue.net += payment.net;
+      result.refundDue.count += 1;
+      continue;
+    }
     result.gross += payment.gross;
     result.applied += payment.applied;
     result.fees += payment.fee;
@@ -111,6 +198,8 @@ export function summarizePayments(payments: Iterable<NormalizedPayment>): Paymen
   result.fees = roundMoney(result.fees);
   result.surcharges = roundMoney(result.surcharges);
   result.net = roundMoney(result.net);
+  result.refundDue.gross = roundMoney(result.refundDue.gross);
+  result.refundDue.net = roundMoney(result.refundDue.net);
   for (const bucket of Object.values(result.byMethod)) {
     bucket.gross = roundMoney(bucket.gross);
     bucket.net = roundMoney(bucket.net);
@@ -142,7 +231,33 @@ export function paymentsByDay(payments: Iterable<NormalizedPayment>, timezone: s
 
 /** Reparte pagos en rangos [start, end) por `paidAt`. Un pago puede caer en varios rangos si se solapan (día ⊂ semana ⊂ mes). */
 export function splitPaymentsByRanges(payments: readonly NormalizedPayment[], ranges: readonly { start: Date; end: Date }[]): NormalizedPayment[][] {
-  return ranges.map((range) => payments.filter((payment) => payment.paidAt !== null && payment.paidAt >= range.start && payment.paidAt < range.end));
+  return ranges.map((range) => payments.filter((payment) => inRange(payment.paidAt, range)));
+}
+
+export type DayPayments = { dateISO: string; breakdown: PaymentBreakdown };
+
+/**
+ * Historial día por día (del más nuevo al más viejo) con el mismo desglose
+ * que el resto de la app: cada día es un `summarizePayments` de los pagos
+ * cuyo `paidAt` cae ese día calendario EN LA ZONA DEL LOCAL. Solo devuelve
+ * días con algún movimiento (cobro o "a devolver").
+ */
+export function dailyPaymentHistory(
+  payments: Iterable<NormalizedPayment>,
+  timezone: string,
+  refundDueAppointmentIds: ReadonlySet<string> = new Set(),
+): DayPayments[] {
+  const byDay = new Map<string, NormalizedPayment[]>();
+  for (const payment of payments) {
+    if (!payment.paidAt) continue;
+    const dateISO = toDateISOInTz(payment.paidAt, timezone);
+    const list = byDay.get(dateISO) ?? [];
+    list.push(payment);
+    byDay.set(dateISO, list);
+  }
+  return [...byDay.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
+    .map(([dateISO, list]) => ({ dateISO, breakdown: summarizePayments(list, refundDueAppointmentIds) }));
 }
 
 export type CompletedSummary = {
