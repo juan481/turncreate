@@ -6,36 +6,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/toast";
+import { ACCEPTED_IMAGE_TYPES, compressImageToDataUrl, validateImageFile } from "@/lib/compress-image";
 import { updateTenantLogo } from "./actions";
-
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
-const MAX_SIDE_PX = 512;
-
-// Se reescala en el navegador antes de subir: una foto de 2 MB guardada
-// tal cual en base64 no entra en un documento de Firestore (1 MB) ni en el
-// cuerpo por defecto de un server action.
-async function compressImage(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("No pudimos leer la imagen"));
-      img.src = url;
-    });
-    const scale = Math.min(1, MAX_SIDE_PX / Math.max(image.naturalWidth, image.naturalHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("No pudimos procesar la imagen");
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const webp = canvas.toDataURL("image/webp", 0.85);
-    return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/png");
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
 export function LogoUploader({ tenantSlug, tenantName, logoUrl }: { tenantSlug: string; tenantName: string; logoUrl: string | null }) {
   const router = useRouter();
@@ -61,16 +33,13 @@ export function LogoUploader({ tenantSlug, tenantName, logoUrl }: { tenantSlug: 
   async function handleFile(file: File | undefined) {
     setError(null);
     if (!file) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
-      setError("Elegí una imagen PNG, JPG o WebP.");
-      return;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      setError("La imagen pesa más de 2 MB. Probá con una más liviana.");
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setError(invalid);
       return;
     }
     try {
-      const dataUrl = await compressImage(file);
+      const dataUrl = await compressImageToDataUrl(file);
       setPreview(dataUrl);
       save(dataUrl, "¡Logo actualizado!");
     } catch (cause) {
@@ -90,7 +59,7 @@ export function LogoUploader({ tenantSlug, tenantName, logoUrl }: { tenantSlug: 
           <input
             ref={inputRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept={ACCEPTED_IMAGE_TYPES}
             className="sr-only"
             aria-label="Elegir logo"
             onChange={(event) => {

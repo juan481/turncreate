@@ -10,6 +10,12 @@ export type PublicTenant = {
   logo_url: string | null;
   timezone: string;
   booking_enabled: boolean;
+  books_by_staff: boolean;
+  max_booking_days: number;
+  description: string | null;
+  address: string | null;
+  instagram_url: string | null;
+  whatsapp_number: string | null;
 };
 
 export type PublicService = {

@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { TZDate } from "@date-fns/tz";
 import { format, parseISO, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/status-pill";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { MercadoPagoLogo } from "@/components/ui/mercado-pago-logo";
 import { cn } from "@/lib/utils";
 import {
   getPublicCatalog,
@@ -20,18 +20,20 @@ import {
   getPublicCheckoutQuote,
   startPublicCheckout,
 } from "./actions";
-import type { PublicCategory, PublicHold, PublicService, PublicStaffMember, PublicAppointment } from "./types";
+import type { PublicCategory, PublicHold, PublicService, PublicStaffMember } from "./types";
 
 export function BookingFlow({
   tenantId,
   slug,
   timezone,
-  rescheduleFrom,
+  booksByStaff,
+  maxBookingDays,
 }: {
   tenantId: string;
   slug: string;
   timezone: string;
-  rescheduleFrom?: string;
+  booksByStaff: boolean;
+  maxBookingDays: number;
 }) {
   const [step, setStep] = useState(1);
   const [catalog, setCatalog] = useState<PublicCategory[]>([]);
@@ -48,7 +50,7 @@ export function BookingFlow({
   const [clientData, setClientData] = useState({ full_name: "", phone_e164: "", email: "" });
 
   const [loading, setLoading] = useState(false);
-  const [confirmedData] = useState<PublicAppointment | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const track = (event: "views" | "bookingStarted" | "checkoutStarted") => {
     void fetch("/api/analytics/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, event }), keepalive: true });
@@ -106,6 +108,7 @@ export function BookingFlow({
 
   const handleCreateHold = async () => {
     if (!selectedTime || !selectedService) return;
+    setErrorMessage(null);
     setLoading(true);
     try {
       const h = await createHold(
@@ -122,7 +125,7 @@ export function BookingFlow({
       setStep(4);
     } catch (err) {
       console.error(err);
-      alert("Error al reservar el turno. Por favor intentá de nuevo.");
+      setErrorMessage(err instanceof Error ? err.message : "No pudimos reservar ese horario. Intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -133,6 +136,7 @@ export function BookingFlow({
     const form = (e.currentTarget as HTMLButtonElement).form;
     if (form && !form.reportValidity()) return;
     if (!hold) return;
+    setErrorMessage(null);
     setLoading(true);
     try {
       const result = await startPublicCheckout(slug, hold.id, clientData);
@@ -140,7 +144,7 @@ export function BookingFlow({
       window.location.assign(result.init_point);
     } catch (err) {
       console.error(err);
-      alert("Error al confirmar. La reserva pudo haber expirado.");
+      setErrorMessage(err instanceof Error ? err.message : "No pudimos iniciar el pago. Elegí el horario nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -150,10 +154,7 @@ export function BookingFlow({
     return (
       <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
-          {rescheduleFrom && (
-            <StatusPill status="draft">Estás reprogramando tu turno</StatusPill>
-          )}
-          <StatusPill status="pending">Paso 1 de 4 · Servicio</StatusPill>
+          <StatusPill status="pending">Paso 1 de {booksByStaff ? 4 : 3} · Servicio</StatusPill>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
             Elegí tu tratamiento
           </h1>
@@ -172,7 +173,8 @@ export function BookingFlow({
                   onClick={() => {
                     setSelectedService(svc);
                     track("bookingStarted");
-                    setStep(2);
+                    setSelectedStaff("any");
+                    setStep(booksByStaff ? 2 : 3);
                   }}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -245,11 +247,14 @@ export function BookingFlow({
   }
 
   if (step === 3) {
-    const dates = Array.from({ length: 14 }).map((_, i) => addDays(new TZDate(new Date(), timezone), i));
+    const today = new TZDate(new Date(), timezone);
+    const dates = Array.from({ length: Math.min(14, Math.max(1, maxBookingDays + 1)) }).map((_, i) => addDays(today, i));
+    const firstDate = format(today, "yyyy-MM-dd");
+    const lastDate = format(addDays(today, Math.max(0, maxBookingDays)), "yyyy-MM-dd");
     return (
       <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
-          <StatusPill status="pending">Paso 3 de 4 · Fecha y Hora</StatusPill>
+          <StatusPill status="pending">Paso {booksByStaff ? 3 : 2} de {booksByStaff ? 4 : 3} · Fecha y hora</StatusPill>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
             ¿Cuándo venís?
           </h1>
@@ -276,6 +281,11 @@ export function BookingFlow({
             )
           })}
         </div>
+
+        <label className="block space-y-1.5">
+          <span className="font-label-md text-label-md text-on-surface-variant">Otra fecha</span>
+          <Input type="date" min={firstDate} max={lastDate} value={selectedDate} onChange={(event) => { if (event.target.value) setSelectedDate(event.target.value); }} />
+        </label>
 
         <div className="grid grid-cols-4 gap-2">
           {loading ? (
@@ -305,7 +315,7 @@ export function BookingFlow({
         </div>
 
         <div className="flex justify-between items-center pt-4">
-          <Button variant="ghost" onClick={() => setStep(2)}>Volver</Button>
+          <Button variant="ghost" onClick={() => setStep(booksByStaff ? 2 : 1)}>Volver</Button>
           <Button
             onClick={handleCreateHold}
             disabled={!selectedTime || loading}
@@ -321,7 +331,7 @@ export function BookingFlow({
     return (
       <div key={step} className="animate-fade-up space-y-lg">
         <div className="space-y-2">
-          <StatusPill status="pending">Paso 4 de 4 · Tus datos</StatusPill>
+          <StatusPill status="pending">Paso {booksByStaff ? 4 : 3} de {booksByStaff ? 4 : 3} · Tus datos</StatusPill>
           <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
             Confirmá tu turno
           </h1>
@@ -373,47 +383,15 @@ export function BookingFlow({
             />
           </div>
 
-          <div className="pt-4 flex gap-4">
-            <Button type="button" variant="ghost" onClick={() => setStep(3)}>Volver</Button>
-            <button type="button" onClick={createPreferenceAndRedirect} disabled={loading || !quote} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-pill bg-primary px-5 font-label-lg text-label-lg text-on-primary disabled:opacity-50" data-mp-checkout-cta="checkout-pro" data-mp-marketplace-checkout="checkout-pro">
+          {errorMessage && <p role="alert" className="rounded-inner bg-status-alert-bg px-3 py-2 font-body-sm text-body-sm text-status-alert">{errorMessage}</p>}
+          <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row">
+            <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => setStep(3)}>Volver</Button>
+            <button type="button" onClick={createPreferenceAndRedirect} disabled={loading || !quote} className="inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-pill bg-primary px-4 font-label-lg text-label-lg text-on-primary disabled:opacity-50 sm:flex-1" data-mp-checkout-cta="checkout-pro" data-mp-marketplace-checkout="checkout-pro">
+              <MercadoPagoLogo className="mr-2 rounded-full bg-white px-1 py-0.5 text-[20px]" />
               Pagar seña con Mercado Pago
             </button>
           </div>
         </form>
-      </div>
-    );
-  }
-
-  if (step === 5) {
-    return (
-      <div key={step} className="space-y-lg py-8 text-center">
-        <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-confirmed-dot opacity-30" />
-          <div className="animate-pop-in relative flex h-16 w-16 items-center justify-center rounded-full bg-status-confirmed-bg text-status-confirmed">
-            <Icon name="check" className="text-[28px]" />
-          </div>
-        </div>
-        <h1
-          className="animate-fade-up font-headline-lg-mobile text-headline-lg-mobile text-on-surface"
-          style={{ animationDelay: "120ms" }}
-        >
-          ¡Turno confirmado!
-        </h1>
-        <p
-          className="mx-auto max-w-[24rem] animate-fade-up font-body-md text-body-md text-on-surface-variant"
-          style={{ animationDelay: "200ms" }}
-        >
-          Te esperamos el {format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es })}.
-        </p>
-        {confirmedData?.token && (
-          <Link
-            href={`/${slug}/mi-turno/${confirmedData.token}`}
-            className={cn(buttonVariants({ variant: "secondary" }), "animate-fade-up")}
-            style={{ animationDelay: "280ms" }}
-          >
-            Ver mi turno
-          </Link>
-        )}
       </div>
     );
   }

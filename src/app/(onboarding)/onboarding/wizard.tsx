@@ -10,6 +10,8 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { checkSlugAvailability, createTenantAction } from "./actions";
 import { CreatingOverlay, JUST_CREATE_ICON } from "./creating-overlay";
+import { HoursEditor } from "@/components/ui/hours-editor";
+import { daysToHours, defaultWeek, weekError, type DayHours } from "@/components/ui/hours-editor-model";
 
 type BusinessType = {
   id: string;
@@ -19,19 +21,18 @@ type BusinessType = {
   hint: string;
 };
 
-const WEEKDAYS = [
-  { id: 1, label: "Lunes" },
-  { id: 2, label: "Martes" },
-  { id: 3, label: "Miércoles" },
-  { id: 4, label: "Jueves" },
-  { id: 5, label: "Viernes" },
-  { id: 6, label: "Sábado" },
-  { id: 0, label: "Domingo" },
-];
+export type OwnerDefaults = {
+  fullName: string;
+  email: string;
+  gender: "female" | "male" | "unspecified" | null;
+  age: string;
+  avatarUrl: string | null;
+};
 
 const STEPS = [
   { title: "Contanos de tu local", subtitle: "Con esto armamos tu turnero público." },
   { title: "¿Cuál es tu rubro?", subtitle: "Elegí el que mejor describa tu negocio." },
+  { title: "Ahora, sobre vos", subtitle: "Estos datos identifican a la persona que atiende." },
   { title: "¿Cuándo abrís?", subtitle: "Configurá tus días y horarios de atención." },
 ];
 
@@ -40,9 +41,6 @@ const STEPS = [
 // que se armó para vos.
 const MIN_CREATING_MS = 2200;
 const DONE_MS = 900;
-
-type HourBlock = { opens_at: string; closes_at: string };
-type DayHours = { weekday: number; active: boolean; blocks: HourBlock[] };
 
 // "Uñas Lumière" -> "unas-lumiere": sin acentos ni eñes, que es lo que
 // acepta la URL del turnero (si no, el alta fallaba con "solo letras,
@@ -56,7 +54,7 @@ function toSlug(value: string) {
     .replace(/^-+/, "");
 }
 
-export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
+export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]; owner: OwnerDefaults }) {
   preload(JUST_CREATE_ICON, { as: "image" });
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
@@ -70,14 +68,14 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [businessTypeId, setBusinessTypeId] = useState(businessTypes[0]?.id || "");
+  const [address, setAddress] = useState("");
+  const [ownerName, setOwnerName] = useState(owner.fullName);
+  const [ownerEmail, setOwnerEmail] = useState(owner.email);
+  const [ownerGender, setOwnerGender] = useState<"female" | "male" | "unspecified">(owner.gender ?? "unspecified");
+  const [ownerAge, setOwnerAge] = useState(owner.age);
+  const [teamMode, setTeamMode] = useState<"solo" | "team">("solo");
 
-  const [hours, setHours] = useState<DayHours[]>(
-    WEEKDAYS.map((day) => ({
-      weekday: day.id,
-      active: day.id >= 1 && day.id <= 5,
-      blocks: [{ opens_at: "09:00", closes_at: "18:00" }],
-    })),
-  );
+  const [hours, setHours] = useState<DayHours[]>(defaultWeek);
 
   const router = useRouter();
 
@@ -104,51 +102,32 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
     if (!slugTouched) setSlug(toSlug(event.target.value).replace(/-+$/, ""));
   };
 
-  const toggleDayActive = (weekday: number, active: boolean) => {
-    setHours((prev) => prev.map((h) => (h.weekday === weekday ? { ...h, active } : h)));
-  };
-
-  const updateBlock = (weekday: number, index: number, field: keyof HourBlock, value: string) => {
-    setHours((prev) =>
-      prev.map((h) =>
-        h.weekday === weekday
-          ? { ...h, blocks: h.blocks.map((b, i) => (i === index ? { ...b, [field]: value } : b)) }
-          : h,
-      ),
-    );
-  };
-
-  // Horario cortado: un segundo bloque para el corte de mediodía
-  // (p. ej. 09:00-13:00 y 17:00-21:00). El motor de disponibilidad ya
-  // opera sobre listas de rangos (src/domain/availability/ranges.ts).
-  const addBlock = (weekday: number) => {
-    setHours((prev) =>
-      prev.map((h) =>
-        h.weekday === weekday ? { ...h, blocks: [...h.blocks, { opens_at: "17:00", closes_at: "21:00" }] } : h,
-      ),
-    );
-  };
-
-  const removeBlock = (weekday: number, index: number) => {
-    setHours((prev) =>
-      prev.map((h) => (h.weekday === weekday ? { ...h, blocks: h.blocks.filter((_, i) => i !== index) } : h)),
-    );
-  };
-
   const handleSubmit = async () => {
     setCreating(true);
     setSubmitError(null);
     const startedAt = Date.now();
     try {
-      const activeHours = hours
-        .filter((h) => h.active)
-        .flatMap((h) => h.blocks.map((b) => ({ weekday: h.weekday, opens_at: b.opens_at, closes_at: b.closes_at })));
-      const { slug: newSlug } = await createTenantAction({
-        name,
-        slug: slug.replace(/-+$/, ""),
-        businessTypeId,
+      const activeHours = daysToHours(hours);
+      const result = await createTenantAction({
+        business: {
+          name,
+          slug: slug.replace(/-+$/, ""),
+          businessTypeId,
+          address,
+          logoUrl: null,
+        },
+        owner: {
+          fullName: ownerName || name,
+          email: ownerEmail,
+          gender: ownerGender,
+          age: ownerAge ? Number(ownerAge) : null,
+          avatarUrl: owner.avatarUrl,
+          teamMode,
+        },
         businessHours: activeHours,
       });
+      if ("error" in result) throw new Error(result.error);
+      const newSlug = result.slug;
       await new Promise((resolve) => setTimeout(resolve, Math.max(0, MIN_CREATING_MS - (Date.now() - startedAt))));
       setCreated(true);
       await new Promise((resolve) => setTimeout(resolve, DONE_MS));
@@ -223,6 +202,10 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
                   </p>
                   {slugError && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{slugError}</p>}
                 </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="onboarding-address" className="font-label-md text-label-md text-on-surface-variant">Dirección (opcional)</label>
+                  <Input id="onboarding-address" placeholder="Barrio, ciudad o dirección" value={address} onChange={(event) => setAddress(event.target.value)} />
+                </div>
               </>
             )}
 
@@ -268,65 +251,47 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
             )}
 
             {step === 3 && (
+              <div className="space-y-md">
+                <div className="space-y-1.5">
+                  <label htmlFor="onboarding-owner-name" className="font-label-md text-label-md text-on-surface-variant">Tu nombre</label>
+                  <Input id="onboarding-owner-name" value={ownerName} onChange={(event) => setOwnerName(event.target.value)} autoComplete="name" />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label htmlFor="onboarding-owner-email" className="font-label-md text-label-md text-on-surface-variant">Email de contacto</label>
+                    <Input id="onboarding-owner-email" type="email" value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)} autoComplete="email" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="onboarding-owner-age" className="font-label-md text-label-md text-on-surface-variant">Edad (opcional)</label>
+                    <Input id="onboarding-owner-age" type="number" min="14" max="99" value={ownerAge} onChange={(event) => setOwnerAge(event.target.value)} inputMode="numeric" />
+                  </div>
+                </div>
+                <fieldset className="space-y-2">
+                  <legend className="font-label-md text-label-md text-on-surface-variant">¿Cómo te hablamos?</legend>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      ["female", "Femenino"],
+                      ["male", "Masculino"],
+                      ["unspecified", "Neutral"],
+                    ] as const).map(([value, label]) => (
+                      <button key={value} type="button" onClick={() => setOwnerGender(value)} className={cn("min-h-11 rounded-pill border px-2 font-label-sm text-label-sm", ownerGender === value ? "border-secondary bg-secondary-soft text-secondary" : "border-border text-on-surface-variant")}>{label}</button>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset className="space-y-2">
+                  <legend className="font-label-md text-label-md text-on-surface-variant">¿Trabajás sola o con equipo?</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setTeamMode("solo")} className={cn("min-h-14 rounded-inner border p-3 text-left", teamMode === "solo" ? "border-secondary bg-secondary-soft" : "border-border")}><strong className="block font-label-md text-label-md">Trabajo sola</strong><span className="font-body-sm text-body-sm text-on-surface-variant">Plan Solo, sin arqueo ni selector de profesional.</span></button>
+                    <button type="button" onClick={() => setTeamMode("team")} className={cn("min-h-14 rounded-inner border p-3 text-left", teamMode === "team" ? "border-secondary bg-secondary-soft" : "border-border")}><strong className="block font-label-md text-label-md">Tengo equipo</strong><span className="font-body-sm text-body-sm text-on-surface-variant">Agenda y caja para varias personas.</span></button>
+                  </div>
+                </fieldset>
+              </div>
+            )}
+
+            {step === 4 && (
               <div className="space-y-3">
-                {hours.map((h) => {
-                  const dayLabel = WEEKDAYS.find((w) => w.id === h.weekday)?.label;
-                  return (
-                    <div key={h.weekday} className="space-y-1.5">
-                      <label className="flex min-h-11 items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={h.active}
-                          onChange={(e) => toggleDayActive(h.weekday, e.target.checked)}
-                          className="h-5 w-5 rounded border-gray-300 accent-secondary"
-                        />
-                        <span className="w-24 font-body-sm">{dayLabel}</span>
-                        {!h.active && <span className="text-sm text-on-surface-variant">Cerrado</span>}
-                      </label>
-                      {h.active && (
-                        <div className="space-y-1.5 pl-8">
-                          {h.blocks.map((b, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <Input
-                                type="time"
-                                value={b.opens_at}
-                                onChange={(e) => updateBlock(h.weekday, i, "opens_at", e.target.value)}
-                                className="h-10 w-[8.5rem] px-3"
-                              />
-                              <span>-</span>
-                              <Input
-                                type="time"
-                                value={b.closes_at}
-                                onChange={(e) => updateBlock(h.weekday, i, "closes_at", e.target.value)}
-                                className="h-10 w-[8.5rem] px-3"
-                              />
-                              {h.blocks.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeBlock(h.weekday, i)}
-                                  className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-muted hover:text-status-alert"
-                                  aria-label="Quitar franja"
-                                >
-                                  <Icon name="close" className="text-[16px]" />
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                          {h.blocks.length < 2 && (
-                            <button
-                              type="button"
-                              onClick={() => addBlock(h.weekday)}
-                              className="flex min-h-9 items-center gap-1 font-label-sm text-label-sm text-secondary transition-colors hover:text-secondary/80"
-                            >
-                              <Icon name="add" className="text-[16px]" />
-                              Agregar corte (ej. horario partido)
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                <HoursEditor value={hours} onChange={setHours} />
+                {weekError(hours) && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{weekError(hours)}</p>}
               </div>
             )}
 
@@ -341,11 +306,11 @@ export function Wizard({ businessTypes }: { businessTypes: BusinessType[] }) {
             </Button>
           )}
           {step < STEPS.length ? (
-            <Button className="flex-1" onClick={continueFromStep} disabled={checkingSlug || !name.trim() || slug.replace(/-+$/, "").length < 3}>
+            <Button className="flex-1" onClick={continueFromStep} disabled={checkingSlug || (step === 1 && (!name.trim() || slug.replace(/-+$/, "").length < 3)) || (step === 3 && (!ownerName.trim() || !ownerEmail.includes("@")))}>
               {checkingSlug ? "Verificando…" : "Continuar"}
             </Button>
           ) : (
-            <Button className="flex-1" onClick={handleSubmit} disabled={creating}>
+            <Button className="flex-1" onClick={handleSubmit} disabled={creating || Boolean(weekError(hours))}>
               Crear mi turnero
             </Button>
           )}

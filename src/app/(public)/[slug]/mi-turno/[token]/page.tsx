@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { formatInTz } from "@/lib/dates";
@@ -66,6 +65,10 @@ export default async function MiTurnoPage({
     hour: "2-digit",
     minute: "2-digit",
   });
+  const whatsappDigits = (tenant.whatsappNumber ?? "").replace(/\D/g, "");
+  const rescheduleHref = whatsappDigits
+    ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(`Hola, quiero reprogramar mi turno del ${formattedDate} a las ${formattedTime} en ${tenant.name}.`)}`
+    : null;
 
   return (
     <div className="container max-w-[42rem] py-8">
@@ -124,12 +127,16 @@ export default async function MiTurnoPage({
 
       {canCancel && (
         <div className="flex flex-col sm:flex-row gap-4">
-          <Link
-            href={`/${slug}?rescheduleFrom=${appointment.id}`}
-            className={cn(buttonVariants({ variant: "secondary" }), "flex-1")}
-          >
-            Reprogramar
-          </Link>
+          {rescheduleHref && (
+            <a
+              href={rescheduleHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(buttonVariants({ variant: "secondary" }), "flex-1")}
+            >
+              Pedir reprogramación
+            </a>
+          )}
           <form
             className="flex-1"
             action={cancelAppointmentAction.bind(null, token, slug)}

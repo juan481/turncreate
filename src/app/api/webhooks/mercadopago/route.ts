@@ -22,16 +22,22 @@ export async function POST(request: Request) {
   if (body?.type !== "payment" || !dataId) return NextResponse.json({ ok: true });
 
   const eventRef = firebaseAdmin().db.collection("mpWebhookEvents").doc(`payment_${dataId}`);
+  const requestId = request.headers.get("x-request-id")!;
   const claimed = await firebaseAdmin().db.runTransaction(async (transaction) => {
     const current = await transaction.get(eventRef);
     const data = current.data();
-    if (data?.processedAt || (data?.processingUntil?.toMillis?.() ?? 0) > Date.now()) return false;
+    // Mercado Pago puede notificar el mismo payment varias veces a medida que
+    // cambia de pending a approved. Solo deduplicamos la entrega exacta; una
+    // notificacion posterior con otro request-id debe volver a reconciliar.
+    if (data?.lastRequestId === requestId || (data?.processingUntil?.toMillis?.() ?? 0) > Date.now()) return false;
     transaction.set(eventRef, {
       type: "payment", paymentId: dataId,
       sellerId: body.user_id != null ? String(body.user_id) : data?.sellerId ?? null,
       action: body.action ?? data?.action ?? null,
+      lastRequestId: requestId,
       attempts: data?.attempts ?? 0,
       receivedAt: data?.receivedAt ?? FieldValue.serverTimestamp(),
+      lastReceivedAt: FieldValue.serverTimestamp(),
       processedAt: null,
       processingUntil: Timestamp.fromMillis(Date.now() + 5 * 60_000),
     }, { merge: true });
@@ -43,7 +49,10 @@ export async function POST(request: Request) {
         await eventRef.set({ attempts: FieldValue.increment(1), lastAttemptAt: FieldValue.serverTimestamp() }, { merge: true });
         await reconcileMercadoPagoPayment(dataId);
       } catch (error) {
-        await eventRef.set({ lastError: error instanceof Error ? error.message.slice(0, 300) : "Error desconocido" }, { merge: true });
+        await eventRef.set({
+          processingUntil: Timestamp.fromMillis(0),
+          lastError: error instanceof Error ? error.message.slice(0, 300) : "Error desconocido",
+        }, { merge: true });
       }
     });
   }

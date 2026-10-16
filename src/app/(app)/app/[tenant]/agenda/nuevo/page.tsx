@@ -2,7 +2,7 @@ import Link from "next/link";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { listAvailableStarts } from "@/server/firebase/booking";
-import { formatTimeInTz, todayISO } from "@/lib/dates";
+import { addDaysISO, formatTimeInTz, isDateISO, todayISO } from "@/lib/dates";
 import { Icon } from "@/components/ui/icon";
 import { TurnoForm } from "./turno-form";
 
@@ -15,7 +15,11 @@ export default async function NuevoTurnoPage({
   const tenant = await getTenantBySlugFromFirebase(tenantSlug);
   if (!tenant) return null;
 
-  const dateISO = typeof sp.date === "string" && sp.date ? sp.date : todayISO(tenant.timezone);
+  const firstDateISO = todayISO(tenant.timezone);
+  const maxBookingDays = tenant.settings.maxBookingDays ?? 60;
+  const lastDateISO = addDaysISO(firstDateISO, maxBookingDays);
+  const requestedDate = typeof sp.date === "string" ? sp.date : "";
+  const dateISO = isDateISO(requestedDate) && requestedDate >= firstDateISO && requestedDate <= lastDateISO ? requestedDate : firstDateISO;
   const serviceId = typeof sp.serviceId === "string" && sp.serviceId ? sp.serviceId : undefined;
   const clientId = typeof sp.clientId === "string" && sp.clientId ? sp.clientId : undefined;
   const rescheduleFrom = typeof sp.rescheduleFrom === "string" ? sp.rescheduleFrom : undefined;
@@ -104,6 +108,7 @@ export default async function NuevoTurnoPage({
           initialServiceId={serviceId}
           initialClientId={clientId}
           initialDateISO={dateISO}
+          maxBookingDays={maxBookingDays}
           slots={slots.map((startsAt) => ({
             startsAtISO: startsAt.toISOString(),
             label: formatTimeInTz(startsAt, tenant.timezone),

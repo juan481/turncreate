@@ -1,6 +1,14 @@
 import "server-only";
 import { firebaseAdmin } from "./admin";
 import { dayRange } from "@/lib/dates";
+import {
+  normalizePayment,
+  summarizePayments,
+  toPaymentSummary,
+  type NormalizedPayment,
+  type PaymentBreakdown,
+  type PaymentSummary,
+} from "./stats-model";
 
 export type DayAppointment = {
   id: string;
@@ -33,25 +41,25 @@ export type RangeSummary = {
   porCobrar: number;
 };
 
-export type PaymentSummary = { gross: number; applied: number; fees: number; surcharges: number; net: number; count: number };
+export type { PaymentBreakdown, PaymentSummary } from "./stats-model";
 
-export async function getPaymentSummary(tenantId: string, range: { start: Date; end: Date }): Promise<PaymentSummary> {
+export async function getPayments(tenantId: string, range: { start: Date; end: Date }): Promise<NormalizedPayment[]> {
   const snapshot = await firebaseAdmin().db.collectionGroup("payments")
     .where("tenantId", "==", tenantId)
     .where("paidAt", ">=", range.start)
     .where("paidAt", "<", range.end)
     .get();
-  return snapshot.docs.reduce<PaymentSummary>((summary, doc) => {
-    const data = doc.data();
-    if (data.status !== "approved") return summary;
-    summary.gross += Number(data.grossAmount ?? data.amount ?? 0);
-    summary.applied += Number(data.appliedAmount ?? data.amount ?? 0);
-    summary.fees += Number(data.feeAmount ?? 0);
-    summary.surcharges += Number(data.surchargeAmount ?? 0);
-    summary.net += Number(data.netAmount ?? data.amount ?? 0);
-    summary.count += 1;
-    return summary;
-  }, { gross: 0, applied: 0, fees: 0, surcharges: 0, net: 0, count: 0 });
+  return snapshot.docs
+    .map((doc) => normalizePayment(doc.id, doc.data()))
+    .filter((payment): payment is NormalizedPayment => payment !== null);
+}
+
+export async function getPaymentBreakdown(tenantId: string, range: { start: Date; end: Date }): Promise<PaymentBreakdown> {
+  return summarizePayments(await getPayments(tenantId, range));
+}
+
+export async function getPaymentSummary(tenantId: string, range: { start: Date; end: Date }): Promise<PaymentSummary> {
+  return toPaymentSummary(await getPaymentBreakdown(tenantId, range));
 }
 
 // Mismos estados en todos lados: cancelado y vencido nunca suman turno,

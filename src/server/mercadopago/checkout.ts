@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { calculateDeposit } from "@/domain/money/deposit";
 import { checkoutAmounts, paymentDocument } from "@/domain/money/payment";
@@ -10,6 +10,7 @@ import { getTenantBySlugFromFirebase, type TenantRecord } from "@/server/firebas
 import { isPublicHttpsUrl, mercadoPagoEnv } from "./config";
 import { sellerAccessToken } from "./connections";
 import { recordTrustedAnalyticsEvent } from "@/server/analytics";
+import { cleanPublicClient, type PublicClientInput } from "@/server/public-booking/client";
 
 export type BookingAttemptStatus =
   | "created"
@@ -20,16 +21,7 @@ export type BookingAttemptStatus =
   | "refund_required"
   | "refunded";
 
-type CheckoutClient = { full_name: string; phone_e164: string; email: string };
-
-function cleanClient(client: CheckoutClient) {
-  const fullName = client.full_name.trim();
-  const phone = client.phone_e164.replace(/[^+\d]/g, "");
-  const email = client.email.trim().toLowerCase();
-  if (fullName.length < 2 || phone.replace(/\D/g, "").length < 8) throw new Error("Completá nombre y WhatsApp");
-  if (email && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("El email no es válido");
-  return { fullName, phone, email };
-}
+type CheckoutClient = PublicClientInput;
 
 function depositFor(tenant: TenantRecord, total: number) {
   const settings = tenant.settings;
@@ -38,14 +30,22 @@ function depositFor(tenant: TenantRecord, total: number) {
     : { type: settings.depositType, value: settings.depositValue, min: settings.depositMin });
 }
 
+function payerNames(fullName: string) {
+  const [name, ...surnameParts] = fullName.trim().split(/\s+/);
+  return { name, surname: surnameParts.join(" ") || undefined };
+}
+
 export async function publicCheckoutQuote(tenantId: string, serviceId: string) {
   const db = firebaseAdmin().db;
   const [tenantSnapshot, serviceSnapshot] = await Promise.all([
     db.collection("tenants").doc(tenantId).get(),
     db.collection("tenants").doc(tenantId).collection("services").doc(serviceId).get(),
   ]);
-  if (!tenantSnapshot.exists || !serviceSnapshot.exists) throw new Error("No se pudo calcular la seña");
+  if (!tenantSnapshot.exists || !serviceSnapshot.exists || serviceSnapshot.data()?.active === false || serviceSnapshot.data()?.public === false || serviceSnapshot.data()?.archivedAt) throw new Error("No se pudo calcular la seña");
   const tenant = tenantSnapshot.data() as TenantRecord;
+  if (tenant.status === "suspended" || tenant.settings.publicBookingEnabled === false || tenant.settings.depositType === "none") {
+    throw new Error("Las reservas online no están habilitadas");
+  }
   const depositAmount = depositFor(tenant, Number(serviceSnapshot.data()!.price ?? 0));
   return checkoutAmounts({
     depositAmount,
@@ -55,9 +55,11 @@ export async function publicCheckoutQuote(tenantId: string, serviceId: string) {
 }
 
 export async function createCheckoutPreference(input: { slug: string; holdId: string; client: CheckoutClient }) {
-  const client = cleanClient(input.client);
+  const client = cleanPublicClient(input.client);
   const tenant = await getTenantBySlugFromFirebase(input.slug);
   if (!tenant || tenant.status === "suspended") throw new Error("Este turnero no está disponible");
+  if (tenant.settings.publicBookingEnabled === false) throw new Error("Las reservas online están pausadas");
+  if (tenant.settings.payments?.mercadopagoEnabled === false) throw new Error("Este local no cobra la seña con Mercado Pago");
   const sellerOauthAccessToken = await sellerAccessToken(tenant.id);
   const db = firebaseAdmin().db;
   const tenantRef = db.collection("tenants").doc(tenant.id);
@@ -66,7 +68,7 @@ export async function createCheckoutPreference(input: { slug: string; holdId: st
   if (!holdSnapshot.exists || holdSnapshot.data()!.expiresAt.toMillis() <= Date.now()) throw new Error("La reserva venció");
   const hold = holdSnapshot.data()!;
   const serviceSnapshot = await tenantRef.collection("services").doc(String(hold.serviceId)).get();
-  if (!serviceSnapshot.exists || serviceSnapshot.data()?.active === false) throw new Error("El servicio ya no está disponible");
+  if (!serviceSnapshot.exists || serviceSnapshot.data()?.active === false || serviceSnapshot.data()?.public === false || serviceSnapshot.data()?.archivedAt) throw new Error("El servicio ya no está disponible");
   const service = serviceSnapshot.data()!;
   const servicePrice = Number(service.price ?? 0);
   const depositAmount = depositFor(tenant, servicePrice);
@@ -122,21 +124,30 @@ export async function createCheckoutPreference(input: { slug: string; holdId: st
   }
   const returnUrl = `${env.appUrl}/${tenant.slug}/checkout?attempt=${attemptRef.id}`;
   try {
+    const payer = payerNames(client.fullName);
     const preferenceBody = {
       items: [{
         id: String(hold.serviceId),
         title: `Seña · ${String(service.name ?? "Turno")}`,
+        description: `Reserva de turno en ${tenant.name}`,
+        category_id: "beauty",
         quantity: 1,
         unit_price: amounts.grossAmount,
         currency_id: "ARS",
       }],
-      payer: { name: client.fullName, email: client.email || undefined },
+      payer: { ...payer, email: client.email || undefined },
       external_reference: externalReference,
       marketplace_fee: 0,
       metadata: { booking_attempt_id: attemptRef.id, tenant_id: tenant.id, hold_id: input.holdId },
       back_urls: { success: returnUrl, failure: returnUrl, pending: returnUrl },
       auto_return: "approved",
       notification_url: `${env.appUrl}/api/webhooks/mercadopago`,
+      // Una seña con hold de 10 minutos no puede quedar esperando un pago
+      // offline. Se permiten tarjeta y dinero en cuenta, en un solo pago.
+      payment_methods: {
+        excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
+        installments: 1,
+      },
       expires: true,
       expiration_date_from: new Date().toISOString(),
       expiration_date_to: hold.expiresAt.toDate().toISOString(),
@@ -145,7 +156,11 @@ export async function createCheckoutPreference(input: { slug: string; holdId: st
     };
     const preferenceResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
-      headers: { Authorization: `Bearer ${sellerOauthAccessToken}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${sellerOauthAccessToken}`,
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": attemptRef.id,
+      },
       body: JSON.stringify(preferenceBody),
       cache: "no-store",
     });
@@ -174,7 +189,6 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
   const db = firebaseAdmin().db;
   const eventRef = db.collection("mpWebhookEvents").doc(`payment_${paymentId}`);
   const eventSnapshot = await eventRef.get();
-  if (eventSnapshot.data()?.processedAt) return { duplicate: true };
 
   // La referencia externa permite encontrar el tenant sin confiar en el body del webhook.
   // Primero se obtiene el payment con la conexión cuyo sellerId llega como query/body;
@@ -200,7 +214,13 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
   if (payment.status !== "approved") {
     const status: BookingAttemptStatus = payment.status === "rejected" || payment.status === "cancelled" ? "rejected" : "pending";
     await attemptRef.set({ status, paymentStatus: payment.status, externalPaymentId: String(payment.id), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    await eventRef.set({ processedAt: FieldValue.serverTimestamp(), attemptId, result: status }, { merge: true });
+    await eventRef.set({
+      processedAt: FieldValue.serverTimestamp(),
+      processingUntil: Timestamp.fromMillis(0),
+      attemptId,
+      result: status,
+      lastError: FieldValue.delete(),
+    }, { merge: true });
     return { status };
   }
 
@@ -209,6 +229,8 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
   const appointmentRef = tenantRef.collection("appointments").doc();
   const appointmentToken = crypto.randomUUID().replace(/-/g, "");
   let finalStatus: BookingAttemptStatus = "approved";
+  let confirmedAppointmentId: string | null = null;
+  let createdNow = false;
   await db.runTransaction(async (transaction) => {
     const [freshAttempt, hold, service, staff] = await Promise.all([
       transaction.get(attemptRef),
@@ -216,7 +238,11 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
       transaction.get(tenantRef.collection("services").doc(String(attempt.snapshot.serviceId))),
       transaction.get(tenantRef.collection("staff").doc(String(attempt.snapshot.staffId))),
     ]);
-    if (freshAttempt.data()?.appointmentId) return;
+    if (freshAttempt.data()?.appointmentId) {
+      confirmedAppointmentId = String(freshAttempt.data()!.appointmentId);
+      finalStatus = freshAttempt.data()?.status === "refund_required" ? "refund_required" : "approved";
+      return;
+    }
     const startsAt = attempt.snapshot.startsAt.toDate();
     const endsAt = attempt.snapshot.endsAt.toDate();
     const duration = Math.round((endsAt.getTime() - startsAt.getTime()) / 60_000);
@@ -245,7 +271,7 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
         fullNameNormalized: String(attempt.client.fullName).toLocaleLowerCase("es-AR"),
         phoneE164: attempt.client.phone, email: attempt.client.email || null,
         noShowCount: 0, appointmentsCount: 1, totalSpent: appliedAmount,
-        lastVisitAt: attempt.snapshot.startsAt, archivedAt: null,
+        lastVisitAt: null, archivedAt: null,
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
       transaction.create(phoneRef, { tenantId, clientId, createdAt: FieldValue.serverTimestamp() });
@@ -255,7 +281,6 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
         email: attempt.client.email || existingClient?.data()?.email || null,
         appointmentsCount: FieldValue.increment(1),
         totalSpent: FieldValue.increment(appliedAmount),
-        lastVisitAt: attempt.snapshot.startsAt,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
@@ -287,15 +312,23 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
       externalPaymentId: String(payment.id), paymentStatus: payment.status,
       approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    confirmedAppointmentId = appointmentRef.id;
+    createdNow = true;
   });
-  await eventRef.set({ processedAt: FieldValue.serverTimestamp(), attemptId, result: finalStatus }, { merge: true });
-  if (finalStatus === "approved") {
+  await eventRef.set({
+    processedAt: FieldValue.serverTimestamp(),
+    processingUntil: Timestamp.fromMillis(0),
+    attemptId,
+    result: finalStatus,
+    lastError: FieldValue.delete(),
+  }, { merge: true });
+  if (finalStatus === "approved" && createdNow) {
     await Promise.all([
       recordTrustedAnalyticsEvent({ tenantId, timezone: String(attempt.timezone ?? "America/Argentina/Buenos_Aires"), event: "paymentApproved" }),
       recordTrustedAnalyticsEvent({ tenantId, timezone: String(attempt.timezone ?? "America/Argentina/Buenos_Aires"), event: "appointmentConfirmed" }),
     ]);
   }
-  return { status: finalStatus, appointmentId: finalStatus === "approved" ? appointmentRef.id : null };
+  return { status: finalStatus, appointmentId: finalStatus === "approved" ? confirmedAppointmentId : null };
 }
 
 export async function getBookingAttempt(attemptId: string, slug: string) {

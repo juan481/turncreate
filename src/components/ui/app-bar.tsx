@@ -38,7 +38,7 @@ export function AppBar({
       <span aria-hidden className="pointer-events-none absolute -left-16 top-2 h-24 w-40 rounded-full bg-[#c4b5fd]/20 blur-2xl" />
       <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
       <div className="relative flex h-14 items-center gap-2 px-3">
-        {backHref && <BackButton fallbackHref={backHref} variant="on-brand" />}
+        {backHref && <BackButton href={backHref} variant="on-brand" />}
         {left}
         {title && (
           <h1 className="min-w-0 flex-1 truncate font-headline-sm text-headline-sm text-on-primary">

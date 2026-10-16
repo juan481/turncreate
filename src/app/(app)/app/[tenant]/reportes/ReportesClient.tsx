@@ -24,7 +24,12 @@ interface ReportesClientProps {
     clientesQueVinieron: number;
     clientesNuevos: number;
     clientesQueNoVolvieron: number;
-    ingresos: number;
+    facturado: number;
+    cobradoBruto: number;
+    costosMp: number;
+    recargos: number;
+    neto: number;
+    porCobrar: number;
     egresos: number;
     ticketMasAlto: number;
     serviciosPopulares: ServicioPopular[];
@@ -161,7 +166,7 @@ export function ReportesClient({ tenantSlug, monthISO, monthOptions, publicAnaly
     }
   };
 
-  const balance = stats.ingresos - stats.egresos;
+  const balance = stats.neto - stats.egresos;
   const openService = useMemo(
     () => stats.serviciosPopulares.find((s) => s.id === openServiceId) ?? null,
     [stats.serviciosPopulares, openServiceId],
@@ -194,13 +199,17 @@ export function ReportesClient({ tenantSlug, monthISO, monthOptions, publicAnaly
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-md sm:grid-cols-3">
-        <KpiCard icon="payments" color="#22C55E" label="Ingresos del mes" value={money(stats.ingresos)} />
-        <KpiCard icon="trending_down" color="#EF4444" label="Egresos del mes" value={money(stats.egresos)} />
+      <div className="grid grid-cols-2 gap-md lg:grid-cols-4">
+        <KpiCard icon="receipt_long" color="#7069E8" label="Facturado" value={money(stats.facturado)} hint="Servicios completados" />
+        <KpiCard icon="payments" color="#22C55E" label="Cobrado bruto" value={money(stats.cobradoBruto)} hint={stats.recargos > 0 ? `${money(stats.recargos)} de recargos` : undefined} />
+        <KpiCard icon="account_balance_wallet" color="#F59E0B" label="Costos Mercado Pago" value={money(stats.costosMp)} />
+        <KpiCard icon="savings" color="#0EA5E9" label="Neto recibido" value={money(stats.neto)} />
+        <KpiCard icon="pending_actions" color="#F59E0B" label="Por cobrar" value={money(stats.porCobrar)} />
+        <KpiCard icon="trending_down" color="#EF4444" label="Egresos" value={money(stats.egresos)} />
         <KpiCard
           icon="account_balance"
           color={balance >= 0 ? "#22C55E" : "#EF4444"}
-          label="Balance del mes"
+          label="Resultado neto"
           value={money(balance)}
         />
       </div>

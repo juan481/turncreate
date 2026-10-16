@@ -15,7 +15,8 @@ test("reserva pública completa: elige turno, paga la seña (MP stub) y llega al
   await page.getByText("Manicuría semipermanente", { exact: true }).click();
 
   // Paso 2: "cualquiera disponible".
-  await page.getByText("Cualquiera disponible", { exact: true }).click();
+  // El tenant E2E es unipersonal: salta la eleccion de profesional.
+  await expect(page.getByText("Cualquiera disponible", { exact: true })).toHaveCount(0);
 
   // Paso 3: fecha y horario. La tira de días arranca hoy; cada botón se
   // llama "<día abreviado><número>" (p. ej. "vie16").

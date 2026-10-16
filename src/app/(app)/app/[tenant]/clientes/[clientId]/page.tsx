@@ -66,7 +66,9 @@ export default async function ClientDetailPage({ params }: PageProps<"/app/[tena
   const recentAppointments = allAppointments.slice(0, 10);
   const completedAppointments = allAppointments.filter((app) => app.status === "completed");
   const turnosCount = completedAppointments.length;
-  const totalSpent = completedAppointments.reduce((sum, app) => sum + Number(app.total ?? 0), 0);
+  // Es plata efectivamente registrada, no el precio teórico de los turnos
+  // completados (un servicio puede quedar con saldo pendiente).
+  const totalSpent = Number(client.totalSpent ?? 0);
   const noShowCount = allAppointments.filter((app) => app.status === "no_show").length;
 
   return (

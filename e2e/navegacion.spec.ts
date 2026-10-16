@@ -12,6 +12,9 @@ test("navegación mobile: clientes, agenda, calendario, caja y reportes cargan s
   await page.goto(`/app/${SLUG}/clientes`);
   await expect(page).toHaveURL(/\/clientes$/);
   await expectPageLoadedOk(page);
+  await page.locator(`a[href^="/app/${SLUG}/clientes/"]`).first().click();
+  await expect(page).toHaveURL(/\/clientes\/[^/]+$/);
+  await expectPageLoadedOk(page);
 
   await page.goto(`/app/${SLUG}/agenda`);
   await expect(page).toHaveURL(/\/agenda(\?|$)/);

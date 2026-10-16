@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
-import { requireTenantAccess } from "@/server/firebase/tenants";
+import { isStorableImageDataUrl, requireTenantAccess, syncOwnerStaffSchedules } from "@/server/firebase/tenants";
 import { disconnectMp } from "@/server/mercadopago/connections";
+import { normalizeArPhone } from "@/lib/phone";
+import { DESCRIPTION_MAX_LENGTH, normalizeDescription, normalizeInstagramUrl } from "@/server/tenant-profile";
 
 export type ConfigActionState = { error: string | null; success?: boolean };
 
@@ -18,12 +20,19 @@ async function tenantForUser(slug: string) {
 export async function updateBusinessInfo(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   const name = formData.get("name");
   if (typeof name !== "string" || name.trim().length < 2) return { error: "Ingresá un nombre válido para el local" };
+  const description = normalizeDescription(String(formData.get("description") ?? ""));
+  if (description && description.length > DESCRIPTION_MAX_LENGTH) return { error: "La descripción es demasiado larga" };
+  const instagramUrl = normalizeInstagramUrl(String(formData.get("instagramUrl") ?? ""));
+  if (instagramUrl === undefined) return { error: "Revisá el usuario de Instagram" };
+  const whatsappRaw = String(formData.get("whatsappNumber") ?? "").trim();
+  const whatsappNumber = whatsappRaw ? normalizeArPhone(whatsappRaw) : null;
+  if (whatsappRaw && !whatsappNumber) return { error: "Revisá el número de WhatsApp" };
   try {
     const { tenant } = await tenantForUser(tenantSlug);
     await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({
-      name: name.trim(), address: String(formData.get("address") || "") || null,
-      instagramUrl: String(formData.get("instagramUrl") || "") || null,
-      whatsappNumber: String(formData.get("whatsappNumber") || "") || null,
+      name: name.trim(), description, address: String(formData.get("address") || "").trim() || null,
+      instagramUrl,
+      whatsappNumber,
       updatedAt: FieldValue.serverTimestamp(),
     });
     revalidatePath(`/app/${tenantSlug}/configuracion`);
@@ -34,11 +43,8 @@ export async function updateBusinessInfo(tenantSlug: string, _prev: ConfigAction
 // El logo viaja ya comprimido desde el navegador (~512px). El techo de
 // 400 KB deja margen de sobra al límite de 1 MB por documento de Firestore,
 // y el tipo se restringe a raster: nada de SVG ni esquemas raros en el src.
-const LOGO_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
-const MAX_LOGO_DATA_URL_LENGTH = 400 * 1024;
-
 export async function updateTenantLogo(tenantSlug: string, dataUrl: string | null): Promise<ConfigActionState> {
-  if (dataUrl !== null && (dataUrl.length > MAX_LOGO_DATA_URL_LENGTH || !LOGO_DATA_URL.test(dataUrl))) {
+  if (dataUrl !== null && !isStorableImageDataUrl(dataUrl)) {
     return { error: "La imagen no es válida. Probá con un PNG, JPG o WebP de hasta 2 MB." };
   }
   try {
@@ -55,7 +61,9 @@ export async function updateBusinessHours(tenantSlug: string, _prev: ConfigActio
     const hours = JSON.parse(typeof formData.get("hours") === "string" ? String(formData.get("hours")) : "[]");
     if (!Array.isArray(hours) || !hours.every((hour) => typeof hour.weekday === "number" && /^\d{2}:\d{2}$/.test(hour.opens_at) && /^\d{2}:\d{2}$/.test(hour.closes_at))) return { error: "Horarios inválidos" };
     const { tenant } = await tenantForUser(tenantSlug);
-    await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ businessHours: hours.map((hour) => ({ weekday: hour.weekday, opensAt: hour.opens_at, closesAt: hour.closes_at })), updatedAt: FieldValue.serverTimestamp() });
+    const nextHours = hours.map((hour) => ({ weekday: hour.weekday, opensAt: hour.opens_at, closesAt: hour.closes_at }));
+    await firebaseAdmin().db.collection("tenants").doc(tenant.id).update({ businessHours: nextHours, updatedAt: FieldValue.serverTimestamp() });
+    await syncOwnerStaffSchedules(tenant.id, tenant.businessHours, nextHours);
     revalidatePath(`/app/${tenantSlug}/configuracion`);
     return { error: null, success: true };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudieron actualizar los horarios" }; }

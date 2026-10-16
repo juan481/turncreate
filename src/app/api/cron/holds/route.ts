@@ -3,9 +3,10 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { occupancyDocId, occupancySlotInstants } from "@/server/firebase/booking";
 import { reconcileMercadoPagoPayment } from "@/server/mercadopago/checkout";
+import { expirePendingTransfers } from "@/server/public-booking/transfer";
 
-// TODO Fase 2 (5.2): pg_cron ya borra los holds vencidos en la base;
-// este endpoint queda como fallback/observabilidad si Vercel Cron lo llama.
+// Libera holds vencidos (10 min), cancela los turnos cuya seña por
+// transferencia no se confirmó a tiempo y reintenta webhooks de MP.
 export async function GET(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
@@ -35,6 +36,13 @@ export async function GET(req: Request) {
     });
   }
 
+  let transfersExpired = 0;
+  try {
+    transfersExpired = await expirePendingTransfers();
+  } catch (error) {
+    console.error("[cron/holds] no se pudieron vencer las transferencias pendientes", error);
+  }
+
   const queued = await db.collection("mpWebhookEvents").where("processedAt", "==", null).limit(50).get();
   let reconciled = 0;
   for (const event of queued.docs) {
@@ -48,5 +56,5 @@ export async function GET(req: Request) {
       await event.ref.set({ lastError: error instanceof Error ? error.message.slice(0, 300) : "Error desconocido" }, { merge: true });
     }
   }
-  return NextResponse.json({ ok: true, released, reconciled }, { status: 200 });
+  return NextResponse.json({ ok: true, released, transfersExpired, reconciled }, { status: 200 });
 }

@@ -12,7 +12,7 @@ export function BusinessInfoForm({
   tenant,
 }: {
   tenantSlug: string;
-  tenant: { name: string; address: string | null; instagramUrl: string | null; whatsappNumber: string | null };
+  tenant: { name: string; description: string | null; address: string | null; instagramUrl: string | null; whatsappNumber: string | null };
 }) {
   const [state, formAction, pending] = useActionState(
     updateBusinessInfo.bind(null, tenantSlug),
@@ -24,6 +24,10 @@ export function BusinessInfoForm({
       <div className="space-y-1.5">
         <label className="font-label-md text-label-md text-on-surface-variant">Nombre del local</label>
         <Input name="name" defaultValue={tenant.name} required />
+      </div>
+      <div className="space-y-1.5 sm:col-span-2">
+        <label className="font-label-md text-label-md text-on-surface-variant">Descripción corta</label>
+        <textarea name="description" defaultValue={tenant.description ?? ""} maxLength={240} rows={3} placeholder="Contá en pocas palabras qué hacés y qué hace especial a tu estudio." className="w-full resize-y rounded-inner border border-border bg-surface px-4 py-3 text-base text-on-surface outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
       <div className="space-y-1.5">
         <label className="font-label-md text-label-md text-on-surface-variant">Dirección</label>

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { expectNoHorizontalScroll } from "./fixtures";
 
-test("alta de un local nuevo: registro, onboarding de 3 pasos, pantalla de creación y checklist en el inicio", async ({ page }, testInfo) => {
+test("alta de un local nuevo: registro, onboarding mobile, pantalla de creación y checklist en el inicio", async ({ page }, testInfo) => {
   const stamp = `${testInfo.project.name}${Date.now()}`;
   const email = `onboarding+${stamp}@turncreate.test`;
 
@@ -13,7 +13,7 @@ test("alta de un local nuevo: registro, onboarding de 3 pasos, pantalla de creac
   await expect(page).toHaveURL(/\/onboarding/);
 
   // Paso 1: el slug se arma solo, sin acentos ni eñes.
-  await expect(page.getByText("Paso 1 de 3")).toBeVisible();
+  await expect(page.getByText("Paso 1 de 4")).toBeVisible();
   await page.getByLabel("Nombre del local").fill(`Uñas Lumière ${stamp}`);
   await expect(page.getByLabel("URL del turnero")).toHaveValue(new RegExp(`^unas-lumiere-${stamp.toLowerCase()}$`));
   await expectNoHorizontalScroll(page);
@@ -22,12 +22,12 @@ test("alta de un local nuevo: registro, onboarding de 3 pasos, pantalla de creac
   await page.getByLabel("URL del turnero").fill("e2e-nails");
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("Esa URL de turnero ya está en uso, probá con otra")).toBeVisible();
-  await expect(page.getByText("Paso 1 de 3")).toBeVisible();
+  await expect(page.getByText("Paso 1 de 4")).toBeVisible();
   await page.getByLabel("URL del turnero").fill(`unas-lumiere-${stamp.toLowerCase()}`);
   await page.getByRole("button", { name: "Continuar" }).click();
 
   // Paso 2: rubro con tarjetas, no un <select>.
-  await expect(page.getByText("Paso 2 de 3")).toBeVisible();
+  await expect(page.getByText("Paso 2 de 4")).toBeVisible();
   const unas = page.getByRole("radio", { name: /Uñas y pestañas/ });
   await unas.click();
   await expect(unas).toHaveAttribute("aria-checked", "true");
@@ -40,8 +40,14 @@ test("alta de un local nuevo: registro, onboarding de 3 pasos, pantalla de creac
   await expect(page.getByRole("radio", { name: /Uñas y pestañas/ })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "Continuar" }).click();
 
-  // Paso 3 y creación con la pantalla de Just Create.
-  await expect(page.getByText("Paso 3 de 3")).toBeVisible();
+  // Paso 3: datos de la dueña y modalidad del local.
+  await expect(page.getByText("Paso 3 de 4")).toBeVisible();
+  await expect(page.getByLabel("Tu nombre")).toHaveValue("Dueña E2E");
+  await page.getByRole("button", { name: /Trabajo sola/ }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+
+  // Paso 4 y creación con la pantalla de Just Create.
+  await expect(page.getByText("Paso 4 de 4")).toBeVisible();
   await page.getByRole("button", { name: "Crear mi turnero" }).click();
   await expect(page.getByText("Estamos creando tu turnero")).toBeVisible();
   await expect(page.getByRole("img", { name: "Just Create" })).toBeVisible();

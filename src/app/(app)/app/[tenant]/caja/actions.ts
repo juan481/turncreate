@@ -6,6 +6,7 @@ import { paymentDocument, type PaymentMethod } from "@/domain/money/payment";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { requireTenantAccess } from "@/server/firebase/tenants";
+import { planFeatures } from "@/lib/plans";
 
 export type CajaActionState = { error: string | null };
 export type ChargeActionState = { error: string | null };
@@ -20,11 +21,14 @@ async function access(slug: string) {
 export async function openCash(tenantSlug: string, _prev: CajaActionState, formData: FormData): Promise<CajaActionState> {
   try {
     const { tenant } = await access(tenantSlug);
+    if (!planFeatures(tenant).cashSessions) return { error: "Tu plan registra cobros sin apertura de caja" };
+    const openingAmount = Number(formData.get("openingAmount") ?? 0);
+    if (!Number.isFinite(openingAmount) || openingAmount < 0) return { error: "Ingresá un monto inicial válido" };
     const db = firebaseAdmin().db;
     const open = await db.collection("tenants").doc(tenant.id).collection("cashSessions").where("closedAt", "==", null).limit(1).get();
     if (!open.empty) return { error: "Ya hay una caja abierta" };
     const ref = db.collection("tenants").doc(tenant.id).collection("cashSessions").doc();
-    await ref.create({ id: ref.id, openingAmount: Number(formData.get("openingAmount") ?? 0), openedAt: FieldValue.serverTimestamp(), closedAt: null, expectedAmount: 0, createdAt: FieldValue.serverTimestamp() });
+    await ref.create({ id: ref.id, openingAmount, openedAt: FieldValue.serverTimestamp(), closedAt: null, expectedAmount: 0, createdAt: FieldValue.serverTimestamp() });
     revalidatePath(`/app/${tenantSlug}/caja`);
     return { error: null };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo abrir la caja" }; }
@@ -33,12 +37,14 @@ export async function openCash(tenantSlug: string, _prev: CajaActionState, formD
 export async function closeCash(tenantSlug: string, sessionId: string, _prev: CajaActionState, formData: FormData): Promise<CajaActionState> {
   try {
     const { tenant } = await access(tenantSlug);
+    if (!planFeatures(tenant).cashSessions) return { error: "Tu plan no usa arqueo de caja" };
     const ref = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId);
     const [movements, sessionSnapshot] = await Promise.all([ref.collection("movements").get(), ref.get()]);
     const session = sessionSnapshot.data();
     if (!session || session.closedAt) return { error: "La caja no está abierta" };
     const expected = Number(session.openingAmount ?? 0) + movements.docs.reduce((sum, movement) => { const data = movement.data(); return sum + (data.type === "in" ? Number(data.amount) : -Number(data.amount)); }, 0);
     const counted = Number(formData.get("countedAmount") ?? 0);
+    if (!Number.isFinite(counted) || counted < 0) return { error: "Ingresá un efectivo contado válido" };
     await ref.update({ closedAt: FieldValue.serverTimestamp(), expectedAmount: expected, countedAmount: counted, difference: counted - expected, differenceReason: String(formData.get("differenceReason") || "") || null });
     revalidatePath(`/app/${tenantSlug}/caja`);
     return { error: null };
@@ -48,11 +54,17 @@ export async function closeCash(tenantSlug: string, sessionId: string, _prev: Ca
 export async function addCashMovement(tenantSlug: string, sessionId: string, _prev: CajaActionState, formData: FormData): Promise<CajaActionState> {
   const type = formData.get("type");
   const amount = Number(formData.get("amount") ?? 0);
-  if ((type !== "in" && type !== "out") || amount <= 0) return { error: "Ingresá un movimiento válido" };
+  if ((type !== "in" && type !== "out") || !Number.isFinite(amount) || amount <= 0) return { error: "Ingresá un movimiento válido" };
   try {
     const { tenant } = await access(tenantSlug);
-    const ref = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId).collection("movements").doc();
-    await ref.create({ id: ref.id, type, amount, method: "cash", reason: String(formData.get("reason") || ""), createdAt: FieldValue.serverTimestamp() });
+    if (!planFeatures(tenant).cashSessions) return { error: "Tu plan no usa movimientos de caja" };
+    const sessionRef = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId);
+    await firebaseAdmin().db.runTransaction(async (transaction) => {
+      const session = await transaction.get(sessionRef);
+      if (!session.exists || session.data()?.closedAt) throw new Error("La caja ya no está abierta");
+      const ref = sessionRef.collection("movements").doc();
+      transaction.create(ref, { id: ref.id, type, amount, method: "cash", reason: String(formData.get("reason") || ""), createdAt: FieldValue.serverTimestamp() });
+    });
     revalidatePath(`/app/${tenantSlug}/caja`);
     return { error: null };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo registrar el movimiento" }; }
@@ -63,7 +75,8 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
   const sessionId = formData.get("sessionId");
   const amount = Number(formData.get("amount") ?? 0);
   const method = String(formData.get("method") ?? "") as PaymentMethod;
-  if (typeof appointmentId !== "string" || !METHODS.has(method) || amount <= 0) return { error: "Faltan datos para cobrar" };
+  const productId = typeof formData.get("productId") === "string" ? String(formData.get("productId")) : "";
+  if (typeof appointmentId !== "string" || !METHODS.has(method) || !Number.isFinite(amount) || amount <= 0) return { error: "Faltan datos para cobrar" };
   try {
     const { tenant } = await access(tenantSlug);
     const db = firebaseAdmin().db;
@@ -75,14 +88,36 @@ export async function chargeAppointment(tenantSlug: string, _prev: ChargeActionS
       if (["cancelled", "no_show", "expired"].includes(String(data.status))) throw new Error("Este turno está cancelado o ausente, no se puede cobrar");
       const currentBalance = Number(data.balance ?? data.total ?? 0);
       if (amount > currentBalance + 0.01) throw new Error("El monto supera el saldo pendiente");
+      const productSnapshot = productId
+        ? await transaction.get(db.collection("tenants").doc(tenant.id).collection("products").doc(productId))
+        : null;
+      if (productSnapshot && (!productSnapshot.exists || productSnapshot.data()?.active === false)) throw new Error("El producto ya no está disponible");
+      const productAmount = productSnapshot ? Number(productSnapshot.data()?.price ?? 0) : 0;
+      if (!Number.isFinite(productAmount) || productAmount < 0) throw new Error("El precio del producto no es válido");
+      const cashSessionRef = method === "cash" && typeof sessionId === "string" && sessionId
+        ? db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId)
+        : null;
+      const cashSession = cashSessionRef ? await transaction.get(cashSessionRef) : null;
+      if (cashSession && (!cashSession.exists || cashSession.data()?.closedAt)) throw new Error("La caja ya no está abierta");
+      const grossAmount = amount + productAmount;
       const balance = Math.max(0, currentBalance - amount);
       const paymentRef = appointmentRef.collection("payments").doc();
-      transaction.create(paymentRef, paymentDocument({ id: paymentRef.id, kind: Number(data.depositPaid ?? 0) > 0 ? "balance" : "deposit", method, status: "approved", grossAmount: amount, appliedAmount: amount, feeAmount: 0, surchargeAmount: 0, netAmount: amount, paidAt: new Date(), source: "cash_register", tenantId: tenant.id, appointmentId }));
-      transaction.update(appointmentRef, { balance, status: balance === 0 ? "completed" : data.status, updatedAt: FieldValue.serverTimestamp() });
-      if (data.clientId) transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { totalSpent: FieldValue.increment(amount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      if (method === "cash" && typeof sessionId === "string" && sessionId) {
-        const movementRef = db.collection("tenants").doc(tenant.id).collection("cashSessions").doc(sessionId).collection("movements").doc();
-        transaction.create(movementRef, { id: movementRef.id, type: "in", amount, method, reason: `Cobro turno · ${String(data.clientName ?? "")}`.trim(), appointmentId, createdAt: FieldValue.serverTimestamp() });
+      transaction.create(paymentRef, {
+        ...paymentDocument({ id: paymentRef.id, kind: Number(data.depositPaid ?? 0) > 0 ? "balance" : "deposit", method, status: "approved", grossAmount, appliedAmount: amount, feeAmount: 0, surchargeAmount: 0, netAmount: grossAmount, paidAt: new Date(), source: "cash_register", tenantId: tenant.id, appointmentId }),
+        ...(productSnapshot ? { productId, productName: String(productSnapshot.data()?.name ?? "Producto"), productAmount } : {}),
+      });
+      // Pagar y prestar el servicio son hechos distintos: saldo cero no
+      // significa que el turno ya se realizó. Solo sale de pending_payment.
+      const nextStatus = data.status === "pending_payment" ? "confirmed" : data.status;
+      transaction.update(appointmentRef, { balance, status: nextStatus, updatedAt: FieldValue.serverTimestamp() });
+      if (data.clientId) transaction.set(db.collection("tenants").doc(tenant.id).collection("clients").doc(String(data.clientId)), { totalSpent: FieldValue.increment(grossAmount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      if (productSnapshot) {
+        const saleRef = db.collection("tenants").doc(tenant.id).collection("productSales").doc();
+        transaction.create(saleRef, { id: saleRef.id, productId, productName: String(productSnapshot.data()?.name ?? "Producto"), quantity: 1, unitPrice: productAmount, total: productAmount, method, appointmentId, clientId: data.clientId ?? null, soldAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
+      }
+      if (cashSessionRef) {
+        const movementRef = cashSessionRef.collection("movements").doc();
+        transaction.create(movementRef, { id: movementRef.id, type: "in", amount: grossAmount, method, reason: `Cobro turno · ${String(data.clientName ?? "")}`.trim(), appointmentId, createdAt: FieldValue.serverTimestamp() });
       }
     });
     revalidatePath(`/app/${tenantSlug}/caja`);

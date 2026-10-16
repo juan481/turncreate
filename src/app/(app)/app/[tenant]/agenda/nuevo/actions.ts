@@ -20,7 +20,7 @@ export async function createClientQuick(
 ): Promise<{ id: string } | { error: string }> {
   const parsed = createClientSchema.safeParse({
     fullName: data.fullName,
-    phoneE164: data.phoneE164,
+    phone: data.phoneE164,
     email: data.email || "",
   });
 
@@ -34,7 +34,7 @@ export async function createClientQuick(
     const { tenant } = await requireTenantAccess(user.uid, tenantSlug);
     const { db } = firebaseAdmin();
     const clientRef = db.collection("tenants").doc(tenant.id).collection("clients").doc();
-    const phoneRef = db.collection("tenantClientPhones").doc(`${tenant.id}_${parsed.data.phoneE164.replace(/[^0-9]/g, "")}`);
+    const phoneRef = db.collection("tenantClientPhones").doc(`${tenant.id}_${parsed.data.phone.replace(/[^0-9]/g, "")}`);
 
     await db.runTransaction(async (transaction) => {
       if ((await transaction.get(phoneRef)).exists) throw new Error("Ya existe un cliente con ese teléfono");
@@ -43,7 +43,7 @@ export async function createClientQuick(
         tenantId: tenant.id,
         fullName: parsed.data.fullName,
         fullNameNormalized: parsed.data.fullName.toLocaleLowerCase("es-AR"),
-        phoneE164: parsed.data.phoneE164,
+        phoneE164: parsed.data.phone,
         email: parsed.data.email || null,
         noShowCount: 0,
         appointmentsCount: 0,

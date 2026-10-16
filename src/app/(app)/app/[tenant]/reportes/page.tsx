@@ -2,6 +2,7 @@ import { firebaseAdmin } from "@/server/firebase/admin";
 import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { addMonthsISO, monthLabel, monthRange, shortMonthLabel, toDateISOInTz, todayISO } from "@/lib/dates";
 import { getTenantAnalyticsRange } from "@/server/analytics";
+import { getPaymentBreakdown } from "@/server/firebase/stats";
 import { ReportesClient } from "./ReportesClient";
 
 export default async function ReportesPage({ params, searchParams }: { params: Promise<{ tenant: string }>; searchParams: Promise<{ month?: string }> }) {
@@ -20,12 +21,13 @@ export default async function ReportesPage({ params, searchParams }: { params: P
   const db = firebaseAdmin().db;
   const ref = db.collection("tenants").doc(tenant.id);
 
-  const [current, previousDocs, clients, staff, publicAnalytics] = await Promise.all([
+  const [current, previousDocs, clients, staff, publicAnalytics, paymentBreakdown] = await Promise.all([
     ref.collection("appointments").where("startsAt", ">=", monthStart).where("startsAt", "<", monthEnd).orderBy("startsAt").get(),
     ref.collection("appointments").where("startsAt", ">=", previousStart).where("startsAt", "<", previousEnd).get(),
     ref.collection("clients").get(),
     ref.collection("staff").where("active", "==", true).get(),
     getTenantAnalyticsRange({ tenantId: tenant.id, timezone: tenant.timezone, days: 14 }),
+    getPaymentBreakdown(tenant.id, { start: monthStart, end: monthEnd }),
   ]);
 
   const completed = current.docs.map((doc) => doc.data()).filter((entry) => entry.status === "completed");
@@ -111,7 +113,15 @@ export default async function ReportesPage({ params, searchParams }: { params: P
             return created && created >= monthStart && created < monthEnd;
           }).length,
           clientesQueNoVolvieron: [...previousClients].filter((id) => !currentClients.has(id)).length,
-          ingresos: income,
+          facturado: income,
+          cobradoBruto: paymentBreakdown.gross,
+          costosMp: paymentBreakdown.fees,
+          recargos: paymentBreakdown.surcharges,
+          neto: paymentBreakdown.net,
+          porCobrar: current.docs.reduce((sum, doc) => {
+            const data = doc.data();
+            return ["confirmed", "pending_payment"].includes(String(data.status)) ? sum + Number(data.balance ?? 0) : sum;
+          }, 0),
           egresos,
           ticketMasAlto: completed.reduce((max, entry) => Math.max(max, Number(entry.total ?? 0)), 0),
           serviciosPopulares: [...services.entries()]

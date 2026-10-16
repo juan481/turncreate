@@ -6,6 +6,8 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { PageTransition } from "@/components/ui/page-transition";
 import { ToastProvider } from "@/components/ui/toast";
+import { RememberRouteSearch } from "@/components/ui/back-button";
+import { planFeatures } from "@/lib/plans";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { getTenantBySlugFromFirebase, getTenantMember, getTenantMembershipsForUser } from "@/server/firebase/tenants";
@@ -67,7 +69,8 @@ export default async function TenantAppLayout({
   const displayName = (profile.data()?.fullName as string | undefined) || user.name || user.email || "Usuario";
   const avatarUrl = (profile.data()?.avatarUrl as string | undefined) ?? null;
   const roleLabel = ROLE_LABEL[currentTenantOption.role] ?? currentTenantOption.role;
-  const nav = NAV.filter((item) => item.href !== "staff" || staffSnapshot.size > 1);
+  const features = planFeatures(tenant);
+  const nav = NAV.filter((item) => item.href !== "staff" || (features.maxStaff > 1 && staffSnapshot.size > 1));
 
   return (
     <ToastProvider>
@@ -117,6 +120,7 @@ export default async function TenantAppLayout({
           <PageTransition>{children}</PageTransition>
         </main>
         <Suspense fallback={null}>
+          <RememberRouteSearch />
           <MobileBottomNav tenantSlug={tenantSlug} />
         </Suspense>
         <NewAppointmentFab tenantSlug={tenantSlug} />

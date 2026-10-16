@@ -37,7 +37,14 @@ export async function getServiceRecord(tenantId: string, serviceId: string) {
   const doc = await firebaseAdmin().db.collection("tenants").doc(tenantId).collection("services").doc(serviceId).get();
   if (!doc.exists) throw new Error(`Servicio ${serviceId} no encontrado`);
   const data = doc.data()!;
-  return { id: doc.id, name: String(data.name), price: Number(data.price), durationMin: serviceDurationMinutes(data) };
+  return {
+    id: doc.id,
+    name: String(data.name),
+    price: Number(data.price),
+    durationMin: serviceDurationMinutes(data),
+    active: data.active !== false && !data.archivedAt,
+    public: data.public !== false,
+  };
 }
 
 /** Profesionales activos que dictan este servicio (staff.serviceIds). */
@@ -244,6 +251,7 @@ export type CreateAppointmentInput = {
 export async function createInternalAppointment(input: CreateAppointmentInput) {
   const db = firebaseAdmin().db;
   const service = await getServiceRecord(input.tenantId, input.serviceId);
+  if (!service.active) throw new Error("El servicio ya no está activo");
   const startsAt = new Date(input.startsAtISO);
   const endsAt = new Date(startsAt.getTime() + service.durationMin * 60_000);
   const tenantRef = db.collection("tenants").doc(input.tenantId);
@@ -378,12 +386,15 @@ export async function createInternalAppointment(input: CreateAppointmentInput) {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    transaction.set(tenantRef.collection("clients").doc(input.clientId), {
-      appointmentsCount: FieldValue.increment(1),
-      totalSpent: FieldValue.increment(deposit),
-      lastVisitAt: Timestamp.fromDate(startsAt),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    // Reprogramar no es una visita ni un cobro nuevo: el turno original ya
+    // incrementó estos contadores y la seña se conserva sin duplicarla.
+    if (!input.rescheduledFromId) {
+      transaction.set(tenantRef.collection("clients").doc(input.clientId), {
+        appointmentsCount: FieldValue.increment(1),
+        totalSpent: FieldValue.increment(deposit),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
 
     if (deposit > 0 && input.depositMethod) {
       const paymentRef = appointmentRef.collection("payments").doc();

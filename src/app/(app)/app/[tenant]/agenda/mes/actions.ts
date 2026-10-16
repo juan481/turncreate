@@ -1,10 +1,12 @@
 "use server";
 
-import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
+import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
+import { requireTenantAccess } from "@/server/firebase/tenants";
 import { getMonthData, type MonthData } from "@/server/agenda-month";
 
 export async function loadMonth(tenantSlug: string, monthISO: string): Promise<MonthData> {
-  const tenant = await getTenantBySlugFromFirebase(tenantSlug);
-  if (!tenant) throw new Error("El local no existe");
+  const user = await getCurrentFirebaseUser();
+  if (!user) throw new Error("No autorizado");
+  const { tenant } = await requireTenantAccess(user.uid, tenantSlug);
   return getMonthData({ tenantId: tenant.id, timezone: tenant.timezone, monthISO });
 }

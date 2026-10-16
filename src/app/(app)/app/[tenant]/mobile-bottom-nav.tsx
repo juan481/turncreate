@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { NewAppointmentNavButton } from "./new-appointment-fab";
 
 /**
  * 4 secciones + "Nuevo turno" al centro -- lo que se mira todo el día.
@@ -40,18 +41,7 @@ export function MobileBottomNav({ tenantSlug }: { tenantSlug: string }) {
       <div className="mx-auto flex max-w-[30rem] items-stretch justify-around">
         {ITEMS.map((item) => {
           if (!item) {
-            return (
-              <Link
-                key="nuevo-turno"
-                href={newAppointmentHref}
-                aria-label="Nuevo turno"
-                className="relative flex flex-1 flex-col items-center justify-end pb-1.5"
-              >
-                <span className="absolute -top-5 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-on-primary shadow-card-hover transition-transform active:scale-95">
-                  <Icon name="add" className="text-[24px]" />
-                </span>
-              </Link>
-            );
+            return <NewAppointmentNavButton key="nuevo-turno" href={newAppointmentHref} />;
           }
           const href = item.href ? `${base}/${item.href}` : base;
           const active = item.href ? pathname === href || pathname.startsWith(`${href}/`) : pathname === href;

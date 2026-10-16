@@ -26,6 +26,7 @@ import {
   ChevronUp,
   Circle,
   CirclePlus,
+  ClipboardClock,
   Clock,
   CreditCard,
   Download,
@@ -52,11 +53,13 @@ import {
   Lock,
   LogOut,
   Mail,
+  MapPin,
   Menu,
   MessageCircle,
   MessagesSquare,
   MousePointerClick,
   Palette,
+  PiggyBank,
   Pencil,
   Phone,
   Pipette,
@@ -176,6 +179,8 @@ const ICONS: Record<string, ComponentType<LucideProps>> = {
 
   // Plata / caja / reportes
   payments: Banknote,
+  savings: PiggyBank,
+  pending_actions: ClipboardClock,
   account_balance_wallet: Landmark,
   account_balance: Landmark,
   point_of_sale: Wallet,
@@ -194,6 +199,7 @@ const ICONS: Record<string, ComponentType<LucideProps>> = {
   storefront: Store,
   apartment: Building2,
   link: Link2,
+  location_on: MapPin,
 
   // Negocio / marca
   smart_toy: Bot,

@@ -73,24 +73,46 @@ async function provision(account) {
     return;
   }
   const tenantRef = db.collection("tenants").doc(id);
+  const memberRef = tenantRef.collection("members").doc(user.uid);
+  const userRef = db.collection("users").doc(user.uid);
+  const membershipRef = userRef.collection("memberships").doc(id);
+  const staffRef = tenantRef.collection("staff").doc("owner");
+  const categoryRefs = CATEGORIES.map((category) => tenantRef.collection("serviceCategories").doc(category.id));
+  const serviceRefs = SERVICES.map(([serviceId]) => tenantRef.collection("services").doc(serviceId));
+  const [tenantSnapshot, memberSnapshot, userSnapshot, membershipSnapshot, staffSnapshot, ...catalogSnapshots] = await db.getAll(
+    tenantRef,
+    memberRef,
+    userRef,
+    membershipRef,
+    staffRef,
+    ...categoryRefs,
+    ...serviceRefs,
+  );
+  const categorySnapshots = catalogSnapshots.slice(0, categoryRefs.length);
+  const serviceSnapshots = catalogSnapshots.slice(categoryRefs.length);
   const batch = db.batch();
-  batch.set(tenantRef, {
-    id, name: account.name, slug: account.slug, businessTypeId: "estetica-unas", timezone: TIMEZONE, currency: "ARS", status: "active",
-    settings: { slotIntervalMin: 15, minNoticeMin: 720, maxBookingDays: 60, booksByStaff: false, depositType: "fixed", depositValue: 10000, depositMin: 10000, mpFeeMode: "absorbed", mpFeePercent: 0, publicBookingEnabled: false },
-    businessHours: BUSINESS_HOURS, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  batch.set(slugRef, { tenantId: id, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() }, { merge: true });
-  batch.set(tenantRef.collection("members").doc(user.uid), { uid: user.uid, role: "owner", status: "active", updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() }, { merge: true });
-  batch.set(db.collection("users").doc(user.uid), { email: account.email, fullName: account.name, ...(userCreated ? { mustChangePassword: true } : {}), updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() }, { merge: true });
-  batch.set(db.collection("users").doc(user.uid).collection("memberships").doc(id), { tenantId: id, slug: account.slug, role: "owner", status: "active", updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() }, { merge: true });
-  for (const category of CATEGORIES) batch.set(tenantRef.collection("serviceCategories").doc(category.id), { ...category, tenantId: id, active: true, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() }, { merge: true });
-  for (const [serviceId, name, categoryId, price, minutes, bufferAfterMin] of SERVICES) {
-    const categoryName = CATEGORIES.find((category) => category.id === categoryId).name;
-    batch.set(tenantRef.collection("services").doc(serviceId), { id: serviceId, tenantId: id, name, nameNormalized: name.toLocaleLowerCase("es-AR"), description: null, categoryId, categoryName, price, phases: [{ kind: "active", minutes, position: 1 }], bufferAfterMin, active: true, public: true, sort: SERVICES.findIndex((service) => service[0] === serviceId) + 1, archivedAt: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() }, { merge: true });
+  if (!tenantSnapshot.exists) {
+    batch.create(tenantRef, {
+      id, name: account.name, slug: account.slug, businessTypeId: "estetica-unas", timezone: TIMEZONE, currency: "ARS", status: "active", plan: "solo", teamMode: "solo",
+      settings: { payments: { mercadopagoEnabled: true, transfer: { enabled: false, alias: "", cbu: null, holderName: account.name, bankName: null } }, slotIntervalMin: 15, minNoticeMin: 720, maxBookingDays: 60, booksByStaff: false, depositType: "fixed", depositValue: 10000, depositMin: 10000, mpFeeMode: "absorbed", mpFeePercent: 0, publicBookingEnabled: false },
+      businessHours: BUSINESS_HOURS, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
+    });
   }
-  batch.set(tenantRef.collection("staff").doc("owner"), { id: "owner", tenantId: id, displayName: account.name, active: true, color: "#7069e8", photoUrl: null, serviceIds: SERVICES.map((service) => service[0]), schedules: BUSINESS_HOURS.map((hours) => ({ weekday: hours.weekday, starts_at: hours.opensAt, ends_at: hours.closesAt })), commission: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() }, { merge: true });
+  batch.set(slugRef, { tenantId: id, updatedAt: FieldValue.serverTimestamp(), ...(!existingSlug.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
+  batch.set(memberRef, { uid: user.uid, role: "owner", status: "active", updatedAt: FieldValue.serverTimestamp(), ...(!memberSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
+  batch.set(userRef, { email: account.email, fullName: account.name, ...(userCreated ? { mustChangePassword: true } : {}), updatedAt: FieldValue.serverTimestamp(), ...(!userSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
+  batch.set(membershipRef, { tenantId: id, slug: account.slug, role: "owner", status: "active", updatedAt: FieldValue.serverTimestamp(), ...(!membershipSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
+  for (const [index, category] of CATEGORIES.entries()) {
+    if (!categorySnapshots[index].exists) batch.create(categoryRefs[index], { ...category, tenantId: id, active: true, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
+  }
+  for (const [index, [serviceId, name, categoryId, price, minutes, bufferAfterMin]] of SERVICES.entries()) {
+    if (serviceSnapshots[index].exists) continue;
+    const categoryName = CATEGORIES.find((category) => category.id === categoryId).name;
+    batch.create(serviceRefs[index], { id: serviceId, tenantId: id, name, nameNormalized: name.toLocaleLowerCase("es-AR"), description: null, categoryId, categoryName, price, phases: [{ kind: "active", minutes, position: 1 }], bufferAfterMin, active: true, public: true, sort: index + 1, archivedAt: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
+  }
+  if (!staffSnapshot.exists) batch.create(staffRef, { id: "owner", tenantId: id, displayName: account.name, active: true, color: "#7069e8", photoUrl: null, serviceIds: SERVICES.map((service) => service[0]), schedules: BUSINESS_HOURS.map((hours) => ({ weekday: hours.weekday, starts_at: hours.opensAt, ends_at: hours.closesAt })), commission: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
   await batch.commit();
-  console.log(`OK ${account.name} <${account.email}> (${account.slug})`);
+  console.log(`OK ${account.name} <${account.email}> (${account.slug}) · ${tenantSnapshot.exists ? "cuenta preservada" : "cuenta creada"}`);
 }
 
 async function main() {

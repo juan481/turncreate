@@ -62,7 +62,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={`${plusJakartaSans.variable} antialiased`}>
+    <html lang="es" data-scroll-behavior="smooth" className={`${plusJakartaSans.variable} antialiased`}>
       <body className="min-h-screen bg-canvas font-sans text-on-surface">
         {children}
       </body>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./icon";
 
@@ -19,6 +19,7 @@ export function Modal({
   variant = "center",
   maxWidth = "32rem",
   closeOnBack = true,
+  ariaLabel,
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,7 +29,14 @@ export function Modal({
   maxWidth?: string;
   /** El botón/gesto de "atrás" del celular cierra el modal en vez de dejar la pantalla. Default: true. */
   closeOnBack?: boolean;
+  /** Nombre accesible del diálogo cuando no hay `title` visible. */
+  ariaLabel?: string;
 }) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   // `open` arranca en false y solo pasa a true por interacción del
   // usuario (después de hidratar) -- nunca hace falta un gate de
   // "montado" para evitar tocar `document` durante SSR.
@@ -55,7 +63,7 @@ export function Modal({
     history.pushState({ turncreateModal: true }, "");
     const handlePopState = () => {
       closedByBack = true;
-      onClose();
+      onCloseRef.current();
     };
     window.addEventListener("popstate", handlePopState);
     return () => {
@@ -64,7 +72,7 @@ export function Modal({
         history.back();
       }
     };
-  }, [open, closeOnBack, onClose]);
+  }, [open, closeOnBack]);
 
   if (!open) return null;
 
@@ -82,7 +90,12 @@ export function Modal({
           onClick={onClose}
           className="absolute inset-0 animate-scrim-in bg-on-surface/40 backdrop-blur-sm"
         />
-        <div className="relative z-10 max-h-[85vh] w-full animate-sheet-up overflow-y-auto rounded-t-[28px] border border-border bg-surface-container-lowest/90 p-lg shadow-card-hover backdrop-blur-xl [padding-bottom:calc(2rem+var(--safe-b))]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={ariaLabel ?? title}
+          className="relative z-10 max-h-[85vh] w-full animate-sheet-up overflow-y-auto rounded-t-[28px] border border-border bg-surface-container-lowest/90 p-lg shadow-card-hover backdrop-blur-xl motion-reduce:animate-none [padding-bottom:calc(2rem+var(--safe-b))]"
+        >
           <div className="mx-auto mb-md h-1.5 w-10 rounded-full bg-border" />
           {title && (
             <div className="mb-md flex items-center justify-between">
@@ -113,6 +126,9 @@ export function Modal({
     >
       <div className="flex min-h-full items-start justify-center p-4 sm:items-center">
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={ariaLabel ?? title}
           onClick={(e) => e.stopPropagation()}
           className="relative my-6 w-full animate-pop-in rounded-card border border-border bg-surface-container-lowest/85 p-lg shadow-card-hover backdrop-blur-xl sm:my-0"
           style={{ maxWidth }}

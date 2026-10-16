@@ -89,8 +89,11 @@ export async function createService(
   try {
     const { tenant } = await authenticatedTenant(tenantSlug);
     const category = await categoryForService(tenant.id, data.categoryId);
-    const serviceRef = firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("services").doc();
-    await serviceRef.create({
+    const tenantRef = firebaseAdmin().db.collection("tenants").doc(tenant.id);
+    const serviceRef = tenantRef.collection("services").doc();
+    const autoAssignedStaff = await tenantRef.collection("staff").where("autoAssignServices", "==", true).get();
+    const batch = firebaseAdmin().db.batch();
+    batch.create(serviceRef, {
       id: serviceRef.id,
       tenantId: tenant.id,
       name: data.name,
@@ -106,6 +109,10 @@ export async function createService(
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    for (const staff of autoAssignedStaff.docs) {
+      batch.update(staff.ref, { serviceIds: FieldValue.arrayUnion(serviceRef.id), updatedAt: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
     revalidateCatalog(tenantSlug);
     return { error: null, id: serviceRef.id };
   } catch (error) {

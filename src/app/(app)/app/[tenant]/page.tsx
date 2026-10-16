@@ -12,6 +12,7 @@ import { PublicLink } from "./public-link";
 import { getCurrentFirebaseUser } from "@/server/firebase/current-user";
 import { DEMO_USER_EMAIL } from "@/lib/demo";
 import { getMpConnection } from "@/server/mercadopago/connections";
+import { planFeatures } from "@/lib/plans";
 
 // Fuera del componente a propósito: el linter de React trata cualquier
 // `Date.now()` adentro de una función-componente como una llamada impura
@@ -52,6 +53,7 @@ export default async function TenantDashboardPage({
 
   const { db } = firebaseAdmin();
   const tenantRef = db.collection("tenants").doc(tenant.id);
+  const features = planFeatures(tenant);
 
   const [
     daySummary,
@@ -81,7 +83,7 @@ export default async function TenantDashboardPage({
     // Al abrir caja se crea con `closedAt: null` explícito (no ausente),
     // así que esta sí es una query directa y mínima -- la misma que usa
     // `openCash` en caja/actions.ts para chequear si ya hay una abierta.
-    tenantRef.collection("cashSessions").where("closedAt", "==", null).limit(1).get(),
+    features.cashSessions ? tenantRef.collection("cashSessions").where("closedAt", "==", null).limit(1).get() : null,
     getCurrentFirebaseUser(),
     getPaymentSummary(tenant.id, dayRange(dateISO, tenant.timezone)),
     getPaymentSummary(tenant.id, weekRange(dateISO, tenant.timezone)),
@@ -94,10 +96,10 @@ export default async function TenantDashboardPage({
   const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://turn.justcreate.com.ar"}/${tenantSlug}`;
 
   const totalStaff = staffSnapshot.size;
-  const hasMultipleStaff = totalStaff > 1;
+  const hasMultipleStaff = features.maxStaff > 1 && totalStaff > 1;
   const clientsCount = clientsSnapshot.docs.filter((doc) => !doc.data().archivedAt).length;
   const servicesCount = servicesSnapshot.docs.filter((doc) => !doc.data().archivedAt).length;
-  const openCashSession = openCashSnapshot.docs[0]?.data() ?? null;
+  const openCashSession = openCashSnapshot?.docs[0]?.data() ?? null;
 
   const upcoming = daySummary.appointments.filter((a) => a.status === "confirmed" && isUpcoming(a.startsAt)).slice(0, 8);
   const atendidosHoy = daySummary.appointments.filter((a) => a.status === "completed").length;
@@ -264,7 +266,9 @@ export default async function TenantDashboardPage({
           icon={<Icon name="point_of_sale" />}
           title="Caja"
           subtitle={
-            openCashSession
+            !features.cashSessions
+              ? `$${todayPayments.applied.toLocaleString("es-AR")} cobrado hoy`
+              : openCashSession
               ? `Abierta · $${Number(openCashSession.openingAmount ?? 0).toLocaleString("es-AR")}`
               : "Cerrada"
           }

@@ -41,6 +41,7 @@ export function TurnoForm({
   initialServiceId,
   initialClientId,
   initialDateISO,
+  maxBookingDays,
   slots,
   suggestedDeposit,
   rescheduleFrom,
@@ -56,6 +57,7 @@ export function TurnoForm({
   initialServiceId?: string;
   initialClientId?: string;
   initialDateISO: string;
+  maxBookingDays: number;
   slots: Slot[];
   suggestedDeposit: number;
   rescheduleFrom?: string;
@@ -113,6 +115,7 @@ export function TurnoForm({
       <DayStrip
         timezone={timezone}
         dateISO={dateISO}
+        maxBookingDays={maxBookingDays}
         onChange={(iso) => {
           setDateISO(iso);
           navigate({ dateISO: iso });
@@ -245,16 +248,20 @@ function StaffPicker({
 function DayStrip({
   timezone,
   dateISO,
+  maxBookingDays,
   onChange,
 }: {
   timezone: string;
   dateISO: string;
+  maxBookingDays: number;
   onChange: (iso: string) => void;
 }) {
   const days = useMemo(() => {
     const start = todayISO(timezone);
-    return Array.from({ length: 14 }, (_, i) => addDaysISO(start, i));
-  }, [timezone]);
+    return Array.from({ length: Math.min(14, Math.max(1, maxBookingDays + 1)) }, (_, i) => addDaysISO(start, i));
+  }, [maxBookingDays, timezone]);
+  const firstDateISO = todayISO(timezone);
+  const lastDateISO = addDaysISO(firstDateISO, Math.max(0, maxBookingDays));
 
   return (
     <div className="space-y-1.5">
@@ -282,6 +289,10 @@ function DayStrip({
           );
         })}
       </div>
+      <label className="block space-y-1">
+        <span className="font-label-sm text-label-sm text-on-surface-variant">Otra fecha</span>
+        <input type="date" min={firstDateISO} max={lastDateISO} value={dateISO} onChange={(event) => { if (event.target.value) onChange(event.target.value); }} className="h-11 w-full rounded-pill border border-border bg-surface px-4 text-base text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
+      </label>
     </div>
   );
 }

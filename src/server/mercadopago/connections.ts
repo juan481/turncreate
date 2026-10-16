@@ -48,9 +48,34 @@ export async function saveMpConnection(tenantId: string, response: {
   const expiresAt = Timestamp.fromMillis(Date.now() + Math.max(60, Number(response.expires_in ?? 21_600)) * 1000);
   const db = firebaseAdmin().db;
   const ref = integrationRef(tenantId);
+  const sellerId = String(response.user_id);
+  const sellerRef = db.collection("mpSellers").doc(sellerId);
   await db.runTransaction(async (transaction) => {
+    const [currentConnection, currentSeller] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(sellerRef),
+    ]);
+    const mappedTenantId = currentSeller.data()?.tenantId;
+    if (currentSeller.exists && currentSeller.data()?.status === "connected" && mappedTenantId !== tenantId) {
+      throw new Error("Esta cuenta de Mercado Pago ya está conectada a otro negocio");
+    }
+
+    const previousSellerId = currentConnection.data()?.sellerId
+      ? String(currentConnection.data()!.sellerId)
+      : null;
+    if (previousSellerId && previousSellerId !== sellerId) {
+      const previousSellerRef = db.collection("mpSellers").doc(previousSellerId);
+      const previousSeller = await transaction.get(previousSellerRef);
+      if (previousSeller.data()?.tenantId === tenantId) {
+        transaction.set(previousSellerRef, {
+          status: "disconnected",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+    }
+
     transaction.set(ref, {
-      sellerId: String(response.user_id),
+      sellerId,
       status: "connected",
       liveMode: Boolean(response.live_mode),
       publicKey: response.public_key ?? null,
@@ -61,11 +86,15 @@ export async function saveMpConnection(tenantId: string, response: {
       updatedAt: FieldValue.serverTimestamp(),
       lastError: null,
     }, { merge: true });
-    transaction.set(db.collection("mpSellers").doc(String(response.user_id)), {
+    transaction.set(sellerRef, {
       tenantId,
       status: "connected",
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    transaction.update(db.collection("tenants").doc(tenantId), {
+      "settings.publicBookingEnabled": true,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
 }
 
@@ -98,8 +127,27 @@ export async function sellerAccessToken(tenantId: string): Promise<string> {
 export async function disconnectMp(tenantId: string) {
   const db = firebaseAdmin().db;
   const ref = integrationRef(tenantId);
-  const current = await ref.get();
-  const sellerId = current.data()?.sellerId;
-  await ref.set({ status: "disconnected", accessTokenEncrypted: FieldValue.delete(), refreshTokenEncrypted: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  if (sellerId) await db.collection("mpSellers").doc(String(sellerId)).set({ status: "disconnected", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(ref);
+    const sellerId = current.data()?.sellerId ? String(current.data()!.sellerId) : null;
+    const sellerRef = sellerId ? db.collection("mpSellers").doc(sellerId) : null;
+    const seller = sellerRef ? await transaction.get(sellerRef) : null;
+
+    transaction.set(ref, {
+      status: "disconnected",
+      accessTokenEncrypted: FieldValue.delete(),
+      refreshTokenEncrypted: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    transaction.update(db.collection("tenants").doc(tenantId), {
+      "settings.publicBookingEnabled": false,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (sellerRef && seller?.data()?.tenantId === tenantId) {
+      transaction.set(sellerRef, {
+        status: "disconnected",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  });
 }

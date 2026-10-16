@@ -186,7 +186,7 @@ function ChargeForm({
     <form action={formAction} className="space-y-3 rounded-inner bg-surface-container-low p-3">
       <input type="hidden" name="appointmentId" value={appointment.id} />
       <input type="hidden" name="sessionId" value={sessionId} />
-      <input type="hidden" name="amount" value={total} />
+      <input type="hidden" name="amount" value={appointment.balance} />
       {product && (
         <>
           <input type="hidden" name="productId" value={product.id} />
@@ -274,7 +274,104 @@ function AddMovementForm({ tenantSlug, sessionId, onDone }: { tenantSlug: string
   );
 }
 
+function DirectCaja({
+  tenantSlug,
+  timezone,
+  appointments,
+  products,
+  paymentsByMethod,
+}: {
+  tenantSlug: string;
+  timezone: string;
+  appointments: AppointmentDue[];
+  products: Product[];
+  paymentsByMethod: Record<string, number>;
+}) {
+  const [chargingId, setChargingId] = useState<string | null>(null);
+  const chargedToday = Object.values(paymentsByMethod).reduce((sum, amount) => sum + amount, 0);
+  const pendingTotal = appointments.reduce((sum, appointment) => sum + appointment.balance, 0);
+
+  return (
+    <div className="space-y-lg">
+      <div className="grid grid-cols-2 gap-md">
+        <Card hoverLift={false} className="p-lg">
+          <p className="font-label-sm text-label-sm text-on-surface-variant">Cobrado hoy</p>
+          <p className="mt-1 font-headline-md text-headline-md tabular-nums text-status-confirmed">
+            ${chargedToday.toLocaleString("es-AR")}
+          </p>
+        </Card>
+        <Card hoverLift={false} className="p-lg">
+          <p className="font-label-sm text-label-sm text-on-surface-variant">Por cobrar hoy</p>
+          <p className="mt-1 font-headline-md text-headline-md tabular-nums text-secondary">
+            ${pendingTotal.toLocaleString("es-AR")}
+          </p>
+        </Card>
+      </div>
+
+      <Card hoverLift={false} className="space-y-3 p-lg">
+        <div>
+          <h2 className="font-headline-sm text-headline-sm text-on-surface">Cobros de hoy</h2>
+          <p className="font-body-sm text-body-sm text-on-surface-variant">Sin apertura ni cierre de caja: registrá cada cobro cuando lo recibís.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {Object.entries(METHOD_LABEL).map(([method, info]) => (
+            <div key={method} className="min-w-0 rounded-inner bg-surface-container-low p-3">
+              <div className="flex items-center gap-1.5 text-on-surface-variant">
+                <Icon name={info.icon} className="shrink-0 text-[15px]" />
+                <span className="truncate font-label-sm text-label-sm">{info.label}</span>
+              </div>
+              <p className="mt-1 font-label-lg text-label-lg tabular-nums text-on-surface">
+                ${(paymentsByMethod[method] ?? 0).toLocaleString("es-AR")}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <section className="space-y-sm">
+        <StepHeader step={1} title="Cobros pendientes" hint="Tocá Cobrar cuando la clienta te paga." />
+        <Card hoverLift={false} className="space-y-3 p-lg">
+          {appointments.map((appointment) => (
+            <div key={appointment.id} className="space-y-2 rounded-inner bg-surface-container-low p-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar name={appointment.clientName} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-label-md text-label-md text-on-surface">
+                    {formatHour(appointment.startsAt, timezone)} · {appointment.clientName}
+                  </p>
+                  <p className="truncate font-body-sm text-body-sm text-on-surface-variant">{appointment.serviceNames}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-label-md text-label-md tabular-nums text-on-surface">${appointment.balance.toLocaleString("es-AR")}</p>
+                  {chargingId !== appointment.id && <Button size="sm" onClick={() => setChargingId(appointment.id)}>Cobrar</Button>}
+                </div>
+              </div>
+              {chargingId === appointment.id && (
+                <ChargeForm
+                  tenantSlug={tenantSlug}
+                  sessionId=""
+                  appointment={appointment}
+                  products={products}
+                  onDone={() => setChargingId(null)}
+                />
+              )}
+            </div>
+          ))}
+          {appointments.length === 0 && (
+            <EmptyState
+              icon={<Icon name="check_circle" className="text-[24px]" />}
+              title="No tenés cobros pendientes"
+              description="Los saldos de los turnos de hoy van a aparecer acá."
+            />
+          )}
+        </Card>
+      </section>
+    </div>
+  );
+}
+
 export function CajaClient({
+  cashSessionsEnabled,
   tenantSlug,
   timezone,
   session,
@@ -284,6 +381,7 @@ export function CajaClient({
   lastClosedSession,
   paymentsByMethod,
 }: {
+  cashSessionsEnabled: boolean;
   tenantSlug: string;
   timezone: string;
   session: Session;
@@ -299,6 +397,10 @@ export function CajaClient({
     session ? closeCash.bind(null, tenantSlug, session.id) : closeCash.bind(null, tenantSlug, ""),
     initialCajaState,
   );
+
+  if (!cashSessionsEnabled) {
+    return <DirectCaja tenantSlug={tenantSlug} timezone={timezone} appointments={appointments} products={products} paymentsByMethod={paymentsByMethod} />;
+  }
 
   if (!session) {
     return <OpenCashForm tenantSlug={tenantSlug} appointments={appointments} timezone={timezone} lastClosedSession={lastClosedSession} />;

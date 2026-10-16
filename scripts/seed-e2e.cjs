@@ -34,6 +34,8 @@ const PRIMER_INGRESO_PROJECTS = ["pixel-7", "w320", "w360", "w390"];
 const primerIngresoEmail = (project) => `e2e-primer-ingreso+${project}@turncreate.test`;
 const primerIngresoUid = (project) => `e2e_primer_ingreso_${project}_uid`;
 const SELLER_ID = "e2e_seller_id";
+const CLIENT_ID = "e2e_client_fixture";
+const CLIENT_PHONE = "+5491100000000";
 
 // Mismo envelope que src/server/mercadopago/crypto.ts (AES-256-GCM).
 function encryptSecret(value) {
@@ -112,6 +114,19 @@ async function main() {
     schedules: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, starts_at: "00:00", ends_at: "23:45" })),
     commission: null, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
   });
+  // Cliente estable para que las pruebas de navegación no dependan de que
+  // otro spec cree uno antes (los cuatro proyectos corren en paralelo).
+  batch.set(tenantRef.collection("clients").doc(CLIENT_ID), {
+    id: CLIENT_ID, tenantId: TENANT_ID, fullName: "Cliente Fixture",
+    fullNameNormalized: "cliente fixture", phoneE164: CLIENT_PHONE,
+    email: "cliente-fixture@turncreate.test", photoUrl: null, birthYear: null,
+    noShowCount: 0, appointmentsCount: 0, totalSpent: 0,
+    lastVisitAt: null, archivedAt: null,
+    updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
+  });
+  batch.set(db.collection("tenantClientPhones").doc(`${TENANT_ID}_${CLIENT_PHONE.replace(/[^0-9]/g, "")}`), {
+    tenantId: TENANT_ID, clientId: CLIENT_ID, createdAt: FieldValue.serverTimestamp(),
+  });
 
   // Conexión de Mercado Pago "conectada" -- necesaria para que el turnero
   // público habilite reservas. Los tokens no se usan de verdad: el checkout
@@ -132,7 +147,7 @@ async function main() {
   const now = Timestamp.now();
   const baseAttempt = (status, extra = {}) => ({
     id: "", externalReference: "tc_fixture", tenantId: TENANT_ID, tenantSlug: SLUG, timezone: TIMEZONE,
-    holdId: "fixture", status, client: { full_name: "Cliente Fixture", phone_e164: "+5491100000000", email: "" },
+    holdId: "fixture", status, client: { full_name: "Cliente Fixture", phone_e164: CLIENT_PHONE, email: "" },
     snapshot: { serviceId: services[0].id, serviceName: services[0].name, servicePrice: services[0].price, staffId: "owner", startsAt: now, endsAt: now },
     amounts: { grossAmount: 10000, appliedAmount: 10000, surchargeAmount: 0 },
     expiresAt: now, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
