@@ -238,7 +238,16 @@ export async function syncOwnerStaffSchedules(tenantId: string, previous: Busine
 
 export async function getTenantBySlugFromFirebase(slug: string) {
   const { db } = firebaseAdmin();
-  const slugSnapshot = await db.collection("tenantSlugs").doc(normalizedSlug(slug)).get();
+  // Esta función también atiende el segmento dinámico público `/[slug]`.
+  // Bots y navegadores piden rutas como `/favicon.ico` o `/.well-known`;
+  // no son slugs de negocio y deben terminar en 404, no tirar un 500.
+  let normalized: string;
+  try {
+    normalized = normalizedSlug(slug);
+  } catch {
+    return null;
+  }
+  const slugSnapshot = await db.collection("tenantSlugs").doc(normalized).get();
   const tenantId = slugSnapshot.data()?.tenantId;
   if (typeof tenantId !== "string") return null;
 
