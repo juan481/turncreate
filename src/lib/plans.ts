@@ -18,7 +18,20 @@ export const PLANS: Record<PlanId, PlanFeatures> = {
   pro: { id: "pro", name: "Pro", maxStaff: 15, cashSessions: true, publicBooking: true },
 };
 
-function isPlanId(value: unknown): value is PlanId {
+export const PLAN_IDS: PlanId[] = ["solo", "equipo", "pro"];
+
+/**
+ * Precio mensual por defecto en ARS (lo que promete la landing). El precio
+ * vigente se puede cambiar desde /platform sin deploy: vive en
+ * platformConfig/billing.prices y pisa estos valores (ver src/server/billing).
+ */
+export const DEFAULT_PLAN_PRICES_ARS: Record<PlanId, number> = {
+  solo: 19900,
+  equipo: 34900,
+  pro: 54900,
+};
+
+export function isPlanId(value: unknown): value is PlanId {
   return value === "solo" || value === "equipo" || value === "pro";
 }
 
