@@ -50,6 +50,10 @@ const onboardingSchema = z.object({
   businessHours: z
     .array(z.object({ weekday: z.number().int(), opens_at: z.string(), closes_at: z.string() }))
     .max(14, "Hay demasiadas franjas horarias"),
+  bookingRules: z.object({
+    slotIntervalMin: z.union([z.literal(15), z.literal(30), z.literal(45), z.literal(60)]),
+    minNoticeMin: z.number().int().min(0).max(43_200),
+  }),
 });
 
 export type OnboardingInput = z.input<typeof onboardingSchema>;
@@ -65,7 +69,7 @@ export async function createTenantAction(
 
   const parsed = onboardingSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revisá los datos cargados" };
-  const { business, owner, businessHours } = parsed.data;
+  const { business, owner, businessHours, bookingRules } = parsed.data;
 
   const hoursError = flatHoursError(businessHours);
   if (hoursError) return { error: hoursError };
@@ -80,6 +84,8 @@ export async function createTenantAction(
       logoUrl: business.logoUrl,
       plan: owner.teamMode === "team" ? "equipo" : "solo",
       teamMode: owner.teamMode,
+      slotIntervalMin: bookingRules.slotIntervalMin,
+      minNoticeMin: bookingRules.minNoticeMin,
       businessHours: businessHours.map((hour) => ({
         weekday: hour.weekday,
         opensAt: hour.opens_at,

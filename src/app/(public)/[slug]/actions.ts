@@ -7,12 +7,13 @@ import {
   getEligibleStaffIds,
   getServiceRecord,
   listAvailableStarts,
+  listSlotAvailability,
   occupancyDocId,
   occupancySlotInstants,
 } from "@/server/firebase/booking";
 import { createCheckoutPreference, publicCheckoutQuote } from "@/server/mercadopago/checkout";
 import { getMpConnection } from "@/server/mercadopago/connections";
-import { addDaysISO, toDateISOInTz, todayISO } from "@/lib/dates";
+import { addDaysISO, formatInTz, toDateISOInTz, todayISO } from "@/lib/dates";
 import { getPublicServiceCatalog } from "@/server/services/catalog";
 import { planFeatures } from "@/lib/plans";
 import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
@@ -27,11 +28,15 @@ import {
 } from "@/server/public-booking/payment-methods";
 import { createTransferAppointment, getTransferInstructions } from "@/server/public-booking/transfer";
 import { buildTransferPanel } from "./transfer-panel";
+import { DEFAULT_CANCELLATION_REFUND_HOURS, normalizeCancellationRefundHours } from "@/domain/booking/cancellation-policy";
+import { sendAppointmentManagementLink } from "@/server/email";
+import { publicAppUrl } from "@/server/mercadopago/config";
 import type {
   ClientFormData,
   PublicActionResult,
   PublicCategory,
   PublicHold,
+  PublicSlot,
   PublicStaffMember,
   PublicTenant,
   TransferPanelData,
@@ -84,6 +89,9 @@ export async function getPublicTenant(slug: string): Promise<PublicTenant | null
     payment_methods: booking.open ? booking.methods : { mercadopago: false, transfer: false },
     books_by_staff: tenant.settings.booksByStaff && planFeatures(tenant).maxStaff > 1,
     max_booking_days: tenant.settings.maxBookingDays ?? 60,
+    cancellation_refund_hours: normalizeCancellationRefundHours(tenant.settings.cancellationRefundHours ?? DEFAULT_CANCELLATION_REFUND_HOURS),
+    slot_interval_min: tenant.settings.slotIntervalMin ?? 15,
+    bookable_weekdays: [...new Set((tenant.businessHours ?? []).map((hours) => hours.weekday))],
     description: tenant.description ?? null,
     address: tenant.address ?? null,
     instagram_url: tenant.instagramUrl ?? null,
@@ -135,6 +143,23 @@ export async function getAvailableSlots(tenantId: string, serviceId: string, sta
     }
   }
   return starts.map((date) => date.toISOString());
+}
+
+export async function getPublicDaySlots(tenantId: string, serviceId: string, staffId: string | "any", dateISO: string): Promise<PublicSlot[]> {
+  const tenant = await getTenantRecordById(tenantId);
+  if (!tenantBillingAllowsPublicBooking(tenant)) throw new Error("Este turnero no está disponible");
+  assertBookableDate(dateISO, tenant);
+  if (typeof serviceId !== "string" || !ID_PATTERN.test(serviceId)) throw new Error("Servicio inválido");
+  const service = await getServiceRecord(tenantId, serviceId);
+  if (!service.active || !service.public) throw new Error("El servicio no está disponible para reservas online");
+  const eligibleStaffIds = await getEligibleStaffIds(tenantId, serviceId);
+  if (staffId !== "any" && !eligibleStaffIds.includes(staffId)) throw new Error("Profesional no disponible para este servicio");
+  let slots = await listSlotAvailability({ tenantId, tenant, serviceId, staffId, dateISO, timezone: tenant.timezone });
+  if (isTransferReady(tenant.settings.payments?.transfer)) {
+    const booking = await tenantBooking(tenant);
+    if (!booking.methods.mercadopago) slots = slots.filter((slot) => transferSlotOfferable(slot.startsAt));
+  }
+  return slots.map((slot) => ({ starts_at: slot.startsAt.toISOString(), available: slot.available }));
 }
 
 async function holdSlot(tenantId: string, serviceId: string, staffId: string | "any", startsAtISO: string): Promise<PublicHold> {
@@ -227,6 +252,23 @@ export async function startTransferBooking(slug: string, holdId: string, client:
     const { token } = await createTransferAppointment({ slug, holdId, client });
     const instructions = await getTransferInstructions(tenant, token);
     if (!instructions) throw new Error("Tu turno quedó reservado, pero no pudimos mostrar los datos. Abrí el link de tu turno.");
+    if (client.email.trim()) {
+      try {
+        const startsAt = new Date(instructions.startsAt);
+        const policyHours = normalizeCancellationRefundHours(tenant.settings.cancellationRefundHours);
+        await sendAppointmentManagementLink(client.email.trim().toLowerCase(), {
+          clientName: instructions.clientName,
+          businessName: tenant.name,
+          serviceName: instructions.serviceName,
+          date: formatInTz(startsAt, tenant.timezone, { weekday: "long", day: "numeric", month: "long" }),
+          time: formatInTz(startsAt, tenant.timezone, { hour: "2-digit", minute: "2-digit" }),
+          managementUrl: publicAppUrl(`/${slug}/mi-turno/${token}`).toString(),
+          cancellationPolicy: `La seña es reembolsable cancelando hasta ${policyHours} horas antes del turno.`,
+        });
+      } catch (error) {
+        console.error("[email] no se pudo enviar el enlace de gestión", error);
+      }
+    }
     return { ok: true, data: buildTransferPanel(tenant, slug, token, instructions) };
   } catch (error) {
     return fail(error, "No pudimos reservar el turno. Elegí el horario nuevamente.");

@@ -55,7 +55,7 @@ export default defineConfig({
     { name: "w390", use: { viewport: { width: 390, height: 844 }, userAgent: devices["Pixel 7"].userAgent, isMobile: true, hasTouch: true } },
   ],
   webServer: {
-    command: `npm run dev -- --port ${PORT}`,
+    command: `npx next dev -p ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
     env: E2E_ENV,

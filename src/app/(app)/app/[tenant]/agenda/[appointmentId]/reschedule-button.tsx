@@ -57,24 +57,28 @@ export function RescheduleButton({
   }
 
   return (
-    <div className="animate-fade-up space-y-2 rounded-inner bg-surface-container-low p-3">
-      <p className="font-label-md text-label-md text-on-surface">
-        Este turno ya tiene una seña pagada de ${depositPaid.toLocaleString("es-AR")}. ¿La mantenemos en el turno nuevo?
-      </p>
-      <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="animate-fade-up space-y-3 rounded-inner border border-border bg-surface-container-low p-4">
+      <div>
+        <p className="font-label-lg text-label-lg text-on-surface">¿Qué hacemos con la seña de ${depositPaid.toLocaleString("es-AR")}?</p>
+        <p className="mt-1 font-body-sm text-body-sm text-on-surface-variant">Elegí cómo debe quedar el nuevo turno.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Link
           href={`${baseHref}&keepDeposit=true`}
-          className={cn(buttonVariants({ size: "sm" }), "flex-1 justify-center")}
+          className={cn(buttonVariants(), "min-h-12 w-full justify-center px-4 text-center")}
         >
-          Mantener seña
+          <Icon name="sync" className="text-[18px]" />
+          Usar la misma seña
         </Link>
         <Link
           href={`${baseHref}&keepDeposit=false`}
-          className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "flex-1 justify-center")}
+          className={cn(buttonVariants({ variant: "secondary" }), "min-h-12 w-full justify-center px-4 text-center")}
         >
-          Sin seña
+          <Icon name="money_off" className="text-[18px]" />
+          Nuevo turno sin seña
         </Link>
       </div>
+      <button type="button" onClick={() => setAsking(false)} className="min-h-11 w-full font-label-md text-label-md text-on-surface-variant hover:text-on-surface">Volver</button>
     </div>
   );
 }

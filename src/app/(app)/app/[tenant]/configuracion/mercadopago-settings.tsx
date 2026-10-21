@@ -97,17 +97,17 @@ export function MercadoPagoSettings({
   const feeOptions: { key: FeeMode; title: string; body: string }[] = [
     {
       key: "absorbed",
-      title: "Yo absorbo la comisión",
+      title: "Descontarla de lo que recibo",
       body: hasPercent
-        ? `La clienta paga ${formatMoney(absorbed.clientPays)} y a vos te llega ${formatMoney(SAMPLE_DEPOSIT)} menos la comisión: ${formatMoney(absorbed.youGet)}.`
-        : `La clienta paga ${formatMoney(SAMPLE_DEPOSIT)} y a vos te llega ${formatMoney(SAMPLE_DEPOSIT)} menos la comisión.`,
+        ? `La clienta paga ${formatMoney(absorbed.clientPays)}. Mercado Pago descuenta ${formatMoney(absorbed.fee)} y vos recibís aproximadamente ${formatMoney(absorbed.youGet)}.`
+        : `La clienta paga ${formatMoney(SAMPLE_DEPOSIT)}. Mercado Pago descuenta su comisión antes de acreditarte el dinero.`,
     },
     {
       key: "passed_through",
-      title: "Se la paso a la clienta",
+      title: "Sumarla al pago de la clienta",
       body: hasPercent
-        ? `Paga ${formatMoney(passed.clientPays)} y a vos te llegan ${formatMoney(SAMPLE_DEPOSIT)}.`
-        : `Paga ${formatMoney(SAMPLE_DEPOSIT)} más la comisión y a vos te llegan ${formatMoney(SAMPLE_DEPOSIT)}.`,
+        ? `La clienta paga ${formatMoney(passed.clientPays)} en total y vos recibís aproximadamente ${formatMoney(SAMPLE_DEPOSIT)}.`
+        : `La clienta paga la seña más la comisión para que vos recibas el monto completo de la seña.`,
     },
   ];
 
@@ -151,7 +151,7 @@ export function MercadoPagoSettings({
         <fieldset disabled={!connected || pending} className={cn("min-w-0 space-y-3", !connected && "opacity-70")}>
           <legend className="mb-1 font-label-lg text-label-lg text-on-surface">¿Quién paga la comisión de Mercado Pago?</legend>
           {!connected && (
-            <p className="font-body-sm text-body-sm text-on-surface-variant">Vas a poder elegirlo cuando conectes tu cuenta. Así funciona cada opción:</p>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">Conectá tu cuenta para guardar esta elección. Mientras tanto, podés comparar cómo se calcula cada alternativa.</p>
           )}
           <div role="radiogroup" aria-label="Quién paga la comisión" className="grid grid-cols-1 gap-2">
             {feeOptions.map((option) => (
@@ -175,7 +175,7 @@ export function MercadoPagoSettings({
                 <span className="min-w-0 flex-1">
                   <span className="block font-label-lg text-label-lg text-on-surface">{option.title}</span>
                   <span className="block font-body-sm text-body-sm tabular-nums text-on-surface-variant">
-                    Ej. con una seña de {formatMoney(SAMPLE_DEPOSIT)}: {option.body}
+                    Ejemplo con una seña de {formatMoney(SAMPLE_DEPOSIT)}: {option.body}
                   </span>
                 </span>
               </label>

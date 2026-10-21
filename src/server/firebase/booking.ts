@@ -167,7 +167,9 @@ async function isRangeFreeOfOccupancy(
 }
 
 /** Todos los inicios posibles (alineados a slotIntervalMin) para un día, para un profesional puntual o "cualquiera". */
-export async function listAvailableStarts(params: {
+export type SlotAvailability = { startsAt: Date; available: boolean };
+
+export async function listSlotAvailability(params: {
   tenantId: string;
   tenant: TenantRecord;
   serviceId: string;
@@ -175,7 +177,7 @@ export async function listAvailableStarts(params: {
   dateISO: string;
   timezone: string;
   now?: Date;
-}): Promise<Date[]> {
+}): Promise<SlotAvailability[]> {
   const db = firebaseAdmin().db;
   const service = await getServiceRecord(params.tenantId, params.serviceId);
   const eligibleIds = params.staffId === "any" ? await getEligibleStaffIds(params.tenantId, params.serviceId) : [params.staffId];
@@ -198,7 +200,7 @@ export async function listAvailableStarts(params: {
   const dayEnd = Math.max(...businessHours.map((h) => h.end));
   const alignedStart = Math.ceil(dayStart / slotIntervalMin) * slotIntervalMin;
 
-  const found = new Set<number>();
+  const found = new Map<number, boolean>();
   for (const staffId of eligibleIds) {
     const freeWindows = await freeWindowsForStaffDay({
       tenantId: params.tenantId,
@@ -212,19 +214,23 @@ export async function listAvailableStarts(params: {
     if (freeWindows.length === 0) continue;
 
     for (let start = alignedStart; start + service.durationMin <= dayEnd; start += slotIntervalMin) {
-      if (start < earliestStart || found.has(start)) continue;
+      if (start < earliestStart) continue;
       const fitsSchedule = freeWindows.some((w) => start >= w.start && start + service.durationMin <= w.end);
       if (!fitsSchedule) continue;
 
       const startsAt = minutesToInstant(params.dateISO, start, params.timezone);
       const free = await isRangeFreeOfOccupancy(db, params.tenantId, staffId, startsAt, service.durationMin);
-      if (free) found.add(start);
+      found.set(start, Boolean(found.get(start)) || free);
     }
   }
 
-  return Array.from(found)
-    .sort((a, b) => a - b)
-    .map((minute) => minutesToInstant(params.dateISO, minute, params.timezone));
+  return Array.from(found.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([minute, available]) => ({ startsAt: minutesToInstant(params.dateISO, minute, params.timezone), available }));
+}
+
+export async function listAvailableStarts(params: Parameters<typeof listSlotAvailability>[0]): Promise<Date[]> {
+  return (await listSlotAvailability(params)).filter((slot) => slot.available).map((slot) => slot.startsAt);
 }
 
 export type CreateAppointmentInput = {

@@ -11,6 +11,7 @@ import { bookingAvailability } from "@/server/public-booking/payment-methods";
 import { normalizeArPhone } from "@/lib/phone";
 import { DESCRIPTION_MAX_LENGTH, normalizeDescription, normalizeInstagramUrl } from "@/server/tenant-profile";
 import { validateTransfer, type TransferFieldErrors } from "./transfer-validation";
+import { MAX_CANCELLATION_REFUND_HOURS } from "@/domain/booking/cancellation-policy";
 
 export type ConfigActionState = { error: string | null; success?: boolean };
 export type TransferActionState = ConfigActionState & { fieldErrors?: TransferFieldErrors };
@@ -95,6 +96,34 @@ export async function updateBusinessHours(tenantSlug: string, _prev: ConfigActio
     revalidateTenant(tenantSlug);
     return { error: null, success: true };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudieron actualizar los horarios" }; }
+}
+
+export async function updateBookingRules(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
+  const slotIntervalMin = Number(formData.get("slotIntervalMin"));
+  const minNoticeMin = Number(formData.get("minNoticeMin"));
+  if (![15, 30, 45, 60].includes(slotIntervalMin)) return { error: "Elegí una separación válida entre turnos" };
+  if (!Number.isInteger(minNoticeMin) || minNoticeMin < 0 || minNoticeMin > 43_200) return { error: "La anticipación debe estar entre 0 y 43.200 minutos" };
+  try {
+    const { tenant } = await tenantForUser(tenantSlug);
+    await tenantDoc(tenant.id).update({
+      "settings.slotIntervalMin": slotIntervalMin,
+      "settings.minNoticeMin": minNoticeMin,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    revalidateTenant(tenantSlug);
+    return { error: null, success: true };
+  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudieron guardar las reglas de turnos" }; }
+}
+
+export async function updateCancellationPolicy(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
+  const hours = Number(formData.get("hours"));
+  if (!Number.isInteger(hours) || hours < 0 || hours > MAX_CANCELLATION_REFUND_HOURS) return { error: `Ingresá un plazo entre 0 y ${MAX_CANCELLATION_REFUND_HOURS} horas` };
+  try {
+    const { tenant } = await tenantForUser(tenantSlug);
+    await tenantDoc(tenant.id).update({ "settings.cancellationRefundHours": hours, updatedAt: FieldValue.serverTimestamp() });
+    revalidateTenant(tenantSlug);
+    return { error: null, success: true };
+  } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo guardar la política de cancelación" }; }
 }
 
 export async function updateDepositSettings(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {

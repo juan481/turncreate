@@ -4,14 +4,15 @@ import { getTenantBySlugFromFirebase } from "@/server/firebase/tenants";
 import { getTransferInstructions } from "@/server/public-booking/transfer";
 import { moneyLabel } from "@/server/public-booking/payment-methods";
 import { formatInTz } from "@/lib/dates";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillStatus } from "@/components/ui/status-pill";
-import { cancelAppointmentAction } from "./actions";
 import { TransferInstructions } from "../../transfer-instructions";
 import { buildTransferPanel } from "../../transfer-panel";
 import { publicCancelReason } from "./public-cancel-reason";
+import { CancelAppointmentButton } from "./cancel-appointment-button";
+import { isCancellationRefundable, normalizeCancellationRefundHours } from "@/domain/booking/cancellation-policy";
 
 export default async function MiTurnoPage({
   params,
@@ -32,6 +33,9 @@ export default async function MiTurnoPage({
 
   const isFuture = new Date(appointment.starts_at) > new Date();
   const canCancel = isFuture && (appointment.status === "confirmed" || appointment.status === "pending_payment");
+  const cancellationRefundHours = normalizeCancellationRefundHours(tenant.settings.cancellationRefundHours);
+  const depositPaid = Number(data.depositPaid ?? 0);
+  const refundable = depositPaid > 0 && isCancellationRefundable(new Date(appointment.starts_at), cancellationRefundHours);
 
   let statusColor: StatusPillStatus = "draft";
   let statusLabel = appointment.status;
@@ -140,33 +144,27 @@ export default async function MiTurnoPage({
           {/* Solo un motivo fijo derivado de campos del sistema: el texto
               libre de la dueña (cancelReason) puede tener notas internas. */}
           {appointment.status === "cancelled" && (
-            <p className="rounded-inner bg-surface-container-low px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">
-              {publicCancelReason(data)}
-            </p>
+            <div className="space-y-2 rounded-inner bg-surface-container-low px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">
+              <p>{publicCancelReason(data)}</p>
+              {data.depositRefunded === true ? <p className="font-label-md text-label-md text-status-confirmed">La seña fue devuelta.</p>
+                : data.depositDisposition === "refund_required" ? <p className="font-label-md text-label-md text-status-pending">La devolución de la seña está registrada. Si pagaste con Mercado Pago, se procesa automáticamente.</p>
+                  : data.depositDisposition === "retained" ? <p className="font-label-md text-label-md text-on-surface">La cancelación fue fuera del plazo y la seña no se devuelve.</p> : null}
+            </div>
           )}
         </div>
       </Card>
 
       {canCancel && (
-        <div className="flex flex-col gap-3 sm:flex-row">
-          {rescheduleHref && (
-            <a
-              href={rescheduleHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(buttonVariants({ variant: "secondary" }), "w-full sm:flex-1")}
-            >
-              Pedir reprogramación
-            </a>
-          )}
-          <form
-            className="sm:flex-1"
-            action={cancelAppointmentAction.bind(null, token, slug)}
-          >
-            <Button variant="secondary" className="w-full text-status-alert" type="submit">
-              Cancelar turno
-            </Button>
-          </form>
+        <div className="space-y-3">
+          {depositPaid > 0 && <p className="flex gap-2 rounded-inner bg-surface-container-low px-3 py-2.5 font-body-sm text-body-sm text-on-surface-variant"><span aria-hidden>ℹ️</span><span>La seña es reembolsable cancelando hasta <strong className="text-on-surface">{cancellationRefundHours} horas antes</strong>. {refundable ? "Todavía estás dentro del plazo." : "El plazo de devolución ya venció."}</span></p>}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {rescheduleHref && (
+              <a href={rescheduleHref} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "secondary" }), "w-full sm:flex-1")}>
+                Reprogramar por WhatsApp
+              </a>
+            )}
+            <div className="sm:flex-1"><CancelAppointmentButton token={token} slug={slug} hasDeposit={depositPaid > 0} refundable={refundable} /></div>
+          </div>
         </div>
       )}
     </div>

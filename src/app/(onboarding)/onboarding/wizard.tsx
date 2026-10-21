@@ -100,6 +100,8 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
   const [teamMode, setTeamMode] = useState<"solo" | "team">("solo");
 
   const [hours, setHours] = useState<DayHours[]>(defaultWeek);
+  const [slotIntervalMin, setSlotIntervalMin] = useState<15 | 30 | 45 | 60>(15);
+  const [minNoticeMin, setMinNoticeMin] = useState(60);
 
   const router = useRouter();
   // Doble envío: el estado `creating` deshabilita el botón recién en el
@@ -186,6 +188,7 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
           teamMode,
         },
         businessHours: daysToHours(hours),
+        bookingRules: { slotIntervalMin, minNoticeMin },
       });
       if ("error" in result) {
         submittingRef.current = false;
@@ -491,9 +494,29 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
             )}
 
             {step === 4 && (
-              <div className="space-y-3">
+              <div className="space-y-md">
                 <HoursEditor value={hours} onChange={setHours} />
                 {hoursError && <p role="alert" className="font-body-sm text-body-sm text-status-alert">{hoursError}</p>}
+                <div className="grid grid-cols-1 gap-3 rounded-inner bg-surface-container-low p-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label htmlFor="onboarding-slot-interval" className="font-label-md text-label-md text-on-surface-variant">Turnos disponibles cada</label>
+                    <select id="onboarding-slot-interval" value={slotIntervalMin} onChange={(event) => setSlotIntervalMin(Number(event.target.value) as 15 | 30 | 45 | 60)} className="h-11 w-full rounded-pill border border-border bg-surface px-4 text-base">
+                      {[15, 30, 45, 60].map((minutes) => <option key={minutes} value={minutes}>{minutes} minutos</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="onboarding-min-notice" className="font-label-md text-label-md text-on-surface-variant">Reservar con al menos</label>
+                    <select id="onboarding-min-notice" value={minNoticeMin} onChange={(event) => setMinNoticeMin(Number(event.target.value))} className="h-11 w-full rounded-pill border border-border bg-surface px-4 text-base">
+                      <option value={0}>Sin anticipación mínima</option>
+                      <option value={60}>1 hora</option>
+                      <option value={120}>2 horas</option>
+                      <option value={360}>6 horas</option>
+                      <option value={720}>12 horas</option>
+                      <option value={1440}>24 horas</option>
+                    </select>
+                  </div>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant sm:col-span-2">La duración de cada atención se define después, al crear los servicios.</p>
+                </div>
               </div>
             )}
 

@@ -17,6 +17,26 @@ type SendEmailOptions = {
   text?: string;
 };
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]!);
+}
+
+function safeHttpHref(value?: string) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? escapeHtml(url.toString()) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
   if (!process.env.AWS_ACCESS_KEY_ID) {
     console.log("[email] SES no configurado — se omite envío a:", to, "|", subject);
@@ -47,15 +67,18 @@ type AppointmentDetails = {
   time: string;   // "10:00"
   address?: string;
   whatsapp?: string;
+  managementUrl?: string;
+  cancellationPolicy?: string;
 };
 
 function baseLayout(content: string, businessName: string) {
+  const safeBusinessName = escapeHtml(businessName);
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${businessName}</title>
+<title>${safeBusinessName}</title>
 <style>
   body { margin: 0; padding: 0; background: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   .wrapper { max-width: 520px; margin: 0 auto; padding: 32px 16px; }
@@ -71,6 +94,7 @@ function baseLayout(content: string, businessName: string) {
   .badge { display: inline-block; background: #f0effd; color: #7069e8; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 600; margin: 8px 0 24px; }
   .footer { margin-top: 24px; font-size: 12px; color: #8e8e93; text-align: center; line-height: 1.6; }
   .divider { border: none; border-top: 1px solid #e5e5ea; margin: 24px 0; }
+  .button { display: block; background: #7069e8; color: #fff !important; text-decoration: none; text-align: center; border-radius: 999px; padding: 12px 18px; font-size: 15px; font-weight: 700; margin: 20px 0 8px; }
 </style>
 </head>
 <body>
@@ -81,7 +105,7 @@ function baseLayout(content: string, businessName: string) {
 </div>
 <div class="footer">
   Powered by TurnCreate · Este correo fue enviado automáticamente, no respondas aquí.<br />
-  ${businessName}
+  ${safeBusinessName}
 </div>
 </div>
 </body>
@@ -92,22 +116,42 @@ export async function sendAppointmentConfirmation(
   to: string,
   details: AppointmentDetails,
 ) {
-  const { clientName, businessName, serviceName, date, time, address, whatsapp } = details;
+  const { clientName, businessName, serviceName, date, time, address, whatsapp, managementUrl, cancellationPolicy } = details;
+  const managementHref = safeHttpHref(managementUrl);
 
   const html = baseLayout(
     `<h1>¡Turno confirmado! 🎉</h1>
-<p>Hola <strong>${clientName}</strong>, tu turno está reservado. Te esperamos.</p>
+<p>Hola <strong>${escapeHtml(clientName)}</strong>, tu turno está reservado. Te esperamos.</p>
 <span class="badge">✓ Confirmado</span>
-<div class="detail-row"><span class="detail-icon">✂️</span><div class="detail-text"><strong>${serviceName}</strong></div></div>
-<div class="detail-row"><span class="detail-icon">📅</span><div class="detail-text"><strong>${date} a las ${time}</strong></div></div>
-${address ? `<div class="detail-row"><span class="detail-icon">📍</span><div class="detail-text">${address}</div></div>` : ""}
-${whatsapp ? `<hr class="divider" /><p style="font-size:13px;color:#8e8e93">¿Necesitás cancelar o reprogramar? Escribinos por WhatsApp al <strong>${whatsapp}</strong>.</p>` : ""}`,
+<div class="detail-row"><span class="detail-icon">✂️</span><div class="detail-text"><strong>${escapeHtml(serviceName)}</strong></div></div>
+<div class="detail-row"><span class="detail-icon">📅</span><div class="detail-text"><strong>${escapeHtml(date)} a las ${escapeHtml(time)}</strong></div></div>
+${address ? `<div class="detail-row"><span class="detail-icon">📍</span><div class="detail-text">${escapeHtml(address)}</div></div>` : ""}
+${managementHref ? `<a class="button" href="${managementHref}">Ver o gestionar mi turno</a>` : ""}
+${cancellationPolicy ? `<p style="font-size:13px;color:#8e8e93">${escapeHtml(cancellationPolicy)}</p>` : ""}
+${whatsapp ? `<hr class="divider" /><p style="font-size:13px;color:#8e8e93">¿Necesitás cancelar o reprogramar? Escribinos por WhatsApp al <strong>${escapeHtml(whatsapp)}</strong>.</p>` : ""}`,
     businessName,
   );
 
-  const text = `Turno confirmado en ${businessName}\n\nServicio: ${serviceName}\nFecha: ${date} a las ${time}${address ? `\nDirección: ${address}` : ""}${whatsapp ? `\n\n¿Necesitás cancelar? WhatsApp: ${whatsapp}` : ""}`;
+  const text = `Turno confirmado en ${businessName}\n\nServicio: ${serviceName}\nFecha: ${date} a las ${time}${address ? `\nDirección: ${address}` : ""}${managementUrl ? `\nGestioná tu turno: ${managementUrl}` : ""}${cancellationPolicy ? `\n${cancellationPolicy}` : ""}${whatsapp ? `\n\nWhatsApp: ${whatsapp}` : ""}`;
 
   await sendEmail({ to, subject: `Turno confirmado — ${businessName}`, html, text });
+}
+
+export async function sendAppointmentManagementLink(to: string, details: AppointmentDetails) {
+  const { clientName, businessName, serviceName, date, time, managementUrl, cancellationPolicy } = details;
+  const managementHref = safeHttpHref(managementUrl);
+  if (!managementHref) return;
+  const html = baseLayout(
+    `<h1>Recibimos tu reserva</h1>
+<p>Hola <strong>${escapeHtml(clientName)}</strong>, guardá este enlace único para consultar, reprogramar o cancelar tu turno.</p>
+<div class="detail-row"><span class="detail-icon">✂️</span><div class="detail-text"><strong>${escapeHtml(serviceName)}</strong></div></div>
+<div class="detail-row"><span class="detail-icon">📅</span><div class="detail-text"><strong>${escapeHtml(date)} a las ${escapeHtml(time)}</strong></div></div>
+<a class="button" href="${managementHref}">Gestionar mi turno</a>
+${cancellationPolicy ? `<p style="font-size:13px;color:#8e8e93">${escapeHtml(cancellationPolicy)}</p>` : ""}`,
+    businessName,
+  );
+  const text = `Reserva en ${businessName}\n${serviceName} · ${date} a las ${time}\nGestioná tu turno: ${managementUrl}${cancellationPolicy ? `\n${cancellationPolicy}` : ""}`;
+  await sendEmail({ to, subject: `Gestioná tu turno — ${businessName}`, html, text });
 }
 
 export async function sendAppointmentReminder(
@@ -118,11 +162,11 @@ export async function sendAppointmentReminder(
 
   const html = baseLayout(
     `<h1>Recordatorio de turno ⏰</h1>
-<p>Hola <strong>${clientName}</strong>, te recordamos que mañana tenés turno.</p>
-<div class="detail-row"><span class="detail-icon">✂️</span><div class="detail-text"><strong>${serviceName}</strong></div></div>
-<div class="detail-row"><span class="detail-icon">📅</span><div class="detail-text"><strong>${date} a las ${time}</strong></div></div>
-${address ? `<div class="detail-row"><span class="detail-icon">📍</span><div class="detail-text">${address}</div></div>` : ""}
-${whatsapp ? `<hr class="divider" /><p style="font-size:13px;color:#8e8e93">¿No podés venir? Escribinos por WhatsApp al <strong>${whatsapp}</strong>.</p>` : ""}`,
+<p>Hola <strong>${escapeHtml(clientName)}</strong>, te recordamos que mañana tenés turno.</p>
+<div class="detail-row"><span class="detail-icon">✂️</span><div class="detail-text"><strong>${escapeHtml(serviceName)}</strong></div></div>
+<div class="detail-row"><span class="detail-icon">📅</span><div class="detail-text"><strong>${escapeHtml(date)} a las ${escapeHtml(time)}</strong></div></div>
+${address ? `<div class="detail-row"><span class="detail-icon">📍</span><div class="detail-text">${escapeHtml(address)}</div></div>` : ""}
+${whatsapp ? `<hr class="divider" /><p style="font-size:13px;color:#8e8e93">¿No podés venir? Escribinos por WhatsApp al <strong>${escapeHtml(whatsapp)}</strong>.</p>` : ""}`,
     businessName,
   );
 
@@ -139,11 +183,11 @@ export async function sendAppointmentCancellation(
 
   const html = baseLayout(
     `<h1>Turno cancelado</h1>
-<p>Hola <strong>${clientName}</strong>, tu turno fue cancelado.</p>
-<div class="detail-row"><span class="detail-icon">✂️</span><div class="detail-text"><strong>${serviceName}</strong></div></div>
-<div class="detail-row"><span class="detail-icon">📅</span><div class="detail-text">${date} a las ${time}</div></div>
-${reason ? `<div class="detail-row"><span class="detail-icon">💬</span><div class="detail-text">${reason}</div></div>` : ""}
-${whatsapp ? `<hr class="divider" /><p style="font-size:13px;color:#8e8e93">Para reservar un nuevo turno escribinos por WhatsApp al <strong>${whatsapp}</strong>.</p>` : ""}`,
+<p>Hola <strong>${escapeHtml(clientName)}</strong>, tu turno fue cancelado.</p>
+<div class="detail-row"><span class="detail-icon">✂️</span><div class="detail-text"><strong>${escapeHtml(serviceName)}</strong></div></div>
+<div class="detail-row"><span class="detail-icon">📅</span><div class="detail-text">${escapeHtml(date)} a las ${escapeHtml(time)}</div></div>
+${reason ? `<div class="detail-row"><span class="detail-icon">💬</span><div class="detail-text">${escapeHtml(reason)}</div></div>` : ""}
+${whatsapp ? `<hr class="divider" /><p style="font-size:13px;color:#8e8e93">Para reservar un nuevo turno escribinos por WhatsApp al <strong>${escapeHtml(whatsapp)}</strong>.</p>` : ""}`,
     businessName,
   );
 

@@ -7,7 +7,19 @@ import { SLUG, ATTEMPT_IDS, expectNoHorizontalScroll, loginAsOwner, projectIndex
 // cuántas horas le queden al día de hoy. Mercado Pago: días 1..4;
 // transferencia: días 9..12 (turno-manual.spec.ts usa 5..8).
 
-/** Pasos 1-3 del turnero: servicio, (profesional se saltea), día y horario. */
+function accessibleDateName(dayOffset: number) {
+  const target = new Date(Date.now() + dayOffset * 86_400_000);
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).formatToParts(target);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
+  return `${value("weekday")} ${value("day")} de ${value("month")}`;
+}
+
+/** Pasos 1-4 del turnero: servicio, (profesional se saltea), día y horario. */
 async function pickSlot(page: Page, dayOffset: number) {
   await page.goto(`/${SLUG}`);
   await expectNoHorizontalScroll(page);
@@ -19,11 +31,15 @@ async function pickSlot(page: Page, dayOffset: number) {
   // salta la elección y nunca ofrece "Cualquiera disponible".
   await expect(page.getByText("Cualquiera disponible", { exact: true })).toHaveCount(0);
 
-  // Paso 3: fecha y horario. La tira de días arranca hoy; cada botón se
-  // llama "<día abreviado><número>" (p. ej. "vie16").
-  const dayButtons = page.getByRole("button", { name: /^\D{2,5}\d{1,2}$/ });
-  await expect(dayButtons.first()).toBeVisible({ timeout: 15_000 });
-  await dayButtons.nth(dayOffset).click();
+  // Paso 2: fecha. El calendario expone el nombre completo del día a
+  // lectores de pantalla (p. ej. "miércoles 21 de octubre").
+  const dayButton = page.getByRole("button", { name: accessibleDateName(dayOffset), exact: true });
+  await expect(dayButton).toBeVisible({ timeout: 15_000 });
+  await dayButton.click();
+  await page.getByRole("button", { name: "Ver horarios" }).click();
+
+  // Paso 3: horario. Los botones ocupados agregan ", ocupado" al nombre,
+  // por eso este selector toma solamente horarios disponibles.
   const timeButtons = page.getByRole("button", { name: /^\d{2}:\d{2}$/ });
   await expect(timeButtons.nth(30)).toBeVisible({ timeout: 15_000 });
   // Los horarios se tocan bien con el dedo (≥44px).
@@ -34,7 +50,7 @@ async function pickSlot(page: Page, dayOffset: number) {
   await page.getByRole("button", { name: "Continuar" }).click();
 
   // Paso 4: datos del cliente.
-  await expect(page.getByText("Confirmá tu turno")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "¿A nombre de quién reservamos?" })).toBeVisible();
   await expectNoHorizontalScroll(page);
 }
 
@@ -47,6 +63,8 @@ test("reserva pública completa: elige turno, paga la seña (MP stub) y llega al
   await expect(page.getByText("Con código de área, ej: 11 2233 4455")).toBeVisible();
   await page.getByLabel("Nombre completo").fill("Cliente E2E");
   await phone.fill("11 2233 4455");
+  await page.getByLabel("Email").fill("cliente-e2e@turncreate.test");
+  await page.getByRole("button", { name: "Continuar al pago" }).click();
   await page.getByRole("button", { name: "Pagar seña con Mercado Pago" }).click();
 
   // MP_E2E_STUB=1: nunca pega contra Mercado Pago real. El intento queda
@@ -71,13 +89,15 @@ test("reserva con seña por transferencia: datos para transferir, Mi turno y la 
   const clientName = `Cliente Transferencia ${testInfo.project.name}`;
   await pickSlot(page, 9 + index);
 
-  const transferOption = page.getByRole("radio", { name: /Transferencia bancaria/ });
-  test.skip((await transferOption.count()) === 0, "El seed E2E no tiene la transferencia habilitada");
-
-  await transferOption.check();
   await page.getByLabel("Nombre completo").fill(clientName);
   // Un WhatsApp distinto por proyecto: hay un tope de transferencias pendientes por teléfono.
   await page.getByLabel("Teléfono (WhatsApp)").fill(`11 3000 000${index}`);
+  await page.getByLabel("Email").fill(`transferencia-${index}@turncreate.test`);
+  await page.getByRole("button", { name: "Continuar al pago" }).click();
+  const transferOption = page.getByRole("radio", { name: /Transferencia bancaria/ });
+  test.skip((await transferOption.count()) === 0, "El seed E2E no tiene la transferencia habilitada");
+  await page.getByText("Transferencia bancaria", { exact: true }).click();
+  await expect(transferOption).toBeChecked();
   await page.getByRole("button", { name: "Reservar y ver datos para transferir" }).click();
 
   await expect(page.getByRole("heading", { name: "Turno reservado — pendiente de confirmación" })).toBeVisible({ timeout: 15_000 });

@@ -7,11 +7,14 @@ import { checkoutAmounts, paymentDocument } from "@/domain/money/payment";
 import { firebaseAdmin } from "@/server/firebase/admin";
 import { occupancyDocId, occupancySlotInstants } from "@/server/firebase/booking";
 import { getTenantBySlugFromFirebase, type TenantRecord } from "@/server/firebase/tenants";
-import { isPublicHttpsUrl, mercadoPagoEnv } from "./config";
+import { isPublicHttpsUrl, mercadoPagoEnv, publicAppUrl } from "./config";
 import { sellerAccessToken } from "./connections";
 import { recordTrustedAnalyticsEvent } from "@/server/analytics";
 import { cleanPublicClient, type PublicClientInput } from "@/server/public-booking/client";
 import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
+import { sendAppointmentConfirmation } from "@/server/email";
+import { formatInTz } from "@/lib/dates";
+import { normalizeCancellationRefundHours } from "@/domain/booking/cancellation-policy";
 
 export type BookingAttemptStatus =
   | "created"
@@ -401,6 +404,27 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
       recordTrustedAnalyticsEvent({ tenantId, timezone: String(attempt.timezone ?? "America/Argentina/Buenos_Aires"), event: "paymentApproved" }),
       recordTrustedAnalyticsEvent({ tenantId, timezone: String(attempt.timezone ?? "America/Argentina/Buenos_Aires"), event: "appointmentConfirmed" }),
     ]);
+    if (attempt.client.email) {
+      try {
+        const tenantSnapshot = await tenantRef.get();
+        const tenant = tenantSnapshot.data() as TenantRecord;
+        const startsAt = attempt.snapshot.startsAt.toDate();
+        const policyHours = normalizeCancellationRefundHours(tenant.settings.cancellationRefundHours);
+        await sendAppointmentConfirmation(String(attempt.client.email), {
+          clientName: String(attempt.client.fullName),
+          businessName: tenant.name,
+          serviceName: String(attempt.snapshot.serviceName ?? "Turno"),
+          date: formatInTz(startsAt, tenant.timezone, { weekday: "long", day: "numeric", month: "long" }),
+          time: formatInTz(startsAt, tenant.timezone, { hour: "2-digit", minute: "2-digit" }),
+          address: tenant.address ?? undefined,
+          whatsapp: tenant.whatsappNumber ?? undefined,
+          managementUrl: publicAppUrl(`/${tenant.slug}/mi-turno/${appointmentToken}`).toString(),
+          cancellationPolicy: `La seña es reembolsable cancelando hasta ${policyHours} horas antes del turno.`,
+        });
+      } catch (error) {
+        console.error("[email] no se pudo enviar el enlace de gestión", error);
+      }
+    }
   }
   return { status: finalStatus, appointmentId: finalStatus === "approved" ? confirmedAppointmentId : null };
 }

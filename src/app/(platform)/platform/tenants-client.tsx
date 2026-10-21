@@ -22,6 +22,7 @@ const FILTER_LABEL: Record<StatusFilter, string> = {
   active: "Activos",
   trial: "En prueba",
   suspended: "Apagados",
+  demo: "Demo",
 };
 
 function OnOff({ on, onLabel, offLabel }: { on: boolean; onLabel: string; offLabel: string }) {
@@ -38,7 +39,7 @@ export function TenantsClient({ tenants }: { tenants: PlatformTenantRow[] }) {
   const [status, setStatus] = useState<StatusFilter>("all");
   const visible = useMemo(() => filterTenants(tenants, query, status), [tenants, query, status]);
   const counts = useMemo(() => {
-    const result: Record<StatusFilter, number> = { all: tenants.length, active: 0, trial: 0, suspended: 0 };
+    const result: Record<StatusFilter, number> = { all: tenants.length, active: 0, trial: 0, suspended: 0, demo: 0 };
     for (const tenant of tenants) result[tenant.status] += 1;
     return result;
   }, [tenants]);

@@ -17,19 +17,35 @@ import { TRANSFER_MIN_LEAD_HOURS, transferAllowedFor } from "@/server/public-boo
 import {
   getPublicCatalog,
   getPublicStaffForService,
-  getAvailableSlots,
+  getPublicDaySlots,
   createHold,
   getPublicCheckoutQuote,
   startPublicCheckout,
   startTransferBooking,
 } from "./actions";
 import { TransferInstructions } from "./transfer-instructions";
-import type { PublicCategory, PublicHold, PublicService, PublicStaffMember, TransferPanelData } from "./types";
+import { PublicMonthCalendar } from "./public-month-calendar";
+import type { PublicCategory, PublicHold, PublicService, PublicSlot, PublicStaffMember, TransferPanelData } from "./types";
 
-type StepId = "service" | "staff" | "time" | "data";
+type StepId = "service" | "staff" | "date" | "time" | "data" | "payment";
 type PayMethod = "mercadopago" | "transfer";
 
 const money = (value: number) => `$${value.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`;
+
+function ProgressHeader({ current, total, name, title }: { current: number; total: number; name: string; title: string }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <StatusPill status="pending">Paso {current} de {total} · {name}</StatusPill>
+        <span className="font-label-sm text-label-sm tabular-nums text-on-surface-variant">{Math.round((current / total) * 100)}%</span>
+      </div>
+      <div role="progressbar" aria-label="Progreso de la reserva" aria-valuemin={1} aria-valuemax={total} aria-valuenow={current} className="h-2 overflow-hidden rounded-pill bg-surface-container-high">
+        <div className="h-full rounded-pill bg-primary transition-[width] duration-300" style={{ width: `${(current / total) * 100}%` }} />
+      </div>
+      <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">{title}</h1>
+    </div>
+  );
+}
 
 export function BookingFlow({
   tenantId,
@@ -38,6 +54,8 @@ export function BookingFlow({
   booksByStaff,
   maxBookingDays,
   paymentMethods,
+  cancellationRefundHours,
+  bookableWeekdays,
 }: {
   tenantId: string;
   slug: string;
@@ -45,6 +63,8 @@ export function BookingFlow({
   booksByStaff: boolean;
   maxBookingDays: number;
   paymentMethods: { mercadopago: boolean; transfer: boolean };
+  cancellationRefundHours: number;
+  bookableWeekdays: number[];
 }) {
   const [step, setStep] = useState(1);
   const [catalog, setCatalog] = useState<PublicCategory[]>([]);
@@ -55,7 +75,7 @@ export function BookingFlow({
   const [selectedService, setSelectedService] = useState<PublicService | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<string>("any");
   const [selectedDate, setSelectedDate] = useState<string>(format(new TZDate(new Date(), timezone), "yyyy-MM-dd"));
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [daySlots, setDaySlots] = useState<PublicSlot[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
   const [hold, setHold] = useState<PublicHold | null>(null);
@@ -76,10 +96,12 @@ export function BookingFlow({
   const visibleSteps: StepId[] = [
     ...(singleService ? [] : (["service"] as StepId[])),
     ...(showStaffStep ? (["staff"] as StepId[]) : []),
+    "date",
     "time",
     "data",
+    "payment",
   ];
-  const stepLabel = (id: StepId, name: string) => `Paso ${Math.max(1, visibleSteps.indexOf(id) + 1)} de ${visibleSteps.length} · ${name}`;
+  const stepNumber = (id: StepId) => Math.max(1, visibleSteps.indexOf(id) + 1);
 
   const track = (event: "views" | "bookingStarted" | "checkoutStarted") => {
     void fetch("/api/analytics/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, event }), keepalive: true });
@@ -135,7 +157,7 @@ export function BookingFlow({
   }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (step !== 3 || !selectedService) return;
+    if (step !== 4 || !selectedService) return;
 
     let cancelled = false;
     // Flag de loading para el fetch de slots al cambiar fecha/staff/servicio;
@@ -153,19 +175,17 @@ export function BookingFlow({
     // servicio, exactamente cuando los slots dejan de ser válidos) cierra
     // el hueco por completo, no solo "al cambiar de día".
     setSelectedTime(null);
-    getAvailableSlots(
+    getPublicDaySlots(
       tenantId,
       selectedService.id,
       selectedStaff,
       selectedDate,
-      timezone,
-      staffList.map(s => s.id)
     ).then(slots => {
       if (cancelled) return;
-      setAvailableSlots(slots);
+      setDaySlots(slots);
     }).catch((err) => {
       console.error(err);
-      if (!cancelled) setAvailableSlots([]);
+      if (!cancelled) setDaySlots([]);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -196,7 +216,7 @@ export function BookingFlow({
       if (singleService) track("bookingStarted");
       setHold(result.data);
       setQuote(await getPublicCheckoutQuote(tenantId, selectedService.id));
-      setStep(4);
+      setStep(5);
     } catch (err) {
       console.error(err);
       setErrorMessage("No pudimos reservar ese horario. Intentá de nuevo.");
@@ -209,6 +229,13 @@ export function BookingFlow({
     e.preventDefault();
     const form = (e.currentTarget as HTMLButtonElement).form;
     return !form || form.reportValidity();
+  };
+
+  const continueToPayment = (e: React.SyntheticEvent) => {
+    if (!formIsValid(e)) return;
+    setErrorMessage(null);
+    setStep(6);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const createPreferenceAndRedirect = async (e: React.SyntheticEvent) => {
@@ -243,7 +270,7 @@ export function BookingFlow({
       }
       track("checkoutStarted");
       setTransferPanel(result.data);
-      setStep(5);
+      setStep(7);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error(err);
@@ -256,12 +283,7 @@ export function BookingFlow({
   if (step === 1) {
     return (
       <div key={step} className="animate-fade-up space-y-lg">
-        <div className="space-y-2">
-          <StatusPill status="pending">{stepLabel("service", "Servicio")}</StatusPill>
-          <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
-            Elegí tu tratamiento
-          </h1>
-        </div>
+        <ProgressHeader current={stepNumber("service")} total={visibleSteps.length} name="Servicio" title="Elegí tu tratamiento" />
         {!catalogLoaded ? (
           <p className="flex items-center justify-center gap-2 py-8 text-center font-body-md text-body-md text-on-surface-variant">
             <Icon name="progress_activity" className="animate-spin text-[18px]" />
@@ -323,12 +345,7 @@ export function BookingFlow({
   if (step === 2) {
     return (
       <div key={step} className="animate-fade-up space-y-lg">
-        <div className="space-y-2">
-          <StatusPill status="pending">{stepLabel("staff", "Profesional")}</StatusPill>
-          <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
-            ¿Con quién querés atenderte?
-          </h1>
-        </div>
+        <ProgressHeader current={stepNumber("staff")} total={visibleSteps.length} name="Profesional" title="¿Con quién querés atenderte?" />
         {staffLoading ? (
           <p className="flex items-center justify-center gap-2 py-8 text-center font-body-md text-body-md text-on-surface-variant">
             <Icon name="progress_activity" className="animate-spin text-[18px]" />
@@ -394,86 +411,66 @@ export function BookingFlow({
 
   if (step === 3) {
     const today = new TZDate(new Date(), timezone);
-    const dates = Array.from({ length: Math.min(14, Math.max(1, maxBookingDays + 1)) }).map((_, i) => addDays(today, i));
     const firstDate = format(today, "yyyy-MM-dd");
     const lastDate = format(addDays(today, Math.max(0, maxBookingDays)), "yyyy-MM-dd");
     const backStep = showStaffStep ? 2 : singleService ? null : 1;
     return (
       <div key={step} className="animate-fade-up space-y-lg">
-        <div className="space-y-2">
-          <StatusPill status="pending">{stepLabel("time", "Fecha y hora")}</StatusPill>
-          <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
-            ¿Cuándo venís?
-          </h1>
-          {singleService && selectedService && (
-            <p className="font-body-md text-body-md text-on-surface-variant">
-              {selectedService.name} · {selectedService.duration} min · {money(selectedService.price)}
-            </p>
-          )}
+        <ProgressHeader current={stepNumber("date")} total={visibleSteps.length} name="Fecha" title="Elegí el día" />
+        {selectedService && <p className="font-body-md text-body-md text-on-surface-variant">{selectedService.name} · {selectedService.duration} min · {money(selectedService.price)}</p>}
+        <PublicMonthCalendar timezone={timezone} selectedDate={selectedDate} onSelect={setSelectedDate} minDate={firstDate} maxDate={lastDate} bookableWeekdays={bookableWeekdays} />
+        <div className={cn("flex items-center pt-2", backStep === null ? "justify-end" : "justify-between")}>
+          {backStep !== null && <Button variant="ghost" onClick={() => setStep(backStep)}>Volver</Button>}
+          <Button onClick={() => setStep(4)} disabled={!bookableWeekdays.includes(new TZDate(`${selectedDate}T12:00:00`, timezone).getDay())}>Ver horarios</Button>
         </div>
+      </div>
+    );
+  }
 
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {dates.map(d => {
-            const dateStr = format(d, "yyyy-MM-dd");
-            const active = selectedDate === dateStr;
-            return (
-              <button
-                key={dateStr}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setSelectedDate(dateStr)}
-                className={cn(
-                  "min-w-[4.5rem] flex-shrink-0 rounded-inner border p-2 text-center transition-all duration-200 ease-out active:scale-95",
-                  active
-                    ? "border-primary bg-primary text-on-primary shadow-card-hover"
-                    : "border-border bg-surface hover:-translate-y-0.5 hover:shadow-card",
-                )}
-              >
-                <div className="font-label-sm text-label-sm uppercase opacity-80">{format(d, "EEE", { locale: es })}</div>
-                <div className="font-headline-md text-headline-md tabular-nums">{format(d, "d")}</div>
-              </button>
-            )
-          })}
-        </div>
-
-        <label className="block space-y-1.5">
-          <span className="font-label-md text-label-md text-on-surface-variant">Otra fecha</span>
-          <Input type="date" min={firstDate} max={lastDate} value={selectedDate} onChange={(event) => { if (event.target.value) setSelectedDate(event.target.value); }} />
-        </label>
-
-        <div className="grid grid-cols-4 gap-2">
+  if (step === 4) {
+    return (
+      <div key={step} className="animate-fade-up space-y-lg">
+        <ProgressHeader current={stepNumber("time")} total={visibleSteps.length} name="Horario" title="Elegí un horario" />
+        <p className="font-body-md text-body-md capitalize text-on-surface-variant">{format(new TZDate(`${selectedDate}T12:00:00`, timezone), "EEEE d 'de' MMMM", { locale: es })}</p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {loading ? (
             <p className="col-span-4 flex items-center justify-center gap-2 py-8 text-center font-body-md text-body-md text-on-surface-variant">
               <Icon name="progress_activity" className="animate-spin text-[18px]" />
               Buscando horarios...
             </p>
-          ) : availableSlots.length === 0 ? (
+          ) : daySlots.length === 0 ? (
             <p className="col-span-4 animate-fade-up py-8 text-center font-body-md text-body-md text-on-surface-variant">No hay horarios disponibles para esta fecha.</p>
           ) : (
-            availableSlots.map((slot, i) => (
+            daySlots.map((slot, i) => (
               <button
-                key={slot}
+                key={slot.starts_at}
                 type="button"
-                aria-pressed={selectedTime === slot}
-                onClick={() => setSelectedTime(slot)}
+                disabled={!slot.available}
+                aria-pressed={selectedTime === slot.starts_at}
+                aria-label={`${format(new TZDate(parseISO(slot.starts_at), timezone), "HH:mm")}${slot.available ? "" : ", ocupado"}`}
+                onClick={() => setSelectedTime(slot.starts_at)}
                 style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
                 className={cn(
-                  "min-h-11 min-w-0 animate-fade-up rounded-pill border px-1 font-label-lg text-label-lg tabular-nums transition-all duration-200 ease-out active:scale-95",
-                  selectedTime === slot
+                  "min-h-12 min-w-0 animate-fade-up rounded-inner border px-1 font-label-lg text-label-lg tabular-nums transition-all duration-200 ease-out active:scale-95",
+                  selectedTime === slot.starts_at
                     ? "border-primary bg-primary text-on-primary shadow-card-hover"
-                    : "border-border bg-surface hover:-translate-y-0.5 hover:bg-surface-muted hover:shadow-card",
+                    : slot.available
+                      ? "border-border bg-surface hover:-translate-y-0.5 hover:bg-surface-muted hover:shadow-card"
+                      : "cursor-not-allowed border-border/60 bg-surface-container-low text-on-surface-variant/50 line-through",
                 )}
               >
-                {format(new TZDate(parseISO(slot), timezone), "HH:mm")}
+                <span className="block">{format(new TZDate(parseISO(slot.starts_at), timezone), "HH:mm")}</span>
+                {!slot.available && <span className="block text-[10px] font-medium no-underline">Ocupado</span>}
               </button>
             ))
           )}
         </div>
+        <p className="flex items-center gap-2 font-body-sm text-body-sm text-on-surface-variant"><span className="h-px w-5 bg-on-surface-variant/50" />Los horarios tachados ya tienen reserva.</p>
 
         {errorMessage && <p role="alert" className="rounded-inner bg-status-alert-bg px-3 py-2 font-body-sm text-body-sm text-status-alert">{errorMessage}</p>}
 
-        <div className={cn("flex items-center pt-4", backStep === null ? "justify-end" : "justify-between")}>
-          {backStep !== null && <Button variant="ghost" onClick={() => { setErrorMessage(null); setStep(backStep); }}>Volver</Button>}
+        <div className="flex items-center justify-between pt-4">
+          <Button variant="ghost" onClick={() => { setErrorMessage(null); setStep(3); }}>Cambiar fecha</Button>
           <Button
             onClick={handleCreateHold}
             disabled={!selectedTime || loading}
@@ -485,82 +482,19 @@ export function BookingFlow({
     );
   }
 
-  if (step === 4) {
-    const startsAt = selectedTime ? new Date(selectedTime) : null;
-    const transferPossible = paymentMethods.transfer && startsAt !== null && transferAllowedFor(startsAt);
-    const mpPossible = paymentMethods.mercadopago;
-    const chosen: PayMethod | null = method === "transfer" && transferPossible ? "transfer" : mpPossible ? "mercadopago" : transferPossible ? "transfer" : null;
-    const canChoose = mpPossible && transferPossible;
+  if (step === 5) {
     return (
       <div key={step} className="animate-fade-up space-y-lg">
-        <div className="space-y-2">
-          <StatusPill status="pending">{stepLabel("data", "Tus datos")}</StatusPill>
-          <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">
-            Confirmá tu turno
-          </h1>
-        </div>
+        <ProgressHeader current={stepNumber("data")} total={visibleSteps.length} name="Tus datos" title="¿A nombre de quién reservamos?" />
 
         <Card hoverLift={false} className="space-y-2 bg-surface-muted p-4">
           <div className="break-words font-label-lg text-label-lg">{selectedService?.name}</div>
           <div className="font-body-md text-body-md text-on-surface-variant first-letter:uppercase">
             {format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })}
           </div>
-          {quote && (
-            <div className="mt-3 space-y-1 border-t border-border pt-3 font-body-md text-body-md">
-              {chosen === "transfer" ? (
-                <>
-                  <div className="flex justify-between gap-3"><span>Seña a transferir</span><strong className="tabular-nums">{money(quote.appliedAmount)}</strong></div>
-                  <p className="pt-1 font-body-sm text-body-sm text-on-surface-variant">El turno queda reservado y se confirma cuando el local recibe tu transferencia.</p>
-                </>
-              ) : (
-                <>
-                  <div className="flex justify-between gap-3"><span>Seña</span><strong className="tabular-nums">{money(quote.appliedAmount)}</strong></div>
-                  {quote.surchargeAmount > 0 && <div className="flex justify-between gap-3 text-on-surface-variant"><span>Cargo de procesamiento</span><span className="tabular-nums">{money(quote.surchargeAmount)}</span></div>}
-                  <div className="flex justify-between gap-3 font-label-lg text-label-lg"><span>Total a pagar ahora</span><span className="tabular-nums">{money(quote.grossAmount)}</span></div>
-                  <p className="pt-1 font-body-sm text-body-sm text-on-surface-variant">El turno se confirma cuando Mercado Pago aprueba la seña.</p>
-                </>
-              )}
-            </div>
-          )}
         </Card>
 
         <form className="space-y-4">
-          {canChoose && (
-            <fieldset className="space-y-2">
-              <legend className="mb-1 font-label-md text-label-md text-on-surface-variant">¿Cómo querés pagar la seña?</legend>
-              {([
-                { id: "mercadopago", title: "Mercado Pago", hint: "Tarjeta o dinero en cuenta. Se confirma al instante." },
-                { id: "transfer", title: "Transferencia bancaria", hint: "Te pasamos alias y CBU; se confirma cuando llega." },
-              ] as const).map((option) => (
-                <label
-                  key={option.id}
-                  className={cn(
-                    "flex min-h-11 cursor-pointer items-start gap-3 rounded-inner border p-md transition-colors",
-                    chosen === option.id ? "border-primary bg-surface" : "border-border bg-surface hover:bg-surface-muted",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="pay_method"
-                    value={option.id}
-                    checked={chosen === option.id}
-                    onChange={() => setMethod(option.id)}
-                    className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-primary)]"
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-label-lg text-label-lg text-on-surface">{option.title}</span>
-                    <span className="block font-body-sm text-body-sm text-on-surface-variant">{option.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-          )}
-          {paymentMethods.transfer && mpPossible && !transferPossible && (
-            <p className="rounded-inner bg-surface-container-low px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">
-              Para turnos con menos de {TRANSFER_MIN_LEAD_HOURS} h de anticipación la seña se paga con Mercado Pago.
-            </p>
-          )}
-
           <div className="space-y-1">
             <label htmlFor="client_full_name" className="font-label-md text-label-md text-on-surface-variant">Nombre completo</label>
             <Input
@@ -587,39 +521,78 @@ export function BookingFlow({
             <p id="client_phone_hint" className="px-1 font-body-sm text-body-sm text-on-surface-variant">{PHONE_HINT}</p>
           </div>
           <div className="space-y-1">
-            <label htmlFor="client_email" className="font-label-md text-label-md text-on-surface-variant">Email (opcional)</label>
+            <label htmlFor="client_email" className="font-label-md text-label-md text-on-surface-variant">Email</label>
             <Input
               id="client_email"
               type="email"
+              required
               autoComplete="email"
               value={clientData.email}
               onChange={e => setClientData({...clientData, email: e.target.value})}
             />
           </div>
 
+          <p className="flex gap-2 rounded-inner bg-surface-container-low px-3 py-2.5 font-body-sm text-body-sm text-on-surface-variant">
+            <Icon name="lock" className="mt-0.5 shrink-0 text-[16px] text-secondary" />
+            Tus datos solo serán utilizados para enviarte la confirmación, el enlace para gestionar y el recordatorio de tu turno.
+          </p>
+
           {errorMessage && <p role="alert" className="rounded-inner bg-status-alert-bg px-3 py-2 font-body-sm text-body-sm text-status-alert">{errorMessage}</p>}
           <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row">
-            <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => { setErrorMessage(null); setStep(3); }}>Volver</Button>
-            {chosen === "transfer" ? (
-              <Button type="button" onClick={reserveWithTransfer} disabled={loading || !quote} className="w-full min-w-0 sm:flex-1">
-                <Icon name="account_balance" className="text-[18px]" />
-                {loading ? "Reservando..." : "Reservar y ver datos para transferir"}
-              </Button>
-            ) : chosen === "mercadopago" ? (
-              <button type="button" onClick={createPreferenceAndRedirect} disabled={loading || !quote} className="inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-pill bg-primary px-4 font-label-lg text-label-lg text-on-primary disabled:opacity-50 sm:flex-1" data-mp-checkout-cta="checkout-pro" data-mp-marketplace-checkout="checkout-pro">
-                <MercadoPagoLogo className="mr-2 rounded-full bg-white px-1 py-0.5 text-[20px]" />
-                Pagar seña con Mercado Pago
-              </button>
-            ) : (
-              <p className="font-body-sm text-body-sm text-status-alert">Ese horario está muy cerca para pagar la seña por transferencia. Volvé y elegí otro.</p>
-            )}
+            <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => { setErrorMessage(null); setStep(4); }}>Volver</Button>
+            <Button type="button" onClick={continueToPayment} disabled={!quote} className="w-full min-w-0 sm:flex-1">Continuar al pago</Button>
           </div>
         </form>
       </div>
     );
   }
 
-  if (step === 5 && transferPanel) {
+  if (step === 6) {
+    const startsAt = selectedTime ? new Date(selectedTime) : null;
+    const transferPossible = paymentMethods.transfer && startsAt !== null && transferAllowedFor(startsAt);
+    const mpPossible = paymentMethods.mercadopago;
+    const chosen: PayMethod | null = method === "transfer" && transferPossible ? "transfer" : mpPossible ? "mercadopago" : transferPossible ? "transfer" : null;
+    const canChoose = mpPossible && transferPossible;
+    return (
+      <div key={step} className="animate-fade-up space-y-lg">
+        <ProgressHeader current={stepNumber("payment")} total={visibleSteps.length} name="Pago" title="Confirmá y pagá la seña" />
+        <Card hoverLift={false} className="space-y-2 bg-surface-muted p-4">
+          <div className="break-words font-label-lg text-label-lg">{selectedService?.name}</div>
+          <div className="font-body-md text-body-md text-on-surface-variant first-letter:uppercase">{format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })}</div>
+          {quote && <div className="mt-3 space-y-1 border-t border-border pt-3 font-body-md text-body-md">
+            <div className="flex justify-between gap-3"><span>Seña</span><strong className="tabular-nums">{money(quote.appliedAmount)}</strong></div>
+            {chosen !== "transfer" && quote.surchargeAmount > 0 && <div className="flex justify-between gap-3 text-on-surface-variant"><span>Cargo de procesamiento</span><span className="tabular-nums">{money(quote.surchargeAmount)}</span></div>}
+            <div className="flex justify-between gap-3 font-label-lg text-label-lg"><span>Total a pagar ahora</span><span className="tabular-nums">{money(chosen === "transfer" ? quote.appliedAmount : quote.grossAmount)}</span></div>
+          </div>}
+        </Card>
+        {canChoose && <fieldset className="space-y-2">
+          <legend className="mb-1 font-label-md text-label-md text-on-surface-variant">¿Cómo querés pagar la seña?</legend>
+          {([
+            { id: "mercadopago", title: "Mercado Pago", hint: "Tarjeta o dinero en cuenta. Se confirma al instante.", icon: "credit_card" },
+            { id: "transfer", title: "Transferencia bancaria", hint: "Te mostramos alias y CBU; se confirma cuando llega.", icon: "account_balance" },
+          ] as const).map((option) => <label key={option.id} className={cn("flex min-h-14 cursor-pointer items-center gap-3 rounded-inner border-2 p-md transition-colors", chosen === option.id ? "border-primary bg-secondary-soft" : "border-border bg-surface hover:bg-surface-muted")}>
+            <input type="radio" name="pay_method" value={option.id} checked={chosen === option.id} onChange={() => setMethod(option.id)} className="sr-only" />
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-surface text-secondary"><Icon name={option.icon} className="text-[19px]" /></span>
+            <span className="min-w-0"><span className="block font-label-lg text-label-lg text-on-surface">{option.title}</span><span className="block font-body-sm text-body-sm text-on-surface-variant">{option.hint}</span></span>
+          </label>)}
+        </fieldset>}
+        {paymentMethods.transfer && mpPossible && !transferPossible && <p className="rounded-inner bg-surface-container-low px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">Para turnos con menos de {TRANSFER_MIN_LEAD_HOURS} h de anticipación la seña se paga con Mercado Pago.</p>}
+        <div className="space-y-2 rounded-inner border border-secondary/25 bg-secondary-soft p-3 font-body-sm text-body-sm text-on-surface">
+          <p className="flex gap-2"><Icon name="verified_user" className="mt-0.5 shrink-0 text-[17px] text-secondary" /><span>La seña es reembolsable cancelando hasta <strong>{cancellationRefundHours} horas antes del turno</strong>.</span></p>
+          <p className="flex gap-2"><Icon name="link" className="mt-0.5 shrink-0 text-[17px] text-secondary" /><span>Te enviaremos por email un enlace único para consultar, reprogramar o cancelar tu reserva.</span></p>
+        </div>
+        {errorMessage && <p role="alert" className="rounded-inner bg-status-alert-bg px-3 py-2 font-body-sm text-body-sm text-status-alert">{errorMessage}</p>}
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row">
+          <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => setStep(5)}>Volver</Button>
+          {chosen === "transfer" ? <Button type="button" onClick={reserveWithTransfer} disabled={loading || !quote} className="w-full min-w-0 sm:flex-1"><Icon name="account_balance" className="text-[18px]" />{loading ? "Reservando..." : "Reservar y ver datos para transferir"}</Button>
+            : chosen === "mercadopago" ? <button type="button" onClick={createPreferenceAndRedirect} disabled={loading || !quote} className="inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-pill bg-primary px-4 font-label-lg text-label-lg text-on-primary disabled:opacity-50 sm:flex-1" data-mp-checkout-cta="checkout-pro" data-mp-marketplace-checkout="checkout-pro"><MercadoPagoLogo className="mr-2 rounded-full bg-white px-1 py-0.5 text-[20px]" />{loading ? "Abriendo Mercado Pago..." : "Pagar seña con Mercado Pago"}</button>
+            : <p className="font-body-sm text-body-sm text-status-alert">Ese horario está muy cerca para pagar la seña por transferencia. Volvé y elegí otro.</p>}
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 7 && transferPanel) {
     return <TransferInstructions key={step} panel={transferPanel} />;
   }
 

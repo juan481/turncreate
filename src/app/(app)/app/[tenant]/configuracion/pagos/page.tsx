@@ -9,6 +9,8 @@ import { ScreenIntro, SettingsSection } from "../settings-ui";
 import { TransferSettingsForm } from "../transfer-settings-form";
 import { isMpResult } from "./mp-result";
 import { MpResultNotice } from "./mp-result-notice";
+import { CancellationPolicyForm } from "../cancellation-policy-form";
+import { DEFAULT_CANCELLATION_REFUND_HOURS, normalizeCancellationRefundHours } from "@/domain/booking/cancellation-policy";
 
 /**
  * Pagos y señas: cuánto se pide de seña y con qué la paga la clienta
@@ -46,6 +48,13 @@ export default async function ConfiguracionPagosPage({ params, searchParams }: P
         <DepositSettingsForm
           tenantSlug={tenant.slug}
           current={{ depositType: tenant.settings.depositType, depositValue: tenant.settings.depositValue, depositMin: tenant.settings.depositMin }}
+        />
+      </SettingsSection>
+
+      <SettingsSection icon={<Icon name="event_busy" />} title="Cancelaciones y devolución" description="Definí hasta cuándo corresponde devolver la seña.">
+        <CancellationPolicyForm
+          tenantSlug={tenant.slug}
+          hours={normalizeCancellationRefundHours(tenant.settings.cancellationRefundHours ?? DEFAULT_CANCELLATION_REFUND_HOURS)}
         />
       </SettingsSection>
 

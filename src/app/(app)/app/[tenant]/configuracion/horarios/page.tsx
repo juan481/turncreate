@@ -3,6 +3,7 @@ import { planFeatures } from "@/lib/plans";
 import { Icon } from "@/components/ui/icon";
 import { BusinessHoursForm } from "../business-hours-form";
 import { ScreenIntro, SettingsSection } from "../settings-ui";
+import { BookingRulesForm } from "../booking-rules-form";
 
 export default async function ConfiguracionHorariosPage({ params }: PageProps<"/app/[tenant]/configuracion/horarios">) {
   const { tenant: tenantSlug } = await params;
@@ -20,6 +21,17 @@ export default async function ConfiguracionHorariosPage({ params }: PageProps<"/
         <BusinessHoursForm
           tenantSlug={tenant.slug}
           initialHours={tenant.businessHours.map((hour) => ({ weekday: hour.weekday, opens_at: hour.opensAt, closes_at: hour.closesAt }))}
+        />
+      </SettingsSection>
+      <SettingsSection
+        icon={<Icon name="calendar_clock" />}
+        title="Intervalos y anticipación"
+        description="Cómo se distribuyen los horarios que ve la clienta al reservar."
+      >
+        <BookingRulesForm
+          tenantSlug={tenant.slug}
+          slotIntervalMin={tenant.settings.slotIntervalMin ?? 15}
+          minNoticeMin={tenant.settings.minNoticeMin ?? 60}
         />
       </SettingsSection>
     </div>

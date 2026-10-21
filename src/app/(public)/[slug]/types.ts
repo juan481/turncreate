@@ -14,6 +14,9 @@ export type PublicTenant = {
   payment_methods: { mercadopago: boolean; transfer: boolean };
   books_by_staff: boolean;
   max_booking_days: number;
+  cancellation_refund_hours: number;
+  slot_interval_min: number;
+  bookable_weekdays: number[];
   description: string | null;
   address: string | null;
   instagram_url: string | null;
@@ -48,6 +51,11 @@ export type PublicHold = {
   starts_at: string;
   ends_at: string;
   expires_at: string;
+};
+
+export type PublicSlot = {
+  starts_at: string;
+  available: boolean;
 };
 
 export type PublicAppointment = {

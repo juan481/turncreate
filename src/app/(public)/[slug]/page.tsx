@@ -20,7 +20,10 @@ export default async function PublicBookingPage({
 
   return (
     <div className="space-y-lg">
-      {(tenant.description || tenant.address) && <div className="min-w-0 space-y-1 px-1"><h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Reservá tu turno</h1>{tenant.description && <p className="break-words font-body-md text-body-md text-on-surface-variant">{tenant.description}</p>}{tenant.address && <p className="flex items-start gap-1.5 font-body-sm text-body-sm text-on-surface-variant"><Icon name="location_on" className="mt-px shrink-0 text-[16px]" /><span className="min-w-0 break-words">{tenant.address}</span></p>}</div>}
+      <div className="min-w-0 space-y-1 px-1">
+        <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Reservá tu turno online</h1>
+        <p className="break-words font-body-md text-body-md text-on-surface-variant">{tenant.description || "Elegí el servicio, la fecha y el horario que prefieras. Confirmás la reserva pagando la seña al final."}</p>
+      </div>
       <BookingFlow
         tenantId={tenant.id}
         slug={slug}
@@ -28,6 +31,8 @@ export default async function PublicBookingPage({
         booksByStaff={tenant.books_by_staff}
         maxBookingDays={tenant.max_booking_days}
         paymentMethods={tenant.payment_methods}
+        cancellationRefundHours={tenant.cancellation_refund_hours}
+        bookableWeekdays={tenant.bookable_weekdays}
       />
     </div>
   );

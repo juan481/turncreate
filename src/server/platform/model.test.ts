@@ -86,8 +86,8 @@ describe("búsqueda y totales", () => {
   });
 
   it("suma totales; un turnero prendido en un local apagado no cuenta", () => {
-    expect(summarizeTenantRows(rows)).toEqual({ total: 3, active: 1, trial: 1, suspended: 1, bookingOn: 2, appointments30d: 13 });
-    expect(summarizeTenantRows([])).toEqual({ total: 0, active: 0, trial: 0, suspended: 0, bookingOn: 0, appointments30d: 0 });
+    expect(summarizeTenantRows(rows)).toEqual({ total: 3, active: 1, trial: 1, suspended: 1, demo: 0, bookingOn: 2, appointments30d: 13 });
+    expect(summarizeTenantRows([])).toEqual({ total: 0, active: 0, trial: 0, suspended: 0, demo: 0, bookingOn: 0, appointments30d: 0 });
   });
 });
 

@@ -4,6 +4,7 @@ import type { PlanId } from "@/lib/plans";
 import type { Gender } from "@/lib/gender";
 import { sameHours, type FlatHours } from "@/components/ui/hours-editor-model";
 import { billingAllowsWrites } from "@/lib/billing";
+import { DEFAULT_CANCELLATION_REFUND_HOURS } from "@/domain/booking/cancellation-policy";
 import { getBillingConfig } from "@/server/billing/config";
 import { initialBillingFor, readTenantBilling } from "@/server/billing/tenant-billing";
 import { firebaseAdmin } from "./admin";
@@ -56,6 +57,7 @@ export type TenantRecord = {
     };
     slotIntervalMin: number;
     minNoticeMin: number;
+    cancellationRefundHours?: number;
     booksByStaff: boolean;
     depositType: "none" | "fixed" | "percent";
     depositValue: number;
@@ -121,6 +123,8 @@ export async function createTenantForOwner(input: {
   logoUrl?: string | null;
   plan?: PlanId;
   teamMode?: "solo" | "team";
+  slotIntervalMin?: number;
+  minNoticeMin?: number;
   owner?: OwnerProfileInput;
 }) {
   const { db } = firebaseAdmin();
@@ -148,8 +152,9 @@ export async function createTenantForOwner(input: {
     address: input.address?.trim() || null,
     logoUrl: input.logoUrl ?? null,
     settings: {
-      slotIntervalMin: 15,
-      minNoticeMin: 60,
+      slotIntervalMin: input.slotIntervalMin ?? 15,
+      minNoticeMin: input.minNoticeMin ?? 60,
+      cancellationRefundHours: DEFAULT_CANCELLATION_REFUND_HOURS,
       booksByStaff: true,
       depositType: "none",
       depositValue: 0,
