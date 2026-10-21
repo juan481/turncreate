@@ -137,6 +137,29 @@ export async function MoneyKpis({ data }: { data: ReportesData }) {
           hint="neto menos egresos"
         />
       </div>
+      <Card hoverLift={false} className="space-y-3 p-lg">
+        <div>
+          <h3 className="font-headline-sm text-headline-sm text-on-surface">Qué se cobró</h3>
+          <p className="font-body-sm text-body-sm text-on-surface-variant">Separado por seña, pago total y saldo. Un pago mixto suma cada parte en su medio, sin duplicar el turno.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { key: "deposit", label: "Señas", icon: "savings" },
+            { key: "full", label: "Pagos totales", icon: "check_circle" },
+            { key: "balance", label: "Saldos", icon: "payments" },
+            { key: "adjustment", label: "Productos / ajustes", icon: "receipt_long" },
+          ].map((item) => {
+            const totals = payments.byKind[item.key as keyof typeof payments.byKind];
+            return (
+              <div key={item.key} className="rounded-inner bg-surface-container-low p-3">
+                <p className="flex items-center gap-1.5 font-label-sm text-label-sm text-on-surface-variant"><Icon name={item.icon} className="text-[15px] text-secondary" />{item.label}</p>
+                <p className="mt-1 font-label-lg text-label-lg tabular-nums text-on-surface">{money(totals.gross)}</p>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">{totals.count} cobro{totals.count === 1 ? "" : "s"}</p>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
     </section>
   );
 }

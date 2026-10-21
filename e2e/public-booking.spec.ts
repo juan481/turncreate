@@ -34,9 +34,10 @@ async function pickSlot(page: Page, dayOffset: number) {
   // Paso 2: fecha. El calendario expone el nombre completo del día a
   // lectores de pantalla (p. ej. "miércoles 21 de octubre").
   const dayButton = page.getByRole("button", { name: accessibleDateName(dayOffset), exact: true });
+  if (await dayButton.count() === 0) await page.getByRole("button", { name: "Ver mes siguiente" }).click();
   await expect(dayButton).toBeVisible({ timeout: 15_000 });
   await dayButton.click();
-  await page.getByRole("button", { name: "Ver horarios" }).click();
+  await expect(page.getByRole("heading", { name: "Elegí un horario" })).toBeVisible();
 
   // Paso 3: horario. Los botones ocupados agregan ", ocupado" al nombre,
   // por eso este selector toma solamente horarios disponibles.
@@ -64,6 +65,7 @@ test("reserva pública completa: elige turno, paga la seña (MP stub) y llega al
   await page.getByLabel("Nombre completo").fill("Cliente E2E");
   await phone.fill("11 2233 4455");
   await page.getByLabel("Email").fill("cliente-e2e@turncreate.test");
+  await page.getByLabel("Edad").fill("34");
   await page.getByRole("button", { name: "Continuar al pago" }).click();
   await page.getByRole("button", { name: "Pagar seña con Mercado Pago" }).click();
 
@@ -93,6 +95,7 @@ test("reserva con seña por transferencia: datos para transferir, Mi turno y la 
   // Un WhatsApp distinto por proyecto: hay un tope de transferencias pendientes por teléfono.
   await page.getByLabel("Teléfono (WhatsApp)").fill(`11 3000 000${index}`);
   await page.getByLabel("Email").fill(`transferencia-${index}@turncreate.test`);
+  await page.getByLabel("Edad").fill("29");
   await page.getByRole("button", { name: "Continuar al pago" }).click();
   const transferOption = page.getByRole("radio", { name: /Transferencia bancaria/ });
   test.skip((await transferOption.count()) === 0, "El seed E2E no tiene la transferencia habilitada");

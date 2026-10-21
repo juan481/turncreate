@@ -35,9 +35,12 @@ export type NormalizedPayment = {
 };
 
 export type MethodTotals = { gross: number; net: number; fees: number; count: number };
+export const PAYMENT_KINDS = ["deposit", "full", "balance", "adjustment", "refund"] as const;
+export type PaymentKindKey = (typeof PAYMENT_KINDS)[number] | "other";
 export type RefundDueTotals = { gross: number; net: number; count: number };
 export type PaymentBreakdown = PaymentSummary & {
   byMethod: Record<MethodKey, MethodTotals>;
+  byKind: Record<PaymentKindKey, MethodTotals>;
   feeUnknownCount: number;
   /**
    * "A devolver": pagos aprobados de turnos cancelados con la seña marcada
@@ -155,13 +158,22 @@ export function normalizePayment(id: string, data: Record<string, unknown>): Nor
     surcharge,
     net,
     paidAt: toDate(data.paidAt) ?? toDate(data.createdAt),
-    feeUnknown: method === "mercadopago" && (data.feeAmount == null || data.source === "migration"),
+    feeUnknown: method === "mercadopago" && (data.feeUnknown === true || data.feeAmount == null || data.source === "migration"),
   };
 }
 
 function emptyMethodTotals(): Record<MethodKey, MethodTotals> {
   const keys: MethodKey[] = [...PAYMENT_METHODS, "other"];
   return Object.fromEntries(keys.map((key) => [key, { gross: 0, net: 0, fees: 0, count: 0 }])) as Record<MethodKey, MethodTotals>;
+}
+
+function emptyKindTotals(): Record<PaymentKindKey, MethodTotals> {
+  const keys: PaymentKindKey[] = [...PAYMENT_KINDS, "other"];
+  return Object.fromEntries(keys.map((key) => [key, { gross: 0, net: 0, fees: 0, count: 0 }])) as Record<PaymentKindKey, MethodTotals>;
+}
+
+function kindKey(value: string): PaymentKindKey {
+  return (PAYMENT_KINDS as readonly string[]).includes(value) ? value as PaymentKindKey : "other";
 }
 
 /**
@@ -171,7 +183,7 @@ function emptyMethodTotals(): Record<MethodKey, MethodTotals> {
 export function summarizePayments(payments: Iterable<NormalizedPayment>, refundDueAppointmentIds: ReadonlySet<string> = new Set()): PaymentBreakdown {
   const result: PaymentBreakdown = {
     gross: 0, applied: 0, fees: 0, surcharges: 0, net: 0, count: 0,
-    byMethod: emptyMethodTotals(), feeUnknownCount: 0, refundDue: { gross: 0, net: 0, count: 0 },
+    byMethod: emptyMethodTotals(), byKind: emptyKindTotals(), feeUnknownCount: 0, refundDue: { gross: 0, net: 0, count: 0 },
   };
   for (const payment of payments) {
     if (payment.appointmentId && refundDueAppointmentIds.has(payment.appointmentId)) {
@@ -192,6 +204,11 @@ export function summarizePayments(payments: Iterable<NormalizedPayment>, refundD
     bucket.net += payment.net;
     bucket.fees += payment.fee;
     bucket.count += 1;
+    const kindBucket = result.byKind[kindKey(payment.kind)];
+    kindBucket.gross += payment.gross;
+    kindBucket.net += payment.net;
+    kindBucket.fees += payment.fee;
+    kindBucket.count += 1;
   }
   result.gross = roundMoney(result.gross);
   result.applied = roundMoney(result.applied);
@@ -201,6 +218,11 @@ export function summarizePayments(payments: Iterable<NormalizedPayment>, refundD
   result.refundDue.gross = roundMoney(result.refundDue.gross);
   result.refundDue.net = roundMoney(result.refundDue.net);
   for (const bucket of Object.values(result.byMethod)) {
+    bucket.gross = roundMoney(bucket.gross);
+    bucket.net = roundMoney(bucket.net);
+    bucket.fees = roundMoney(bucket.fees);
+  }
+  for (const bucket of Object.values(result.byKind)) {
     bucket.gross = roundMoney(bucket.gross);
     bucket.net = roundMoney(bucket.net);
     bucket.fees = roundMoney(bucket.fees);

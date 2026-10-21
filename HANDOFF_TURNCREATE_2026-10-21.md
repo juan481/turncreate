@@ -240,3 +240,78 @@ No requiere migración: el fallback visual cubre documentos viejos hasta que el 
 - Mantener los IDs internos de plan aunque cambien sus nombres comerciales.
 - Si se agregan paletas, validar contraste AA de texto blanco sobre `primary` y mantener todos los tokens de `brandThemeStyle`.
 - El componente `Reveal` usa un umbral bajo a propósito: un valor alto vuelve invisibles las secciones más altas que el viewport.
+
+## Tercera entrega — turnero, marca, alertas y caja (2026-10-21)
+
+Esta sección reemplaza las descripciones anteriores del calendario de dos meses y de las paletas cerradas.
+
+### Reserva pública
+
+- El calendario muestra un solo mes. Las flechas permiten alternar únicamente entre el actual y el siguiente.
+- Elegir una fecha avanza inmediatamente a horarios; ya no existe el clic redundante en `Ver horarios`.
+- Fecha y horario conservan acciones sticky dentro del viewport mobile. Los horarios ocupados siguen visibles, tachados, deshabilitados y rotulados.
+- Nombre completo, WhatsApp, email y edad son obligatorios y se validan también en servidor. La edad se conserva en el snapshot del turno y actualiza el año de nacimiento aproximado de la ficha.
+- La pantalla de datos muestra servicio, fecha, hora, precio total y seña. La pantalla de pago separa seña, recargo (si corresponde) y `Total a pagar ahora`.
+- La confirmación final oculta la introducción genérica, indica revisar email o WhatsApp según configuración y mantiene el enlace `Ver mi turno`.
+- Los indicadores de paso, botones, selección de fecha/hora y confirmación usan los tokens del color del comercio.
+
+### Color de marca
+
+- `tenant.brandColor` acepta los IDs históricos (`iris`, `rose`, etc.) o un hexadecimal `#rrggbb`.
+- El selector nativo permite cualquier color, más campo hexadecimal, presets y preview en vivo.
+- El servidor rechaza colores con contraste menor a 4.5:1 contra blanco. No alcanza con bloquear solo blanco.
+- `brandThemeStyle` deriva hover, light, deep, glow y soft; no requiere migración y mantiene compatibilidad con las paletas existentes.
+
+### Alertas administrativas
+
+- El layout consulta turnos creados en las últimas 48 horas y los muestra en la campana con enlace directo.
+- Un `pending_payment` con `awaitingTransfer` se muestra como `Transferencia por confirmar`; los demás, como `Nuevo turno`.
+- El cliente consulta `/api/app/[tenant]/notifications` cada 20 segundos. La ruta exige sesión y acceso de lectura al tenant.
+- Al detectar un ID nuevo reproduce un doble tono suave. Por restricciones del navegador, el sonido se habilita después de la primera interacción con la página; la campana muestra ese estado.
+- Desktop y mobile deduplican el sonido con una clave local por tenant.
+
+### Caja, cobros y reportes
+
+- `Cobrar` permite un importe parcial del servicio o el saldo completo.
+- Se puede dividir el total entre dos medios distintos: efectivo, transferencia, Posnet o Mercado Pago ya acreditado.
+- El saldo del turno descuenta solo el importe aplicado al servicio. Los productos no alteran ese saldo.
+- Los documentos de pago separan servicio y producto cuando ambos se cobran juntos; todos comparten `paymentGroupId`. Así los totales por método no se duplican y `Señas`, `Pagos totales`, `Saldos` y `Productos / ajustes` son exactos.
+- Un cobro manual marcado como Mercado Pago lleva `feeUnknown: true`: hasta reconciliar el cobro real no inventa una comisión.
+- Caja y Reportes muestran el desglose por tipo de cobro; el cobro mixto suma cada porción en su medio.
+- Los movimientos sueltos se registran como `Gasto`, `Retiro` o `Ingreso`; el servidor deriva entrada/salida desde la categoría y no confía en un `type` enviado por el cliente.
+- La configuración existente de comisión sigue siendo la fuente de verdad: `absorbed` (la absorbe el comercio) o `passed_through` (se agrega al total que paga el cliente).
+
+Archivos centrales de esta entrega:
+
+- `src/app/(public)/[slug]/booking-flow.tsx`
+- `src/app/(public)/[slug]/public-month-calendar.tsx`
+- `src/lib/brand-theme.ts`
+- `src/app/(app)/app/[tenant]/notifications-button.tsx`
+- `src/server/firebase/app-notifications.ts`
+- `src/app/(app)/app/[tenant]/caja/actions.ts`
+- `src/domain/money/split-payment.ts`
+- `src/server/firebase/stats-model.ts`
+
+### Marcas e integraciones
+
+- El logo dibujado de Mercado Pago fue reemplazado por el SVG oficial entregado en `public/brands/mercado-pago.svg`.
+- La landing usa el logo ARCA entregado en `public/brands/arca.jpeg`.
+- ARCA continúa rotulado `Próximamente · beta`; no se anuncia emisión fiscal activa.
+- Revisión Mercado Pago local: firma HMAC con ventana temporal, `x-request-id`, idempotencia, `external_reference`, OAuth de un solo uso, tokens cifrados, HTTPS obligatorio y webhooks server-side están presentes. No se encontraron bloqueantes de severidad alta. Queda pendiente una prueba real con usuarios/cuenta de prueba externa y la reconciliación de devoluciones `in_process` ya registrada como límite conocido.
+
+### QA de esta entrega
+
+- `npm run typecheck`: aprobado.
+- `npm test`: 29 archivos / 291 tests aprobados.
+- `npx eslint src e2e`: aprobado.
+- `npm run build`: aprobado.
+- `npx playwright test e2e/public-booking.spec.ts --project=pixel-7`: 7/7 aprobado contra Firebase Emulator y Mercado Pago stub.
+- `npm run lint` global detecta únicamente archivos generados y scripts dentro del worktree ajeno no versionado `.claude/worktrees/`; el código versionable se validó por separado y esa carpeta no debe agregarse al commit.
+
+### Indicaciones adicionales para Claude
+
+- No volver a juntar producto y servicio en un único pago categorizado como seña/saldo: rompe el desglose.
+- `Mercado Pago (ya acreditado)` en caja es registro manual, no inicia Checkout Pro.
+- No eliminar `feeUnknown`; evita reportar un neto ficticio.
+- Si se cambia el polling, conservar autorización por tenant y deduplicación de sonidos.
+- La notificación no usa push en segundo plano: funciona mientras el panel está abierto. Web Push sería una fase distinta.

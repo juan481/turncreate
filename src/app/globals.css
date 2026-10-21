@@ -428,6 +428,12 @@ body {
   overflow-x: clip;
 }
 
+/* En la confirmación por transferencia queda solo el mensaje útil: el
+   encabezado introductorio del turnero ya no compite con el comprobante. */
+.booking-shell:has([data-booking-confirmation]) .booking-intro {
+  display: none;
+}
+
 /*
   Safe-area insets del dispositivo (notch, cámara, home indicator) --
   existen porque el layout raíz declara `viewportFit: "cover"`. Se

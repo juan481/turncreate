@@ -5,7 +5,7 @@ import type { Gender } from "@/lib/gender";
 import { sameHours, type FlatHours } from "@/components/ui/hours-editor-model";
 import { billingAllowsWrites } from "@/lib/billing";
 import { DEFAULT_CANCELLATION_REFUND_HOURS } from "@/domain/booking/cancellation-policy";
-import type { BrandColorId } from "@/lib/brand-theme";
+import type { BrandColorValue } from "@/lib/brand-theme";
 import { getBillingConfig } from "@/server/billing/config";
 import { initialBillingFor, readTenantBilling } from "@/server/billing/tenant-billing";
 import { firebaseAdmin } from "./admin";
@@ -44,7 +44,7 @@ export type TenantRecord = {
   /** Bajada corta que se muestra arriba del turnero público. */
   description?: string | null;
   /** Paleta visual del panel y del turnero público. Sin dato = iris. */
-  brandColor?: BrandColorId;
+  brandColor?: BrandColorValue;
   /**
    * Suscripción del local a TurnCreate (mapa con fechas como Timestamp).
    * Leer SIEMPRE con readTenantBilling / tenantBillingAccess (src/server/billing).

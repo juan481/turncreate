@@ -9,6 +9,7 @@ import {
   BRAND_PALETTES,
   brandThemeStyle,
   type BrandColorId,
+  type BrandColorValue,
 } from "@/lib/brand-theme";
 import { cn } from "@/lib/utils";
 
@@ -191,7 +192,7 @@ export function BookingJourney() {
               <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold transition-all duration-300", active === index ? "bg-primary text-on-primary shadow-brand" : "bg-surface-container text-on-surface-variant group-hover:bg-secondary-soft group-hover:text-primary")}>{index + 1}</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-semibold text-on-surface">{step.title}</span>
-                <span className="mt-0.5 block text-[12px] text-on-surface-variant">{index === 0 ? "Servicio y profesional" : index === 1 ? "Dos meses y grilla amplia" : index === 2 ? "Solo lo indispensable" : index === 3 ? "Mercado Pago o transferencia" : "Confirmación y link de gestión"}</span>
+                <span className="mt-0.5 block text-[12px] text-on-surface-variant">{index === 0 ? "Servicio y profesional" : index === 1 ? "Un mes, navegación simple y horarios visibles" : index === 2 ? "Solo lo indispensable" : index === 3 ? "Mercado Pago o transferencia" : "Confirmación y link de gestión"}</span>
               </span>
               <Icon name={step.icon} className={cn("text-[18px] transition-colors", active === index ? "text-primary" : "text-outline-variant group-hover:text-primary")} />
             </button>
@@ -219,12 +220,12 @@ export function BookingJourney() {
   );
 }
 
-function ColorPhone({ color, selected = false }: { color: BrandColorId; selected?: boolean }) {
-  const palette = BRAND_PALETTES[color];
+function ColorPhone({ color, selected = false }: { color: BrandColorValue; selected?: boolean }) {
+  const palette = BRAND_PALETTES[color as BrandColorId];
   return (
     <button
       type="button"
-      aria-label={`Vista previa ${palette.label}`}
+      aria-label={`Vista previa ${palette?.label ?? color}`}
       className={cn("group min-w-[158px] flex-1 rounded-[1.65rem] border bg-white p-2.5 text-left shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-card-hover", selected ? "border-primary ring-2 ring-primary/15" : "border-border")}
       style={brandThemeStyle(color)}
     >
@@ -242,12 +243,17 @@ function ColorPhone({ color, selected = false }: { color: BrandColorId; selected
 }
 
 export function BrandColorShowcase() {
-  const [color, setColor] = useState<BrandColorId>("iris");
+  const [color, setColor] = useState<BrandColorValue>("iris");
+  const custom = !BRAND_COLOR_IDS.includes(color as BrandColorId);
 
   return (
     <div className="grid min-w-0 items-center gap-12 lg:grid-cols-[0.7fr_1.3fr] lg:gap-16">
       <div className="min-w-0">
         <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Color de ejemplo">
+          <label className="group flex min-h-12 cursor-pointer items-center gap-2 rounded-pill border border-border bg-surface px-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-card">
+            <input type="color" value={custom ? color : BRAND_PALETTES[color as BrandColorId].primary} onChange={(event) => setColor(event.target.value as BrandColorValue)} className="size-7 cursor-pointer rounded-full border-0 bg-transparent p-0" aria-label="Probar cualquier color" />
+            <span className="text-[12px] font-semibold text-on-surface">Tu color</span>
+          </label>
           {BRAND_COLOR_IDS.map((id) => {
             const palette = BRAND_PALETTES[id];
             const isSelected = color === id;
@@ -269,12 +275,13 @@ export function BrandColorShowcase() {
           })}
         </div>
         <p className="mt-5 max-w-[28rem] text-[14px] leading-7 text-on-surface-variant">
-          Elegís una paleta cuidada y accesible. El turnero, sus botones, estados activos y focos adoptan tu color sin perder legibilidad.
+          Elegís cualquier color de marca con un selector completo. TurnCreate controla el contraste y lo aplica a botones, pasos, selecciones y focos en todo el sistema.
         </p>
       </div>
 
       <div className="min-w-0 overflow-x-auto pb-5 pt-3 [scrollbar-width:none]">
         <div className="flex min-w-max gap-4 px-1">
+          {custom && <ColorPhone color={color} selected />}
           {BRAND_COLOR_IDS.map((id) => (
             <div key={id} onClick={() => setColor(id)}><ColorPhone color={id} selected={color === id} /></div>
           ))}

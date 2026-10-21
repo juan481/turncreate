@@ -96,6 +96,20 @@ for (const processTz of ["UTC", "Asia/Tokyo", AR]) {
 }
 
 describe("Cobrado: bruto de pagos aprobados", () => {
+  it("separa señas, pagos totales, saldos y ajustes sin alterar el total", () => {
+    const breakdown = summarizePayments([
+      payment("deposit", { kind: "deposit", grossAmount: 3000 }),
+      payment("full", { kind: "full", grossAmount: 10000 }),
+      payment("balance", { kind: "balance", grossAmount: 7000 }),
+      payment("product", { kind: "adjustment", grossAmount: 1500, appliedAmount: 0 }),
+    ]);
+    expect(breakdown.gross).toBe(21500);
+    expect(breakdown.byKind.deposit.gross).toBe(3000);
+    expect(breakdown.byKind.full.gross).toBe(10000);
+    expect(breakdown.byKind.balance.gross).toBe(7000);
+    expect(breakdown.byKind.adjustment.gross).toBe(1500);
+  });
+
   it("usa grossAmount (con recargo y productos), no appliedAmount", () => {
     const breakdown = summarizePayments([
       payment("mp", { method: "mercadopago", grossAmount: 1060, appliedAmount: 1000, surchargeAmount: 60, feeAmount: 60, netAmount: 1000, paidAt: new Date() }),

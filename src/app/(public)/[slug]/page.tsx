@@ -19,8 +19,8 @@ export default async function PublicBookingPage({
   }
 
   return (
-    <div className="space-y-lg">
-      <div className="min-w-0 space-y-1 px-1">
+    <div className="booking-shell space-y-lg">
+      <div className="booking-intro min-w-0 space-y-1 px-1">
         <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Reservá tu turno online</h1>
         <p className="break-words font-body-md text-body-md text-on-surface-variant">{tenant.description || "Elegí el servicio, la fecha y el horario que prefieras. Confirmás la reserva pagando la seña al final."}</p>
       </div>

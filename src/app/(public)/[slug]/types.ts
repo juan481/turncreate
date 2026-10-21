@@ -21,7 +21,7 @@ export type PublicTenant = {
   address: string | null;
   instagram_url: string | null;
   whatsapp_number: string | null;
-  brand_color: import("@/lib/brand-theme").BrandColorId;
+  brand_color: import("@/lib/brand-theme").BrandColorValue;
 };
 
 export type PublicService = {
@@ -82,6 +82,7 @@ export type ClientFormData = {
   full_name: string;
   phone_e164: string;
   email: string;
+  age: string;
 };
 
 /**

@@ -30,7 +30,7 @@ export default async function CheckoutResultPage({ params, searchParams }: PageP
           </h1>
           <p className="mt-2 font-body-md text-body-md text-on-surface-variant">
             {approved
-              ? `La seña de ${attempt.serviceName} fue acreditada y el horario quedó reservado.`
+              ? "Revisá tu email (o WhatsApp, si el local lo tiene configurado) para ver el comprobante de tu reserva."
               : pending
                 ? "No cierres esta pantalla. La confirmación suele tardar unos segundos."
                 : refundRequired

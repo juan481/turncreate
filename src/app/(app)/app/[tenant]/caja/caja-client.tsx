@@ -31,6 +31,7 @@ export type AppointmentDue = {
   startsAt: string;
   total: number;
   balance: number;
+  paid: number;
   /** Seña pedida (turnos que esperan transferencia). */
   depositDue?: number;
   clientName: string;
@@ -40,7 +41,7 @@ export type AppointmentDue = {
 /** Turno detrás del "A devolver" de hoy (para abrirlo y marcar la seña devuelta). */
 export type RefundDueItem = { id: string; clientName: string; href: string };
 type Product = { id: string; name: string; price: number };
-type Movement = { id: string; type: string; amount: number; reason: string; createdAt: string };
+type Movement = { id: string; type: string; category: string; amount: number; reason: string; createdAt: string };
 type LastClosedSession = {
   closedAt: string;
   expectedAmount: number;
@@ -248,14 +249,25 @@ function ChargeForm({
   );
   const [productId, setProductId] = useState("");
   const product = products.find((p) => p.id === productId);
-  const total = appointment.balance + (product?.price ?? 0);
+  const [serviceAmount, setServiceAmount] = useState(String(appointment.balance));
+  const [method, setMethod] = useState("cash");
+  const [mixed, setMixed] = useState(false);
+  const [secondaryMethod, setSecondaryMethod] = useState("mercadopago");
+  const [secondaryAmount, setSecondaryAmount] = useState("");
+  const serviceAmountNumber = Number(serviceAmount);
+  const total = (Number.isFinite(serviceAmountNumber) ? serviceAmountNumber : 0) + (product?.price ?? 0);
+  const secondaryAmountNumber = Number(secondaryAmount);
+  const mixedValid = !mixed || (secondaryMethod !== method && secondaryAmountNumber > 0 && secondaryAmountNumber < total);
   const fieldId = useId();
 
   return (
     <form action={formAction} className="space-y-3 rounded-inner bg-surface-container-low p-3">
       <input type="hidden" name="appointmentId" value={appointment.id} />
       <input type="hidden" name="sessionId" value={sessionId} />
-      <input type="hidden" name="amount" value={appointment.balance} />
+      <input type="hidden" name="amount" value={serviceAmount} />
+      <input type="hidden" name="method" value={method} />
+      <input type="hidden" name="secondaryMethod" value={mixed ? secondaryMethod : ""} />
+      <input type="hidden" name="secondaryAmount" value={mixed ? secondaryAmount : ""} />
       {product && (
         <>
           <input type="hidden" name="productId" value={product.id} />
@@ -266,11 +278,17 @@ function ChargeForm({
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="min-w-0 space-y-1">
-          <label htmlFor={`${fieldId}-method`} className="font-label-sm text-label-sm text-on-surface-variant">Método</label>
-          <select id={`${fieldId}-method`} name="method" className={SELECT_CLASS}>
+          <label htmlFor={`${fieldId}-amount`} className="font-label-sm text-label-sm text-on-surface-variant">Monto del servicio</label>
+          <Input id={`${fieldId}-amount`} type="number" inputMode="decimal" min="0.01" max={appointment.balance} step="0.01" value={serviceAmount} onChange={(event) => setServiceAmount(event.target.value)} required />
+          <p className="font-body-sm text-body-sm text-on-surface-variant">Podés cobrar una parte o el saldo completo de {money(appointment.balance)}.</p>
+        </div>
+        <div className="min-w-0 space-y-1">
+          <label htmlFor={`${fieldId}-method`} className="font-label-sm text-label-sm text-on-surface-variant">Primer medio</label>
+          <select id={`${fieldId}-method`} value={method} onChange={(event) => setMethod(event.target.value)} className={SELECT_CLASS}>
             <option value="cash">Efectivo</option>
             <option value="card_posnet">Posnet</option>
             <option value="transfer">Transferencia</option>
+            <option value="mercadopago">Mercado Pago (ya acreditado)</option>
           </select>
         </div>
         {products.length > 0 && (
@@ -288,13 +306,37 @@ function ChargeForm({
         )}
       </div>
 
+      <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-inner border border-border bg-surface px-3 py-2">
+        <span className="min-w-0"><span className="block font-label-md text-label-md text-on-surface">Pago mixto</span><span className="block font-body-sm text-body-sm text-on-surface-variant">Dividí el cobro entre dos medios.</span></span>
+        <input type="checkbox" checked={mixed} onChange={(event) => { setMixed(event.target.checked); if (event.target.checked && !secondaryAmount) setSecondaryAmount(String(Math.max(1, Math.round(total / 2)))); }} className="size-5 accent-[var(--color-primary)]" />
+      </label>
+
+      {mixed && (
+        <div className="grid grid-cols-1 gap-2 rounded-inner border border-secondary/25 bg-secondary-soft p-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label htmlFor={`${fieldId}-secondary-method`} className="font-label-sm text-label-sm text-on-surface-variant">Segundo medio</label>
+            <select id={`${fieldId}-secondary-method`} value={secondaryMethod} onChange={(event) => setSecondaryMethod(event.target.value)} className={SELECT_CLASS}>
+              <option value="mercadopago" disabled={method === "mercadopago"}>Mercado Pago (ya acreditado)</option>
+              <option value="cash" disabled={method === "cash"}>Efectivo</option>
+              <option value="card_posnet" disabled={method === "card_posnet"}>Posnet</option>
+              <option value="transfer" disabled={method === "transfer"}>Transferencia</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label htmlFor={`${fieldId}-secondary-amount`} className="font-label-sm text-label-sm text-on-surface-variant">Monto en el segundo medio</label>
+            <Input id={`${fieldId}-secondary-amount`} type="number" inputMode="decimal" min="0.01" max={Math.max(0, total - 0.01)} step="0.01" value={secondaryAmount} onChange={(event) => setSecondaryAmount(event.target.value)} required />
+          </div>
+          <p className="font-body-sm text-body-sm text-on-surface-variant sm:col-span-2">{money(Math.max(0, total - (Number.isFinite(secondaryAmountNumber) ? secondaryAmountNumber : 0)))} en {METHOD_LABEL[method]?.label ?? method} + {money(Number.isFinite(secondaryAmountNumber) ? secondaryAmountNumber : 0)} en {METHOD_LABEL[secondaryMethod]?.label ?? secondaryMethod}.</p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="font-label-lg text-label-lg tabular-nums text-on-surface">Total a cobrar: {money(total)}</span>
         <div className="flex gap-2">
           <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={onDone}>
             Cancelar
           </Button>
-          <Button type="submit" className="flex-1 sm:flex-none" disabled={pending}>
+          <Button type="submit" className="flex-1 sm:flex-none" disabled={pending || !(serviceAmountNumber > 0) || serviceAmountNumber > appointment.balance || !mixedValid}>
             {pending ? "Cobrando…" : "Confirmar cobro"}
           </Button>
         </div>
@@ -340,6 +382,7 @@ function ChargeRow({
             {appointment.serviceNames}
             {showStaff && appointment.staffName ? ` · ${appointment.staffName}` : ""}
           </p>
+          <p className="font-label-sm text-label-sm tabular-nums text-on-surface-variant">{appointment.paid > 0 ? `Ya cobrado ${money(appointment.paid)} · saldo ${money(appointment.balance)}` : `Sin pagos · total ${money(appointment.total)}`}</p>
           {awaitingDeposit && <StatusDot tone="pending">Esperando la seña</StatusDot>}
         </div>
         <span className="shrink-0 font-label-lg text-label-lg tabular-nums text-on-surface">{money(appointment.balance)}</span>
@@ -499,16 +542,30 @@ function AddMovementForm({ tenantSlug, sessionId, onDone }: { tenantSlug: string
     addCashMovement.bind(null, tenantSlug, sessionId),
     initialCajaState,
   );
+  const [category, setCategory] = useState("expense");
+  const categories = [
+    { id: "expense", label: "Gasto", hint: "Insumos o servicios", icon: "receipt_long" },
+    { id: "withdrawal", label: "Retiro", hint: "Efectivo que retirás", icon: "trending_down" },
+    { id: "income", label: "Ingreso", hint: "Entrada extraordinaria", icon: "add_circle" },
+  ];
 
   return (
-    <form action={formAction} className="space-y-2 rounded-inner bg-surface-container-low p-3">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_1fr]">
-        <select name="type" aria-label="Tipo de movimiento" className={SELECT_CLASS}>
-          <option value="out">Retiro / gasto</option>
-          <option value="in">Ingreso suelto</option>
-        </select>
-        <Input name="amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="Monto" aria-label="Monto" required />
-        <Input name="reason" placeholder="Motivo (ej: compra de insumos)" aria-label="Motivo" required />
+    <form action={formAction} className="space-y-4 rounded-card border border-border bg-surface-container-low p-4">
+      <input type="hidden" name="category" value={category} />
+      <fieldset>
+        <legend className="mb-2 font-label-sm text-label-sm text-on-surface-variant">¿Qué movimiento querés registrar?</legend>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {categories.map((item) => (
+            <button key={item.id} type="button" role="radio" aria-checked={category === item.id} onClick={() => setCategory(item.id)} className={cn("flex min-h-16 items-center gap-3 rounded-inner border p-3 text-left transition-all hover:-translate-y-0.5", category === item.id ? "border-primary bg-secondary-soft shadow-sm" : "border-border bg-surface hover:border-primary/30")}>
+              <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", category === item.id ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant")}><Icon name={item.icon} className="text-[17px]" /></span>
+              <span><span className="block font-label-md text-label-md text-on-surface">{item.label}</span><span className="block font-body-sm text-body-sm text-on-surface-variant">{item.hint}</span></span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-1"><label htmlFor="movement-amount" className="font-label-sm text-label-sm text-on-surface-variant">Monto</label><Input id="movement-amount" name="amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="$ 0,00" required /></div>
+        <div className="space-y-1"><label htmlFor="movement-reason" className="font-label-sm text-label-sm text-on-surface-variant">Motivo</label><Input id="movement-reason" name="reason" placeholder={category === "expense" ? "Ej: compra de insumos" : category === "withdrawal" ? "Ej: retiro del titular" : "Ej: cambio inicial"} required /></div>
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onDone}>
@@ -545,6 +602,26 @@ function MethodGrid({ paymentsByMethod }: { paymentsByMethod: Record<string, num
   );
 }
 
+const KIND_LABEL: Record<string, { label: string; icon: string }> = {
+  deposit: { label: "Señas", icon: "savings" },
+  full: { label: "Pagos totales", icon: "check_circle" },
+  balance: { label: "Saldos", icon: "payments" },
+  adjustment: { label: "Productos / ajustes", icon: "receipt_long" },
+};
+
+function KindGrid({ paymentsByKind }: { paymentsByKind: Record<string, number> }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {Object.entries(KIND_LABEL).map(([kind, info]) => (
+        <div key={kind} className="rounded-inner border border-border/70 bg-surface p-3">
+          <p className="flex items-center gap-1.5 font-label-sm text-label-sm text-on-surface-variant"><Icon name={info.icon} className="text-[15px] text-secondary" />{info.label}</p>
+          <p className="mt-1 font-label-lg text-label-lg tabular-nums text-on-surface">{money(paymentsByKind[kind] ?? 0)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DirectCaja({
   tenantSlug,
   timezone,
@@ -553,6 +630,7 @@ function DirectCaja({
   awaitingTransfer,
   products,
   paymentsByMethod,
+  paymentsByKind,
   totals,
 }: {
   tenantSlug: string;
@@ -562,6 +640,7 @@ function DirectCaja({
   awaitingTransfer: AppointmentDue[];
   products: Product[];
   paymentsByMethod: Record<string, number>;
+  paymentsByKind: Record<string, number>;
   totals: DayTotals;
 }) {
   return (
@@ -574,6 +653,7 @@ function DirectCaja({
           <p className="font-body-sm text-body-sm text-on-surface-variant">Sin apertura ni cierre de caja: registrá cada cobro cuando lo recibís.</p>
         </div>
         <MethodGrid paymentsByMethod={paymentsByMethod} />
+        <KindGrid paymentsByKind={paymentsByKind} />
       </Card>
 
       <section className="space-y-sm">
@@ -606,6 +686,7 @@ export function CajaClient({
   movements,
   lastClosedSession,
   paymentsByMethod,
+  paymentsByKind,
   totals,
 }: {
   cashSessionsEnabled: boolean;
@@ -619,6 +700,7 @@ export function CajaClient({
   movements: Movement[];
   lastClosedSession: LastClosedSession;
   paymentsByMethod: Record<string, number>;
+  paymentsByKind: Record<string, number>;
   totals: DayTotals;
 }) {
   const [addingMovement, setAddingMovement] = useState(false);
@@ -637,6 +719,7 @@ export function CajaClient({
         awaitingTransfer={awaitingTransfer}
         products={products}
         paymentsByMethod={paymentsByMethod}
+        paymentsByKind={paymentsByKind}
         totals={totals}
       />
     );
@@ -711,6 +794,11 @@ export function CajaClient({
         </Card>
       )}
 
+      <Card hoverLift={false} className="space-y-2 p-lg">
+        <p className="font-label-md text-label-md text-on-surface-variant">Qué se cobró hoy</p>
+        <KindGrid paymentsByKind={paymentsByKind} />
+      </Card>
+
       {/* Paso 2: cobrar los turnos de hoy. */}
       <section className="space-y-sm">
         <StepHeader step={2} title="Cobrar turnos de hoy" hint="Tocá Cobrar en cada turno cuando el cliente te paga." />
@@ -756,7 +844,7 @@ export function CajaClient({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-label-md text-label-md text-on-surface">{m.reason}</p>
-                <p className="font-body-sm text-body-sm tabular-nums text-on-surface-variant">{formatTimeInTz(m.createdAt, timezone)}</p>
+                <p className="font-body-sm text-body-sm tabular-nums text-on-surface-variant">{m.category === "withdrawal" ? "Retiro" : m.category === "expense" ? "Gasto" : m.category === "appointment" ? "Cobro de turno" : "Ingreso"} · {formatTimeInTz(m.createdAt, timezone)}</p>
               </div>
               <span
                 className={cn(

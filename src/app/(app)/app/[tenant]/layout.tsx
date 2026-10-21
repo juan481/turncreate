@@ -25,6 +25,7 @@ import { NotificationsButton } from "./notifications-button";
 import { TenantSwitcher, type TenantOption } from "./tenant-switcher";
 import { billingBanner } from "./plan/billing-copy";
 import { brandThemeStyle } from "@/lib/brand-theme";
+import { listAppNotifications } from "@/server/firebase/app-notifications";
 
 const NAV = [
   { href: "", label: "Inicio", icon: "home" },
@@ -51,10 +52,11 @@ export default async function TenantAppLayout({
   const { tenant: tenantSlug } = await params;
   const { tenant, user, member } = await requireTenantPage(tenantSlug);
 
-  const [tenantOptions, profile, staffSnapshot] = await Promise.all([
+  const [tenantOptions, profile, staffSnapshot, notifications] = await Promise.all([
     getTenantMembershipsForUser(user.uid),
     getUserProfileSnapshot(user.uid),
     firebaseAdmin().db.collection("tenants").doc(tenant.id).collection("staff").where("active", "==", true).get(),
+    listAppNotifications(tenant.id, tenant.slug),
   ]);
   if (profile.data()?.mustChangePassword === true) redirect("/cambiar-clave");
 
@@ -100,7 +102,7 @@ export default async function TenantAppLayout({
               <Link href={`/app/${tenantSlug}/configuracion`} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface" aria-label="Configuración" title="Configuración">
                 <Icon name="settings" className="text-[20px]" />
               </Link>
-              <NotificationsButton notifications={[]} />
+              <NotificationsButton tenantSlug={tenantSlug} initialNotifications={notifications} />
               <div className="flex items-center gap-2 pl-1">
                 <div className="hidden text-right leading-tight 2xl:block">
                   <div className="font-label-md text-label-md text-on-surface">{displayName}</div>
@@ -117,7 +119,7 @@ export default async function TenantAppLayout({
             </div>
           </div>
         </header>
-        <MobilePageHeader tenantSlug={tenantSlug} tenantName={tenant.name} tenantLogoUrl={currentTenantOption.logoUrl ?? null} />
+        <MobilePageHeader tenantSlug={tenantSlug} tenantName={tenant.name} tenantLogoUrl={currentTenantOption.logoUrl ?? null} initialNotifications={notifications} />
         {/* pt-5 en mobile: sin aire bajo el AppBar sticky, los botones del
             tope de cada pantalla ("Nuevo servicio", etc.) quedaban pegados
             al header. En lg+ el header-pill flotante ya reserva su lugar. */}

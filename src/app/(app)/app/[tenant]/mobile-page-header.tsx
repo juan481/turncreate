@@ -8,15 +8,18 @@ import { Logo } from "@/components/ui/logo";
 import { Icon } from "@/components/ui/icon";
 import { NotificationsButton } from "./notifications-button";
 import { resolveTenantRoute } from "./route-meta";
+import type { AppNotification } from "@/lib/app-notification";
 
 export function MobilePageHeader({
   tenantSlug,
   tenantName,
   tenantLogoUrl,
+  initialNotifications,
 }: {
   tenantSlug: string;
   tenantName: string;
   tenantLogoUrl: string | null;
+  initialNotifications: AppNotification[];
 }) {
   const pathname = usePathname();
   const base = `/app/${tenantSlug}`;
@@ -38,10 +41,10 @@ export function MobilePageHeader({
             <span className="truncate font-headline-sm text-headline-sm text-on-primary">{tenantName}</span>
           </Link>
         }
-        right={<>{support}<NotificationsButton notifications={[]} /></>}
+        right={<>{support}<NotificationsButton tenantSlug={tenantSlug} initialNotifications={initialNotifications} /></>}
       />
     );
   }
 
-  return <AppBar title={route.title} backHref={route.backHref ?? base} right={support} />;
+  return <AppBar title={route.title} backHref={route.backHref ?? base} right={<>{support}<NotificationsButton tenantSlug={tenantSlug} initialNotifications={initialNotifications} /></>} />;
 }

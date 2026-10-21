@@ -13,7 +13,8 @@ import { recordTrustedAnalyticsEvent } from "@/server/analytics";
 import { cleanPublicClient, type PublicClientInput } from "@/server/public-booking/client";
 import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
 import { sendAppointmentConfirmation } from "@/server/email";
-import { formatInTz } from "@/lib/dates";
+import { formatInTz, todayISO } from "@/lib/dates";
+import { birthYearFromAge } from "@/lib/schemas/client";
 import { normalizeCancellationRefundHours } from "@/domain/booking/cancellation-policy";
 
 export type BookingAttemptStatus =
@@ -271,6 +272,8 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
   const attemptSnapshot = await attemptRef.get();
   if (!attemptSnapshot.exists) throw new Error("Intento de reserva inexistente");
   const attempt = attemptSnapshot.data()!;
+  const currentYear = Number(todayISO(String(attempt.timezone ?? "America/Argentina/Buenos_Aires")).slice(0, 4));
+  const clientBirthYear = birthYearFromAge(Number(attempt.client.age), currentYear);
   if (attempt.tenantId !== tenantId || attempt.externalReference !== externalReference) throw new Error("La referencia no pertenece al vendedor");
   const expected = Number(attempt.amounts.grossAmount);
   const paid = Number(payment.transaction_amount ?? 0);
@@ -346,7 +349,7 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
       transaction.create(clientRef, {
         id: clientId, tenantId, fullName: attempt.client.fullName,
         fullNameNormalized: String(attempt.client.fullName).toLocaleLowerCase("es-AR"),
-        phoneE164: attempt.client.phone, email: attempt.client.email || null,
+        phoneE164: attempt.client.phone, email: attempt.client.email || null, birthYear: clientBirthYear,
         noShowCount: 0, appointmentsCount: 1, totalSpent: appliedAmount,
         lastVisitAt: null, archivedAt: null,
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
@@ -356,6 +359,7 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
       transaction.set(clientRef, {
         fullName: attempt.client.fullName,
         email: attempt.client.email || existingClient?.data()?.email || null,
+        ...(clientBirthYear ? { birthYear: clientBirthYear } : {}),
         appointmentsCount: FieldValue.increment(1),
         totalSpent: FieldValue.increment(appliedAmount),
         updatedAt: FieldValue.serverTimestamp(),
@@ -366,7 +370,7 @@ export async function reconcileMercadoPagoPayment(paymentId: string) {
       id: appointmentRef.id, token: appointmentToken, tenantId,
       staffId: attempt.snapshot.staffId, staffName: staff.data()?.displayName ?? "", staffPhoto: staff.data()?.photoUrl ?? null,
       clientId, clientName: attempt.client.fullName, clientPhoto: existingClient?.data()?.photoUrl ?? null,
-      clientPhone: attempt.client.phone, clientEmail: attempt.client.email || null,
+      clientPhone: attempt.client.phone, clientEmail: attempt.client.email || null, clientAge: attempt.client.age,
       startsAt: attempt.snapshot.startsAt, endsAt: attempt.snapshot.endsAt,
       status: "confirmed", total: servicePrice, balance: Math.max(0, servicePrice - appliedAmount), depositPaid: appliedAmount,
       items: [{ serviceId: attempt.snapshot.serviceId, name: service.data()?.name ?? attempt.snapshot.serviceName, price: servicePrice }],

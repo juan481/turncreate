@@ -12,7 +12,7 @@ import { normalizeArPhone } from "@/lib/phone";
 import { DESCRIPTION_MAX_LENGTH, normalizeDescription, normalizeInstagramUrl } from "@/server/tenant-profile";
 import { validateTransfer, type TransferFieldErrors } from "./transfer-validation";
 import { MAX_CANCELLATION_REFUND_HOURS } from "@/domain/booking/cancellation-policy";
-import { isBrandColorId } from "@/lib/brand-theme";
+import { isAllowedBrandColor, normalizeBrandColor } from "@/lib/brand-theme";
 
 export type ConfigActionState = { error: string | null; success?: boolean };
 export type TransferActionState = ConfigActionState & { fieldErrors?: TransferFieldErrors };
@@ -69,10 +69,10 @@ export async function updateBusinessInfo(tenantSlug: string, _prev: ConfigAction
 
 export async function updateBrandColor(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   const brandColor = formData.get("brandColor");
-  if (!isBrandColorId(brandColor)) return { error: "Elegí un color de la paleta" };
+  if (!isAllowedBrandColor(brandColor)) return { error: "Elegí un color más oscuro para que el texto blanco se lea bien" };
   try {
     const { tenant } = await tenantForUser(tenantSlug);
-    await tenantDoc(tenant.id).update({ brandColor, updatedAt: FieldValue.serverTimestamp() });
+    await tenantDoc(tenant.id).update({ brandColor: normalizeBrandColor(brandColor), updatedAt: FieldValue.serverTimestamp() });
     revalidateTenant(tenantSlug);
     return { error: null, success: true };
   } catch (error) {

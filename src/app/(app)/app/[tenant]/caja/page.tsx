@@ -16,6 +16,7 @@ function toDue(id: string, item: DocumentData): AppointmentDue {
     startsAt: item.startsAt?.toDate?.().toISOString?.() ?? "",
     total: Number(item.total ?? 0),
     balance: Number(item.balance ?? 0),
+    paid: Math.max(0, Number(item.total ?? 0) - Number(item.balance ?? 0)),
     depositDue: Number(item.depositDue ?? 0),
     clientName: String(item.clientName ?? ""),
     staffName: String(item.staffName ?? ""),
@@ -96,6 +97,9 @@ export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja
   const paymentsByMethod = Object.fromEntries(
     Object.entries(paymentBreakdown.byMethod).map(([method, totals]) => [method, totals.gross]),
   );
+  const paymentsByKind = Object.fromEntries(
+    Object.entries(paymentBreakdown.byKind).map(([kind, totals]) => [kind, totals.gross]),
+  );
 
   return (
     <div className="space-y-lg">
@@ -125,6 +129,7 @@ export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja
           type: String(doc.data().type),
           amount: Number(doc.data().amount),
           reason: String(doc.data().reason ?? ""),
+          category: String(doc.data().category ?? (doc.data().type === "in" ? "income" : "expense")),
           createdAt: doc.data().createdAt?.toDate?.().toISOString?.() ?? "",
         })) ?? []}
         lastClosedSession={lastClosed ? {
@@ -134,6 +139,7 @@ export default async function CajaPage({ params }: PageProps<"/app/[tenant]/caja
           difference: Number(lastClosed.difference ?? 0),
         } : null}
         paymentsByMethod={paymentsByMethod}
+        paymentsByKind={paymentsByKind}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import { getTenantBySlugFromFirebase, type TenantRecord, type TransferSettings }
 import { recordTrustedAnalyticsEvent } from "@/server/analytics";
 import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
 import { cleanPublicClient, tenantPhoneKey, type PublicClientInput } from "./client";
+import { birthYearFromAge } from "@/lib/schemas/client";
 import {
   activePendingIds,
   isTransferReady,
@@ -178,8 +179,8 @@ export async function createTransferAppointment(input: { slug: string; holdId: s
       staffId: holdData.staffId, staffName: staff.data()?.displayName ?? "", staffPhoto: staff.data()?.photoUrl ?? null,
       // Sin ficha hasta que la dueña confirme (ver comentario de arriba).
       clientId: null, clientName: client.fullName, clientPhoto: null,
-      clientPhone: client.phone, clientEmail: client.email || null,
-      pendingClient: { fullName: client.fullName, phone: client.phone, email: client.email || null },
+      clientPhone: client.phone, clientEmail: client.email || null, clientAge: client.age,
+      pendingClient: { fullName: client.fullName, phone: client.phone, email: client.email || null, age: client.age },
       transferPhoneKey: phoneKey,
       startsAt: holdData.startsAt, endsAt: holdData.endsAt,
       status: "pending_payment", total: servicePrice, balance: servicePrice, depositPaid: 0,
@@ -243,7 +244,7 @@ export async function getTransferInstructions(tenant: TenantRecord, token: strin
 
 export type ConfirmTransferResult = "confirmed" | "already_confirmed";
 
-type PendingClient = { fullName: string; phone: string; email: string | null };
+type PendingClient = { fullName: string; phone: string; email: string | null; age: number | null };
 
 function pendingClientOf(data: DocumentData): PendingClient | null {
   const source = (data.pendingClient ?? {}) as Partial<PendingClient>;
@@ -251,7 +252,8 @@ function pendingClientOf(data: DocumentData): PendingClient | null {
   const phone = String(source.phone ?? data.clientPhone ?? "").trim();
   if (!fullName || !phone.replace(/\D/g, "")) return null;
   const email = source.email ?? data.clientEmail ?? null;
-  return { fullName, phone, email: typeof email === "string" && email ? email : null };
+  const age = Number(source.age ?? data.clientAge);
+  return { fullName, phone, email: typeof email === "string" && email ? email : null, age: Number.isInteger(age) && age > 0 && age <= 110 ? age : null };
 }
 
 /**
@@ -281,6 +283,8 @@ export async function confirmTransferDeposit(input: { tenantId: string; timezone
     const amount = roundMoney(Number(data.depositDue ?? 0));
     if (amount <= 0) throw new Error("El turno no tiene una seña para confirmar");
     const total = Number(data.total ?? 0);
+    const age = Number(data.pendingClient?.age ?? data.clientAge);
+    const birthYear = birthYearFromAge(age, Number(new Intl.DateTimeFormat("en", { timeZone: input.timezone, year: "numeric" }).format(new Date())));
 
     // Ficha: la que ya tenía el turno (reservas de antes de este cambio) o
     // la del teléfono; si no hay ninguna, se crea con lo que cargó en el turnero.
@@ -323,7 +327,7 @@ export async function confirmTransferDeposit(input: { tenantId: string; timezone
       transaction.set(clientRef, {
         id: clientId, tenantId: input.tenantId, fullName: newClient.fullName,
         fullNameNormalized: newClient.fullName.toLocaleLowerCase("es-AR"),
-        phoneE164: newClient.phone, email: newClient.email,
+        phoneE164: newClient.phone, email: newClient.email, birthYear,
         noShowCount: 0, appointmentsCount: 1, totalSpent: amount,
         lastVisitAt: null, archivedAt: null,
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
@@ -333,6 +337,7 @@ export async function confirmTransferDeposit(input: { tenantId: string; timezone
       transaction.set(clientRef, {
         appointmentsCount: FieldValue.increment(1),
         totalSpent: FieldValue.increment(amount),
+        ...(birthYear ? { birthYear } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }

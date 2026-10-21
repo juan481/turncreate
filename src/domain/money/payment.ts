@@ -1,4 +1,4 @@
-export type PaymentKind = "deposit" | "balance" | "refund" | "adjustment";
+export type PaymentKind = "deposit" | "balance" | "full" | "refund" | "adjustment";
 export type PaymentMethod = "mercadopago" | "cash" | "transfer" | "card_posnet";
 
 export type PaymentRecord = {

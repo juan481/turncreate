@@ -84,7 +84,7 @@ export function TransferInstructions({ panel, showMiTurnoLink = true, headingLev
           Turno reservado — pendiente de confirmación
         </Heading>
         <p className="font-body-md text-body-md text-on-surface-variant">
-          Tu horario ya quedó guardado. Para confirmarlo, transferí la seña y mandale el comprobante a {panel.tenantName}.
+          Tu horario ya quedó guardado. Transferí la seña y mandale el comprobante a {panel.tenantName}. Revisá tu email o WhatsApp para seguir el estado de la reserva.
         </p>
       </div>
 

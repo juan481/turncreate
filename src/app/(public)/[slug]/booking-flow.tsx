@@ -6,7 +6,6 @@ import { format, parseISO, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
@@ -36,7 +35,7 @@ function ProgressHeader({ current, total, name, title }: { current: number; tota
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <StatusPill status="pending">Paso {current} de {total} · {name}</StatusPill>
+        <span className="inline-flex min-h-7 items-center rounded-pill bg-secondary-soft px-3 font-label-sm text-label-sm text-secondary">Paso {current} de {total} · {name}</span>
         <span className="font-label-sm text-label-sm tabular-nums text-on-surface-variant">{Math.round((current / total) * 100)}%</span>
       </div>
       <div role="progressbar" aria-label="Progreso de la reserva" aria-valuemin={1} aria-valuemax={total} aria-valuenow={current} className="h-2 overflow-hidden rounded-pill bg-surface-container-high">
@@ -80,7 +79,7 @@ export function BookingFlow({
 
   const [hold, setHold] = useState<PublicHold | null>(null);
   const [quote, setQuote] = useState<{ appliedAmount: number; surchargeAmount: number; grossAmount: number } | null>(null);
-  const [clientData, setClientData] = useState({ full_name: "", phone_e164: "", email: "" });
+  const [clientData, setClientData] = useState({ full_name: "", phone_e164: "", email: "", age: "" });
   const [method, setMethod] = useState<PayMethod>(paymentMethods.mercadopago ? "mercadopago" : "transfer");
   const [transferPanel, setTransferPanel] = useState<TransferPanelData | null>(null);
 
@@ -235,6 +234,13 @@ export function BookingFlow({
     if (!formIsValid(e)) return;
     setErrorMessage(null);
     setStep(6);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const chooseDate = (dateISO: string) => {
+    setSelectedDate(dateISO);
+    setErrorMessage(null);
+    setStep(4);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -418,10 +424,10 @@ export function BookingFlow({
       <div key={step} className="animate-fade-up space-y-lg">
         <ProgressHeader current={stepNumber("date")} total={visibleSteps.length} name="Fecha" title="Elegí el día" />
         {selectedService && <p className="font-body-md text-body-md text-on-surface-variant">{selectedService.name} · {selectedService.duration} min · {money(selectedService.price)}</p>}
-        <PublicMonthCalendar timezone={timezone} selectedDate={selectedDate} onSelect={setSelectedDate} minDate={firstDate} maxDate={lastDate} bookableWeekdays={bookableWeekdays} />
-        <div className={cn("flex items-center pt-2", backStep === null ? "justify-end" : "justify-between")}>
+        <PublicMonthCalendar timezone={timezone} selectedDate={selectedDate} onSelect={chooseDate} minDate={firstDate} maxDate={lastDate} bookableWeekdays={bookableWeekdays} />
+        <div className={cn("sticky bottom-[calc(var(--safe-b)+0.75rem)] z-20 flex items-center rounded-pill border border-border bg-surface/95 p-1 shadow-card-hover backdrop-blur-xl", backStep === null ? "justify-end" : "justify-between")}>
           {backStep !== null && <Button variant="ghost" onClick={() => setStep(backStep)}>Volver</Button>}
-          <Button onClick={() => setStep(4)} disabled={!bookableWeekdays.includes(new TZDate(`${selectedDate}T12:00:00`, timezone).getDay())}>Ver horarios</Button>
+          <span className="pr-3 font-label-sm text-label-sm text-on-surface-variant">Elegí un día para continuar</span>
         </div>
       </div>
     );
@@ -469,7 +475,7 @@ export function BookingFlow({
 
         {errorMessage && <p role="alert" className="rounded-inner bg-status-alert-bg px-3 py-2 font-body-sm text-body-sm text-status-alert">{errorMessage}</p>}
 
-        <div className="flex items-center justify-between pt-4">
+        <div className="sticky bottom-[calc(var(--safe-b)+0.75rem)] z-20 flex items-center justify-between rounded-pill border border-border bg-surface/95 p-1 shadow-card-hover backdrop-blur-xl">
           <Button variant="ghost" onClick={() => { setErrorMessage(null); setStep(3); }}>Cambiar fecha</Button>
           <Button
             onClick={handleCreateHold}
@@ -488,10 +494,16 @@ export function BookingFlow({
         <ProgressHeader current={stepNumber("data")} total={visibleSteps.length} name="Tus datos" title="¿A nombre de quién reservamos?" />
 
         <Card hoverLift={false} className="space-y-2 bg-surface-muted p-4">
-          <div className="break-words font-label-lg text-label-lg">{selectedService?.name}</div>
-          <div className="font-body-md text-body-md text-on-surface-variant first-letter:uppercase">
-            {format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="break-words font-label-lg text-label-lg">{selectedService?.name}</div>
+              <div className="font-body-md text-body-md text-on-surface-variant first-letter:uppercase">
+                {format(new TZDate(parseISO(selectedTime!), timezone), "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })}
+              </div>
+            </div>
+            <strong className="shrink-0 font-headline-sm text-headline-sm tabular-nums text-on-surface">{money(selectedService?.price ?? 0)}</strong>
           </div>
+          {quote && <div className="flex items-center justify-between border-t border-border pt-2 font-body-sm text-body-sm text-on-surface-variant"><span>Seña para reservar</span><strong className="tabular-nums text-on-surface">{money(quote.appliedAmount)}</strong></div>}
         </Card>
 
         <form className="space-y-4">
@@ -530,6 +542,10 @@ export function BookingFlow({
               value={clientData.email}
               onChange={e => setClientData({...clientData, email: e.target.value})}
             />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="client_age" className="font-label-md text-label-md text-on-surface-variant">Edad</label>
+            <Input id="client_age" type="number" inputMode="numeric" min={1} max={110} step={1} required placeholder="Ej: 34" value={clientData.age} onChange={e => setClientData({...clientData, age: e.target.value})} />
           </div>
 
           <p className="flex gap-2 rounded-inner bg-surface-container-low px-3 py-2.5 font-body-sm text-body-sm text-on-surface-variant">
@@ -593,7 +609,7 @@ export function BookingFlow({
   }
 
   if (step === 7 && transferPanel) {
-    return <TransferInstructions key={step} panel={transferPanel} />;
+    return <div data-booking-confirmation><TransferInstructions key={step} panel={transferPanel} /></div>;
   }
 
   return null;
