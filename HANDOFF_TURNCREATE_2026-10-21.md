@@ -315,3 +315,13 @@ Archivos centrales de esta entrega:
 - No eliminar `feeUnknown`; evita reportar un neto ficticio.
 - Si se cambia el polling, conservar autorización por tenant y deduplicación de sonidos.
 - La notificación no usa push en segundo plano: funciona mientras el panel está abierto. Web Push sería una fase distinta.
+
+### Publicación de esta entrega
+
+- Commit funcional: `093824687269a3359188f651dc6979325369e08f`.
+- Subido a GitHub en `main` y `wip/suscripciones`.
+- Release construida con Node `22.23.3` en `/root/turncreate-release-0938246` y validada primero como canary en el puerto 3012.
+- Canary: `/landing`, `/demo-individual`, logo Mercado Pago y logo ARCA respondieron 200; la API de notificaciones sin sesión respondió 401.
+- Cambio atómico completado en PM2. `/root/turncreate` quedó en `0938246` y `/root/turncreate-previous-cb18288` conserva el rollback anterior.
+- El rollback más viejo `/root/turncreate-previous-a79a35e` se eliminó antes del build para liberar espacio; sigue recuperable desde Git.
+- Verificación HTTPS externa posterior: `/landing`, `/demo-individual`, `/login` y el SVG oficial de Mercado Pago respondieron 200; PM2 quedó `online`.

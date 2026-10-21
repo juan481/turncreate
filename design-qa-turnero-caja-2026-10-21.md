@@ -3,6 +3,8 @@
 Fecha: 2026-10-21
 Estado: `passed`
 
+Producción verificada: `https://turn.justcreate.com.ar/landing` sobre commit funcional `0938246`.
+
 ## Evidencia revisada
 
 - Producción previa en desktop y mobile: el turnero mostraba dos calendarios simultáneos y obligaba a bajar hasta `Ver horarios`.
