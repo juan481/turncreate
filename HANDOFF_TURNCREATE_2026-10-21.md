@@ -168,7 +168,17 @@ Sí, se puede sumar. Para TurnCreate conviene tratarla como un módulo desacopla
 
 ## Rediseño de landing y color por comercio
 
-Segunda entrega del 2026-10-21. La referencia elegida fue la opción visual 1 y se implementó localmente, sin publicar en el VPS.
+Segunda entrega del 2026-10-21. La referencia elegida fue la opción visual 1 y quedó publicada en producción.
+
+### Publicación en producción
+
+- URL: `https://turn.justcreate.com.ar/landing`.
+- Commit funcional desplegado: `ac9f441365be9d80007b267cf5fd507b3ee75e3f`.
+- GitHub Actions aprobó lint, typecheck y tests, pero omitió el deploy porque todavía faltan los secrets `VPS_SSH_KEY`, `VPS_HOST` y `VPS_USER`.
+- Se hizo un deploy manual seguro: build con Node 22 en `/root/turncreate-release-ac9f441`, prueba canary en el puerto 3012, cambio de release y reinicio de `turncreate` en PM2.
+- La release anterior quedó temporalmente disponible en `/root/turncreate-previous-a79a35e` como rollback.
+- Validación posterior: `/landing` y `/login` responden 200 por HTTPS; PM2 está online; el proceso real de Next usa Node `22.23.3`.
+- Auditoría remota en 1440x1000 y 390x844: sin overflow horizontal ni errores de consola; menú mobile, demo de reserva, integraciones, planes, animaciones y selector de color verificados.
 
 ### Landing nueva
 
