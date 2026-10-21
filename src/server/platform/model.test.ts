@@ -44,10 +44,10 @@ describe("ids y estados", () => {
     expect(normalizeTenantStatus("onboarding")).toBe("trial");
   });
 
-  it("nombra el plan y trata los locales sin plan como Equipo", () => {
-    expect(planLabel("solo")).toBe("Solo");
-    expect(planLabel("pro")).toBe("Pro");
-    expect(planLabel(undefined)).toBe("Equipo (sin plan)");
+  it("nombra el plan y trata los locales sin plan como Estudio", () => {
+    expect(planLabel("solo")).toBe("Individual");
+    expect(planLabel("pro")).toBe("Equipo");
+    expect(planLabel(undefined)).toBe("Estudio (sin plan)");
   });
 
   it("describe la seña", () => {

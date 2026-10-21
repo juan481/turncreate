@@ -51,10 +51,10 @@ export function isTenantOn(status: TenantStatus): boolean {
   return status !== "suspended";
 }
 
-/** Los locales anteriores a los planes no tienen `plan` y funcionan como Equipo (ver lib/plans.ts). */
+/** Los locales anteriores a los planes no tienen `plan` y funcionan como Estudio (ver lib/plans.ts). */
 export function planLabel(plan: unknown): string {
   if (plan === "solo" || plan === "equipo" || plan === "pro") return PLANS[plan].name;
-  return "Equipo (sin plan)";
+  return "Estudio (sin plan)";
 }
 
 /** "Sin seña" / "$10.000 fija" / "30%" -- de settings.depositType/depositValue. */

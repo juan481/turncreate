@@ -1,137 +1,78 @@
 import Link from "next/link";
-import { Logo } from "@/components/ui/logo";
-import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { Logo } from "@/components/ui/logo";
 import { PageTransition } from "@/components/ui/page-transition";
+import { cn } from "@/lib/utils";
+import { MarketingMobileMenu } from "./marketing-mobile-menu";
+import "./marketing.css";
 
 const NAV = [
-  { href: "#beneficios", label: "Beneficios" },
-  { href: "#como-funciona", label: "Cómo funciona" },
-  { href: "#para-quien-es", label: "Para quién es" },
+  { href: "#producto", label: "Producto" },
+  { href: "#personalizacion", label: "Personalización" },
+  { href: "#integraciones", label: "Integraciones" },
   { href: "#planes", label: "Planes" },
 ];
 
 const FOOTER_COLUMNS = [
   {
     title: "Producto",
-    items: ["Turnero Online", "Señas Mercado Pago", "Recordatorios WhatsApp", "Arqueo de Caja", "Comisiones Staff"],
+    items: ["Turnero online", "Agenda y clientes", "Señas y reembolsos", "Caja y reportes"],
   },
   {
-    title: "Rubros",
-    items: ["Estética & Cosmiatría", "Barberías & Peluquerías", "Salones de Uñas", "Spas & Masajes"],
+    title: "Integraciones",
+    items: ["Mercado Pago", "Transferencias", "ARCA · próximamente"],
   },
   {
-    title: "Recursos & Ayuda",
-    items: ["Soporte WhatsApp Oficial", "Guía de Inicio Rápido", "Términos y Privacidad", "Integración AFIP & MP"],
+    title: "Ayuda",
+    items: ["Inicio guiado", "Preguntas frecuentes", "Términos y privacidad"],
   },
 ];
 
-export default function MarketingLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
-      <header className="fixed inset-x-0 top-0 z-50 px-gutter pt-3 md:px-gutter-desktop">
-        <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between gap-gutter rounded-pill border border-border bg-surface-container-lowest/85 px-4 shadow-card backdrop-blur-xl md:h-[72px] md:px-xl">
-          <Link href="/landing" className="flex shrink-0 items-center gap-2">
-            <Logo iconOnly className="h-8 w-auto" />
-            <span className="font-headline-sm text-headline-sm tracking-tight text-on-surface">
-              TurnCreate
-            </span>
+      <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 md:px-gutter-desktop md:pt-4">
+        <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between gap-3 rounded-pill border border-white/80 bg-white/78 px-3.5 shadow-[0_12px_45px_-25px_rgba(35,28,95,.4)] backdrop-blur-2xl md:h-[68px] md:px-5">
+          <Link href="/landing" aria-label="TurnCreate, inicio" className="flex shrink-0 items-center gap-2 transition-transform duration-300 hover:scale-[1.02]">
+            <Logo iconOnly className="h-8 w-8" />
+            <span className="text-[15px] font-bold tracking-[-0.035em] text-on-surface md:text-[16px]">TurnCreate</span>
           </Link>
 
-          <nav className="hidden items-center gap-1 rounded-pill border border-outline-variant/30 bg-surface-container-low/70 p-1.5 lg:flex">
+          <nav aria-label="Navegación principal" className="hidden items-center gap-0.5 rounded-pill bg-surface-container-low/75 p-1.5 lg:flex">
             {NAV.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="rounded-pill px-4 py-1.5 font-label-md text-label-md text-on-surface-variant transition-colors hover:text-on-surface hover:bg-surface-container-lowest"
-              >
-                {item.label}
-              </a>
+              <a key={item.href} href={item.href} className="rounded-pill px-4 py-2 text-[11px] font-semibold text-on-surface-variant transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:text-on-surface hover:shadow-sm">{item.label}</a>
             ))}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <Link
-              href="/login"
-              className="hidden font-label-lg text-label-lg text-on-surface-variant transition-colors hover:text-on-surface sm:inline-flex"
-            >
-              Iniciar sesión
-            </Link>
-            <Link href="/registro" className={buttonVariants({ size: "sm" })}>
-              Empezá gratis
-            </Link>
+          <div className="flex shrink-0 items-center gap-2 md:gap-3">
+            <Link href="/login" className="hidden text-[12px] font-semibold text-on-surface-variant transition-colors hover:text-primary sm:inline-flex">Iniciar sesión</Link>
+            <Link href="/registro" className={cn(buttonVariants({ size: "sm" }), "hidden shadow-brand sm:inline-flex")}>Probar gratis 7 días</Link>
+            <MarketingMobileMenu />
           </div>
         </div>
       </header>
-      <main className="flex-1 pt-24 md:pt-28">
-        <PageTransition>{children}</PageTransition>
-      </main>
-      <footer className="w-full border-t border-border bg-surface-container-lowest pb-xl pt-2xl">
-        <div className="mx-auto w-full max-w-[1440px] px-gutter md:px-gutter-desktop">
-          <div className="grid grid-cols-1 gap-xl border-b border-border pb-2xl md:grid-cols-2 lg:grid-cols-5">
-            <div className="flex flex-col gap-md pr-xl lg:col-span-2">
-              <div className="flex items-center gap-2">
-                <Logo iconOnly className="h-8 w-auto" />
-                <span className="font-headline-sm text-headline-sm tracking-tight text-on-surface">TurnCreate</span>
-              </div>
-              <p className="max-w-[24rem] font-body-md text-body-md leading-relaxed text-on-surface-variant">
-                Gestión inteligente, señas automáticas y control total para salones en Argentina.
-              </p>
-              <div className="flex flex-wrap items-center gap-sm pt-xs">
-                <span className="inline-flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant">
-                  <span className="h-1.5 w-1.5 rounded-full bg-secondary" /> Servidores en Buenos Aires
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant">
-                  <span className="h-1.5 w-1.5 rounded-full bg-status-confirmed-dot" /> 99.9% Uptime
-                </span>
-              </div>
+
+      <main className="flex-1 pt-20 md:pt-24"><PageTransition>{children}</PageTransition></main>
+
+      <footer className="border-t border-border bg-white pb-8 pt-20">
+        <div className="mx-auto max-w-[1240px] px-gutter md:px-gutter-desktop">
+          <div className="grid gap-12 border-b border-border pb-14 md:grid-cols-2 lg:grid-cols-5">
+            <div className="lg:col-span-2">
+              <Link href="/landing" className="inline-flex items-center gap-2"><Logo iconOnly className="size-9" /><span className="text-[17px] font-bold tracking-[-.035em] text-on-surface">TurnCreate</span></Link>
+              <p className="mt-5 max-w-[24rem] text-[13px] leading-6 text-on-surface-variant">El sistema de turnos, señas, clientes y caja para negocios de servicios en Argentina.</p>
+              <span className="mt-6 inline-flex items-center gap-2 rounded-pill bg-secondary-soft px-3 py-2 text-[11px] font-semibold text-primary"><Icon name="location_on" className="text-[14px]" /> Creado en Argentina</span>
             </div>
-            {FOOTER_COLUMNS.map((col) => (
-              <div key={col.title} className="flex flex-col gap-sm">
-                <h4 className="mb-xs font-label-lg text-label-lg uppercase tracking-wider text-on-surface">
-                  {col.title}
-                </h4>
-                <ul className="flex flex-col gap-sm">
-                  {col.items.map((item) => (
-                    <li
-                      key={item}
-                      className="cursor-pointer font-body-sm text-body-sm text-on-surface-variant transition-colors hover:text-on-surface"
-                    >
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+            {FOOTER_COLUMNS.map((column) => (
+              <div key={column.title}>
+                <h2 className="text-[11px] font-bold uppercase tracking-[.14em] text-on-surface">{column.title}</h2>
+                <ul className="mt-5 space-y-3.5">{column.items.map((item) => <li key={item} className="text-[12px] text-on-surface-variant">{item}</li>)}</ul>
               </div>
             ))}
           </div>
-          <div className="flex flex-col items-center justify-between gap-md pt-lg text-on-surface-variant md:flex-row">
-            <p className="text-center font-body-sm text-body-sm md:text-left">
-              © {new Date().getFullYear()} TurnCreate Argentina · Pagos procesados de forma segura con Mercado Pago
-            </p>
-            <div className="flex items-center gap-md">
-              <span className="rounded-pill bg-surface-container px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant">
-                AR ARS
-              </span>
-              <span className="rounded-pill bg-surface-container px-3 py-1.5 font-label-sm text-label-sm text-on-surface-variant">
-                Español (Argentina)
-              </span>
-            </div>
-          </div>
-          <div className="mt-lg flex justify-center border-t border-border pt-lg md:justify-start">
-            <a
-              href="https://justcreate.com.ar"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant transition-colors hover:text-secondary"
-            >
-              Tecnología desarrollada por
-              <span className="font-label-md text-label-md text-on-surface">Just Create</span>
-              <Icon name="north_east" className="text-[14px]" />
-            </a>
+          <div className="flex flex-col items-center justify-between gap-4 pt-7 text-[11px] text-on-surface-variant sm:flex-row">
+            <p>© {new Date().getFullYear()} TurnCreate · Todos los derechos reservados.</p>
+            <a href="https://justcreate.com.ar" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 transition-colors hover:text-primary">Desarrollado por <strong className="font-semibold text-on-surface">Just Create</strong><Icon name="north_east" className="text-[13px]" /></a>
           </div>
         </div>
       </footer>

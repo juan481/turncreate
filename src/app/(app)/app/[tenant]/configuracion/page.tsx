@@ -51,7 +51,7 @@ export default async function ConfiguracionPage({ params }: PageProps<"/app/[ten
       ? ["Tomando reservas", "ok"]
       : ["Todavía no toma reservas", "warning"];
 
-  // Suscripción a TurnCreate: "Plan Equipo · Cortesía". Sin `billing` = cortesía.
+  // Suscripción a TurnCreate: "Plan Estudio · Cortesía". Sin `billing` = cortesía.
   const billing = readTenantBilling(tenant);
   const billingLevel = tenantBillingAccess(tenant).level;
   const planStatus: [string, HubTileTone] = [

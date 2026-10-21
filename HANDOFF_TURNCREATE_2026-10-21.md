@@ -165,3 +165,68 @@ Sí, se puede sumar. Para TurnCreate conviene tratarla como un módulo desacopla
 - Toda llamada de devolución o facturación externa debe ser idempotente y reconciliable.
 - No registrar tokens de gestión, access tokens, claves privadas ni respuestas fiscales completas con datos personales en logs.
 - Antes de tocar reprogramación pública, diseñar la transición atómica de ocupación y seña.
+
+## Rediseño de landing y color por comercio
+
+Segunda entrega del 2026-10-21. La referencia elegida fue la opción visual 1 y se implementó localmente, sin publicar en el VPS.
+
+### Landing nueva
+
+- Hero premium con la propuesta de valor y una composición real de dashboard + turnero mobile.
+- Secciones con mucho más aire editorial y comportamiento responsive específico, no una simple reducción de desktop.
+- Demo interactiva del flujo de reserva de 5 pasos, incluyendo política de devolución y enlace de gestión.
+- Vista del panel con agenda, clientes, pagos, caja y reportes.
+- Personalización interactiva con cinco paletas accesibles.
+- Mercado Pago se presenta como disponible; ARCA se muestra de forma explícita como `Próximamente · beta`, prevista para el plan Equipo.
+- Planes visibles renombrados a `Individual`, `Estudio` y `Equipo`. Los IDs internos siguen siendo `solo`, `equipo` y `pro` para conservar compatibilidad.
+- Los precios de la landing salen de `DEFAULT_PLAN_PRICES_ARS`, evitando una segunda fuente hardcodeada.
+- El período de prueba por defecto se alineó a 7 días con registro y comunicación comercial.
+- Hover lift, fades, movimiento ambiental, cambios de panel y soporte de `prefers-reduced-motion`.
+
+Archivos principales:
+
+- `src/app/(marketing)/page.tsx`
+- `src/app/(marketing)/layout.tsx`
+- `src/app/(marketing)/marketing.css`
+- `src/app/(marketing)/marketing-product-showcase.tsx`
+- `src/app/(marketing)/marketing-mobile-menu.tsx`
+- `public/marketing/turncreate-light-waves.webp`
+- `public/marketing/turncreate-dark-waves.webp`
+
+### Color de marca
+
+- Nuevo campo opcional top-level `tenant.brandColor`; tenants existentes caen de forma segura a `iris`.
+- Paletas cerradas: violeta, rosa, esmeralda, azul y ámbar. No se aceptan hex arbitrarios, para mantener contraste y consistencia.
+- Se configura en `Configuración > Información del local > Color de tu marca`.
+- El tema se inyecta mediante variables CSS tanto en el panel autenticado como en el turnero público. Botones, acciones primarias, estados activos, foco y sombras de marca adoptan la paleta.
+- Los tenants nuevos guardan `iris` explícitamente.
+
+Archivos principales:
+
+- `src/lib/brand-theme.ts`
+- `src/lib/brand-theme.test.ts`
+- `src/app/(app)/app/[tenant]/configuracion/brand-color-form.tsx`
+- `src/app/(app)/app/[tenant]/configuracion/actions.ts`
+- `src/app/(app)/app/[tenant]/layout.tsx`
+- `src/app/(public)/[slug]/layout.tsx`
+- `src/app/(public)/[slug]/actions.ts`
+- `src/server/firebase/tenants.ts`
+
+No requiere migración: el fallback visual cubre documentos viejos hasta que el comercio guarde su elección.
+
+### QA de esta entrega
+
+- `npx eslint src e2e/public-booking.spec.ts playwright.config.ts`: aprobado.
+- `npm run typecheck`: aprobado.
+- `npm test`: 28 archivos y 284 tests aprobados.
+- `npm run build`: aprobado.
+- `npx playwright test e2e/public-booking.spec.ts --project=pixel-7`: 7/7 aprobados.
+- Auditoría visual y funcional documentada en `design-qa.md`: `passed`.
+- Capturas y comparaciones en `artifacts/landing-redesign/`.
+
+### Cuidado al continuar
+
+- No anunciar ARCA como disponible hasta completar homologación, emisión idempotente, notas de crédito y revisión contable.
+- Mantener los IDs internos de plan aunque cambien sus nombres comerciales.
+- Si se agregan paletas, validar contraste AA de texto blanco sobre `primary` y mantener todos los tokens de `brandThemeStyle`.
+- El componente `Reveal` usa un umbral bajo a propósito: un valor alto vuelve invisibles las secciones más altas que el viewport.

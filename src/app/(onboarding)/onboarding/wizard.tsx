@@ -451,13 +451,13 @@ export function Wizard({ businessTypes, owner }: { businessTypes: BusinessType[]
                         value: "solo",
                         icon: "person",
                         title: byGender(g, { female: "Trabajo sola", male: "Trabajo solo", neutral: "Trabajo sin equipo" }),
-                        description: "Plan Solo: tu agenda, sin arqueo de caja ni selector de profesional.",
+                        description: "Plan Individual: tu agenda, sin arqueo de caja ni selector de profesional.",
                       },
                       {
                         value: "team",
                         icon: "groups",
                         title: "Tengo equipo",
-                        description: "Plan Equipo: agenda y caja para varias personas.",
+                        description: "Plan Estudio: agenda y caja para varias personas.",
                       },
                     ] as const).map((option) => {
                       const selected = teamMode === option.value;

@@ -3,6 +3,7 @@ import { JustCreateFooter } from "@/components/ui/just-create-footer";
 import { getPublicTenant } from "./actions";
 import { notFound } from "next/navigation";
 import Image from "next/image";
+import { brandThemeStyle } from "@/lib/brand-theme";
 
 function instagramDetails(value: string | null) {
   if (!value) return null;
@@ -29,7 +30,7 @@ export default async function PublicBookingLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
+    <div style={brandThemeStyle(tenant.brand_color)} className="flex min-h-screen flex-col bg-canvas">
       <header className="sticky top-0 z-50 border-b border-border bg-surface/85 backdrop-blur-xl">
         <div className="flex min-h-16 items-center justify-between gap-3 px-gutter py-2.5">
           <div className="flex min-w-0 flex-col gap-1">

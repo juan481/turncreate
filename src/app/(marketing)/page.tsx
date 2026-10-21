@@ -1,595 +1,269 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { StatusPill } from "@/components/ui/status-pill";
+import { Avatar } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { Avatar } from "@/components/ui/avatar";
+import { MercadoPagoLogo } from "@/components/ui/mercado-pago-logo";
 import { Reveal } from "@/components/ui/reveal";
-import { FeatureShowcase } from "./feature-showcase";
+import { DEFAULT_PLAN_PRICES_ARS, type PlanId } from "@/lib/plans";
 import { cn } from "@/lib/utils";
+import { BookingJourney, BrandColorShowcase } from "./marketing-product-showcase";
 
-const STATS = [
-  { value: "70%", label: "menos ausentismo", detail: "cobrando seña antes de confirmar el turno" },
-  { value: "24/7", label: "turnero abierto", detail: "tus clientes reservan solos, aunque estés cerrado" },
-  { value: "1 clic", label: "para cobrar con MP", detail: "el dinero se acredita directo en tu cuenta" },
-  { value: "1 o 20", label: "profesionales", detail: "el mismo sistema te sirve solo o con todo un equipo" },
-];
-
-const PROBLEMAS = [
+const PLANS = [
   {
-    icon: "schedule_send",
-    title: "Mensajes a deshoras",
-    body: "¿Cansado de responder mensajes a las 11 de la noche para dar un turno? Clientes preguntando precios y horarios a deshoras mientras vos intentás descansar.",
-  },
-  {
-    icon: "event_busy",
-    title: "Sillón vacío y pérdida de plata",
-    body: "¿Te frustra perder plata y tiempo valioso cuando un cliente te deja plantado a último momento? Silla vacía, profesional desocupado y costos fijos que corren igual.",
-  },
-  {
-    icon: "receipt_long",
-    title: "Caos administrativo en papel",
-    body: "Planillas de papel, cruces de horarios y comisiones calculadas a ojo al final del mes. El caos administrativo te roba horas de tu vida.",
-  },
-];
-
-const BENEFICIOS = [
-  {
-    span: "lg:col-span-7",
-    badge: "Cobro Blindado",
-    icon: "payments",
-    title: "Ausentismo Cero con Señas Inteligentes",
-    body: "Elegí cómo cobrar la seña: un porcentaje del servicio, un monto fijo, o decidilo turno por turno a mano. Conectá tu cuenta de Mercado Pago con un clic y la plata se acredita directo, sin intermediarios. Si el cliente cancela fuera de término, el sistema la retiene automáticamente.",
-  },
-  {
-    span: "lg:col-span-5",
-    badge: "Autogestión 24/7",
-    icon: "link",
-    title: "Tu propia recepcionista 24/7",
-    body: "Olvidate de cruzar horarios a mano. Tus clientes entran a tu link personalizado, eligen el servicio, el profesional (o vos, si trabajás solo/a), la fecha y pagan la seña en 4 simples pasos, sin que vos tengas que intervenir.",
-  },
-  {
-    span: "lg:col-span-4",
-    badge: "WhatsApp API Oficial",
-    icon: "forum",
-    title: "Recordatorios por WhatsApp Automáticos",
-    body: "El sistema envía una confirmación inmediata y un recordatorio 24 horas antes directo al WhatsApp del cliente, bajando drásticamente la tasa de no-shows.",
-  },
-  {
-    span: "lg:col-span-4",
-    badge: "Caja & Finanzas",
-    icon: "point_of_sale",
-    title: "Control Total de la Caja y tu Equipo",
-    body: "Administrá la apertura y cierre de caja diaria, registrá pagos mixtos (efectivo, transferencia, tarjeta) y automatizá la liquidación de comisiones para cada profesional — funciona igual si sos vos solo/a o si sumás todo un equipo.",
-  },
-  {
-    span: "lg:col-span-4",
-    badge: "CRM & Ficha",
-    icon: "clinical_notes",
-    title: "Conocé a tus clientes a fondo",
-    body: "Armá un historial de cada visita, llevá el control de ausencias y registrá notas clínicas confidenciales (ideal para cosmiatría y estética).",
-  },
-];
-
-const VERTICALES = [
-  { emoji: "✂️", tag: "Ritmo Ágil", title: "Barberías y Peluquerías", body: "Control de sillones, turnos de 30-45 min, barberos con comisión y venta rápida de pomadas en mostrador.", footer: "Sillones en paralelo" },
-  { emoji: "💆‍♀️", tag: "Cabinas & Fichas", title: "Centros de Cosmiatría y Estética", body: "Ficha clínica de piel, tiempos de aparatología y cabina, consentimiento informado y señas obligatorias.", footer: "Gestión de aparatología" },
-  { emoji: "💅", tag: "Mesas & Retoques", title: "Salones de Uñas y Pestañas", body: "Gestión de mesas de manicuría, citas recurrentes cada 21 días y cálculo de insumos por servicio.", footer: "Reagendamiento cada 21 días" },
-  { emoji: "🧘‍♀️", tag: "Profesionales Libres", title: "Spas y Profesionales Independientes", body: "Modo autónomo, agenda despejada y link directo en la bio de Instagram para que nadie te distraiga en sesión.", footer: "Link directo para Instagram Bio" },
-];
-
-const PASOS = [
-  { title: "El cliente entra a tu web", body: "Ingresa a tu turnero público desde Instagram o WhatsApp y ve los horarios disponibles en tiempo real.", tag: "turncreate.com.ar/tu-marca" },
-  { title: "Reserva en segundos", body: "Selecciona el servicio y su profesional favorito con duración y valor transparente.", tag: "Sin apps que descargar" },
-  { title: "Asegura con Mercado Pago", body: "Paga la seña directamente en la plataforma, y el dinero va a tu propia cuenta de Mercado Pago al instante.", tag: "Dinero disponible de inmediato" },
-  { title: "Confirmación instantánea", body: "El turno se bloquea en tu agenda y el cliente recibe un WhatsApp confirmando su cita.", tag: "Recordatorio 24hs antes" },
-];
-
-const PLANES = [
-  {
-    nombre: "Solo",
-    precio: "$19.900",
-    detalle: "Para profesionales independientes.",
-    features: ["Turnero online personalizado", "Cobro de señas con Mercado Pago", "Agenda digital inteligente", "Historial completo de clientes", "150 mensajes de WhatsApp mensuales"],
-    cta: "Empezar con Solo",
+    id: "solo" as PlanId,
+    name: "Individual",
+    detail: "Para quien trabaja de forma independiente.",
+    price: DEFAULT_PLAN_PRICES_ARS.solo,
+    limit: "1 profesional",
+    features: ["Agenda y turnero online", "Clientes e historial", "Señas con Mercado Pago", "Reportes esenciales"],
     featured: false,
   },
   {
-    nombre: "Equipo",
-    precio: "$34.900",
-    detalle: "Ideal para locales con staff y recepcionista.",
-    features: ["Hasta 5 profesionales con agenda propia", "Accesos y permisos para recepcionista", "Arqueo y control de caja diaria", "Mini POS para venta de productos", "Comisiones automáticas", "600 notificaciones de WhatsApp"],
-    cta: "Probar 7 días gratis",
+    id: "equipo" as PlanId,
+    name: "Estudio",
+    detail: "Para estudios y equipos pequeños.",
+    price: DEFAULT_PLAN_PRICES_ARS.equipo,
+    limit: "Hasta 5 profesionales",
+    features: ["Todo lo del plan Individual", "Agenda por profesional", "Apertura y cierre de caja", "Reportes y administración"],
     featured: true,
   },
   {
-    nombre: "Pro",
-    precio: "$54.900",
-    detalle: "Para los que van por todo.",
-    features: ["Hasta 15 profesionales en el staff", "Gestión multi-sucursal (2 locales)", "Dominio propio", "Número de WhatsApp exclusivo de tu marca", "Seguimiento post-turno y reportes avanzados"],
-    cta: "Contactar Ventas",
+    id: "pro" as PlanId,
+    name: "Equipo",
+    detail: "Para operaciones en crecimiento.",
+    price: DEFAULT_PLAN_PRICES_ARS.pro,
+    limit: "Hasta 15 profesionales",
+    features: ["Todo lo del plan Estudio", "Mayor capacidad de equipo", "Control de caja", "Beta de facturación ARCA próximamente"],
     featured: false,
   },
-];
+] as const;
 
-const AGENDA_PREVIEW = [
-  { hora: "12:00", nombre: "Mateo Rossi", servicio: "Corte Degradé + Perfilado de Barba", tag: "Barbero: Nico", seed: "mateo-rossi" },
-  { hora: "13:15", nombre: "Luciana Morales", servicio: "Kapping Gel + Esmaltado Semipermanente", tag: "Mesa 2: Vale", seed: "luciana-morales" },
-  { hora: "14:30", nombre: "Agustina Méndez", servicio: "Radiofrecuencia Facial + Masaje Kobido", tag: "Cabina 1: Andrea", seed: "agustina-mendez" },
-];
+const formatPlanPrice = (price: number) => `$${price.toLocaleString("es-AR")}`;
 
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
+const AGENDA = [
+  { time: "09:30", name: "Lucía", service: "Corte clásico", color: "bg-[#e9e5ff] text-[#5146be]", span: "md:col-start-1" },
+  { time: "10:00", name: "Mateo", service: "Limpieza facial", color: "bg-[#f2dcff] text-[#7b3fa2]", span: "md:col-start-2" },
+  { time: "11:30", name: "Carla", service: "Manicura", color: "bg-[#ffe4ec] text-[#9b3f60]", span: "md:col-start-3" },
+  { time: "13:00", name: "Valentina", service: "Color + brushing", color: "bg-[#e3ecff] text-[#35579b]", span: "md:col-start-1" },
+  { time: "14:30", name: "Nicolás", service: "Barba", color: "bg-[#e3f8ee] text-[#247452]", span: "md:col-start-2" },
+  { time: "16:00", name: "Andrea", service: "Diseño de uñas", color: "bg-[#fff0d8] text-[#8b5a11]", span: "md:col-start-3" },
+] as const;
+
+function Eyebrow({ children, dark = false }: { children: React.ReactNode; dark?: boolean }) {
   return (
-    <span className="mb-xs rounded-pill bg-surface-container px-4 py-1.5 font-label-md text-label-md text-secondary">
+    <span className={cn("mb-5 inline-flex items-center gap-2 rounded-pill px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.13em]", dark ? "bg-white/10 text-white/80" : "bg-secondary-soft text-primary")}>
+      <span className={cn("size-1.5 rounded-full", dark ? "bg-primary-light" : "bg-primary")} />
       {children}
     </span>
   );
 }
 
+function HeroBookingPhone() {
+  return (
+    <div className="hero-phone relative z-20 w-[178px] shrink-0 rounded-[2rem] border-[5px] border-white bg-surface p-3 shadow-[0_30px_70px_-22px_rgba(52,45,140,.45)] sm:w-[205px]">
+      <div className="mx-auto mb-3 h-1.5 w-12 rounded-pill bg-on-surface/10" />
+      <div className="flex items-center gap-1.5"><span className="flex size-5 items-center justify-center rounded-[6px] bg-primary text-on-primary"><Icon name="auto_awesome" className="text-[10px]" /></span><span className="text-[8px] font-bold">TurnCreate</span></div>
+      <div className="mt-3 grid grid-cols-5 gap-1"><span className="h-1 rounded-pill bg-primary" /><span className="h-1 rounded-pill bg-primary/20" /><span className="h-1 rounded-pill bg-primary/20" /><span className="h-1 rounded-pill bg-primary/20" /><span className="h-1 rounded-pill bg-primary/20" /></div>
+      <p className="mt-4 text-[8px] font-semibold uppercase tracking-[.12em] text-primary">Reservá tu turno</p>
+      <h3 className="mt-1 text-[14px] font-semibold tracking-[-.03em] text-on-surface">Elegí un servicio</h3>
+      <div className="mt-3 space-y-1.5">
+        {["Corte de pelo", "Corte + barba", "Limpieza facial"].map((service, index) => (
+          <div key={service} className={cn("flex h-10 items-center gap-2 rounded-[10px] border px-2", index === 0 ? "border-primary bg-secondary-soft" : "border-border")}>
+            <span className={cn("size-3 rounded-full border", index === 0 ? "border-primary bg-primary" : "border-outline-variant")} />
+            <span className="min-w-0 flex-1 text-[7px] font-semibold text-on-surface">{service}</span>
+            <span className="text-[7px] font-bold text-on-surface">${index === 0 ? "18" : index === 1 ? "26" : "30"}k</span>
+          </div>
+        ))}
+      </div>
+      <span className="mt-3 flex h-8 items-center justify-center rounded-pill bg-primary text-[8px] font-bold text-on-primary shadow-brand">Continuar →</span>
+    </div>
+  );
+}
+
+function DashboardPreview({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={cn("marketing-dashboard overflow-hidden rounded-[1.6rem] border border-white/90 bg-white/92 shadow-[0_34px_100px_-38px_rgba(47,40,125,.34)] backdrop-blur-xl", compact ? "min-w-[630px]" : "w-full")}>
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2"><span className="flex size-7 items-center justify-center rounded-[9px] bg-primary text-on-primary"><Icon name="auto_awesome" className="text-[13px]" /></span><span className="text-[11px] font-bold text-on-surface">TurnCreate</span></div>
+        <div className="flex items-center gap-3"><span className="hidden text-[9px] font-semibold text-on-surface-variant sm:inline">Studio Lumen</span><Avatar name="Sofía Lumen" size="sm" /></div>
+      </div>
+      <div className="grid grid-cols-[108px_1fr]">
+        <aside className="border-r border-border bg-surface-container-lowest p-3">
+          {[{ i: "home", t: "Inicio" }, { i: "calendar_month", t: "Agenda" }, { i: "group", t: "Clientes" }, { i: "payments", t: "Pagos y caja" }, { i: "monitoring", t: "Reportes" }].map((item, index) => (
+            <div key={item.t} className={cn("mb-1 flex h-8 items-center gap-2 rounded-lg px-2 text-[8px] font-semibold", index === 1 ? "bg-secondary-soft text-primary" : "text-on-surface-variant")}><Icon name={item.i} className="text-[12px]" />{item.t}</div>
+          ))}
+        </aside>
+        <div className="min-w-0 p-4">
+          <div className="flex items-center justify-between"><div><h3 className="text-[16px] font-semibold tracking-[-.03em] text-on-surface">Agenda</h3><p className="text-[8px] text-on-surface-variant">Jueves 22 de octubre de 2026</p></div><span className="rounded-pill bg-secondary-soft px-3 py-1.5 text-[8px] font-bold text-primary">Hoy</span></div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {AGENDA.map((appointment) => (
+              <div key={`${appointment.time}-${appointment.name}`} className={cn("min-h-14 rounded-xl p-2 transition-transform duration-300 hover:-translate-y-1", appointment.color, appointment.span)}>
+                <p className="text-[7px] font-bold opacity-75">{appointment.time}</p><p className="mt-0.5 text-[8px] font-bold">{appointment.service}</p><p className="text-[7px] opacity-80">{appointment.name}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[['Turnos', '24'], ['Señas cobradas', '$134.000'], ['Asistencia', '96%']].map(([label, value]) => <div key={label} className="rounded-xl bg-surface-container-low p-2"><p className="text-[7px] text-on-surface-variant">{label}</p><p className="mt-0.5 text-[11px] font-bold text-on-surface">{value}</p></div>)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeroProductStage() {
+  return (
+    <div className="product-stage relative mt-12 min-h-[430px] w-full overflow-hidden rounded-[2.5rem] border border-white/75 p-5 sm:min-h-[500px] sm:p-10 lg:mt-0 lg:min-h-[610px] lg:p-10">
+      <Image src="/marketing/turncreate-light-waves.webp" alt="" fill priority sizes="(max-width: 768px) 100vw, 1200px" className="object-cover opacity-95" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(255,255,255,.92),transparent_54%)]" />
+      <div className="relative mx-auto flex h-full max-w-[1050px] items-center justify-center pt-10 sm:pt-16">
+        <div className="hero-dashboard w-[91%] max-w-[850px] translate-x-[5%] rotate-[.4deg]"><DashboardPreview compact /></div>
+        <div className="absolute bottom-4 left-[3%] sm:bottom-1 sm:left-[8%] lg:left-[4%]"><HeroBookingPhone /></div>
+        <div className="marketing-float absolute right-[2%] top-[4%] hidden items-center gap-2 rounded-pill border border-white/80 bg-white/80 px-4 py-2 text-[10px] font-semibold text-on-surface shadow-card backdrop-blur-md md:flex"><Icon name="payments" className="text-[14px] text-status-confirmed" /> Seña recibida · $18.000</div>
+        <div className="marketing-float-delayed absolute bottom-[8%] right-[1%] hidden items-center gap-2 rounded-pill border border-white/80 bg-white/80 px-4 py-2 text-[10px] font-semibold text-on-surface shadow-card backdrop-blur-md lg:flex"><Icon name="check_circle" className="text-[14px] text-status-confirmed" /> Turno confirmado</div>
+      </div>
+    </div>
+  );
+}
+
+function FeatureRow({ icon, title, body }: { icon: string; title: string; body: string }) {
+  return (
+    <div className="group flex gap-4 rounded-[1.2rem] p-3 transition-all duration-300 hover:translate-x-1 hover:bg-surface">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary-soft text-primary transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"><Icon name={icon} className="text-[19px]" /></span>
+      <div><h3 className="text-[14px] font-semibold text-on-surface">{title}</h3><p className="mt-1 text-[12px] leading-relaxed text-on-surface-variant">{body}</p></div>
+    </div>
+  );
+}
+
 export default function MarketingHomePage() {
   return (
-    <div className="flex w-full flex-col">
-      {/* HERO */}
-      <section className="relative w-full overflow-hidden px-gutter py-2xl md:px-gutter-desktop">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 flex items-start justify-center">
-          <div className="animate-float-slow absolute -left-16 top-0 h-64 w-64 rounded-full bg-secondary/20 blur-3xl" />
-          <div className="animate-float-slow-delayed absolute -right-10 top-16 h-72 w-72 rounded-full bg-tertiary/20 blur-3xl" />
-        </div>
-
-        <div className="relative mx-auto flex max-w-7xl flex-col items-center text-center">
-          <StatusPill status="pending" className="mb-lg animate-fade-up">
-            Diseñado para barberías, salones y estética en Argentina
-          </StatusPill>
-
-          <h1
-            className="max-w-4xl animate-fade-up text-balance font-headline-xl-mobile text-headline-xl-mobile text-on-surface md:font-headline-xl md:text-headline-xl"
-            style={{ animationDelay: "80ms" }}
-          >
-            Multiplicá tus reservas y terminá con los turnos colgados.
-          </h1>
-          <p
-            className="mb-xl mt-md max-w-[42rem] animate-fade-up text-balance font-body-lg text-body-lg text-on-surface-variant"
-            style={{ animationDelay: "160ms" }}
-          >
-            TurnCreate es el SaaS integral de turnos, CRM y caja diseñado exclusivamente para barberías, salones y
-            centros de estética. Automatizá tu agenda, cobrá señas al instante y tomá el control de tu negocio.
-          </p>
-
-          <div
-            className="flex w-full animate-fade-up flex-col items-center gap-md sm:w-auto sm:flex-row"
-            style={{ animationDelay: "240ms" }}
-          >
-            <Link href="/registro" className={cn(buttonVariants({ size: "default" }), "group h-12 w-full px-xl sm:w-auto")}>
-              Empezá tu prueba gratis de 7 días
-              <Icon name="arrow_forward" className="text-[18px] transition-transform duration-200 group-hover:translate-x-1" />
-            </Link>
-            <Link
-              href="#como-funciona"
-              className={cn(buttonVariants({ variant: "secondary", size: "default" }), "h-12 w-full px-xl sm:w-auto")}
-            >
-              <Icon name="calendar_month" className="text-[20px] text-secondary" />
-              Ver demo (Turnero de ejemplo)
-            </Link>
-          </div>
-
-          <div
-            className="mt-lg flex animate-fade-up flex-wrap items-center justify-center gap-x-md gap-y-xs font-body-sm text-body-sm text-on-surface-variant"
-            style={{ animationDelay: "300ms" }}
-          >
-            <span className="flex items-center gap-1.5">
-              <Icon name="check_circle" className="text-[16px] text-secondary" /> No requiere tarjeta de crédito
-            </span>
-            <span className="text-outline-variant">•</span>
-            <span className="flex items-center gap-1.5">
-              <Icon name="bolt" className="text-[16px] text-secondary" /> Activación en 15 minutos
-            </span>
-            <span className="text-outline-variant">•</span>
-            <span className="flex items-center gap-1.5">
-              <Icon name="verified_user" className="text-[16px] text-secondary" /> Sin contratos de permanencia
-            </span>
-          </div>
-
-          {/* Dashboard showcase */}
-          <div className="relative mt-2xl w-full pt-xs">
-            <div className="absolute -left-4 top-16 z-20 hidden animate-float-slow items-center gap-sm rounded-pill bg-surface-container-lowest/95 px-lg py-md shadow-card-hover backdrop-blur-md lg:flex">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary-soft font-label-md text-label-md text-secondary">
-                +92%
-              </div>
-              <div className="text-left">
-                <p className="font-label-sm text-label-sm text-on-surface">Asistencia confirmada</p>
-                <p className="font-body-sm text-body-sm text-on-surface-variant">Sin ausentismo no-show</p>
-              </div>
+    <div className="landing-shell w-full overflow-hidden">
+      <section className="relative px-gutter pb-24 pt-16 md:px-gutter-desktop md:pb-36 md:pt-24">
+        <div aria-hidden="true" className="absolute left-1/2 top-0 -z-10 h-[620px] w-[1100px] max-w-[130vw] -translate-x-1/2 rounded-full bg-primary-glow/20 blur-[100px]" />
+        <div className="mx-auto grid max-w-[1240px] items-center gap-12 text-center lg:grid-cols-[0.76fr_1.24fr] lg:gap-5 lg:text-left">
+          <div className="relative z-10 lg:pr-5">
+            <div className="animate-fade-up"><Eyebrow>Turnos, señas y gestión en un solo lugar</Eyebrow></div>
+            <h1 className="mx-auto max-w-[870px] animate-fade-up text-balance text-[3.1rem] font-semibold leading-[.98] tracking-[-.055em] text-on-surface sm:text-[4.5rem] lg:mx-0 lg:text-[4.6rem]" style={{ animationDelay: "80ms" }}>
+              Tu negocio, <span className="marketing-gradient-text">siempre en orden.</span>
+            </h1>
+            <p className="mx-auto mt-7 max-w-[670px] animate-fade-up text-balance text-[16px] leading-7 text-on-surface-variant md:text-[18px] md:leading-8 lg:mx-0" style={{ animationDelay: "150ms" }}>
+              TurnCreate une reservas, clientes, señas y caja para barberías, salones y centros de estética. Tus clientes reservan solos y vos recuperás el control del día.
+            </p>
+            <div className="mt-9 flex animate-fade-up flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start" style={{ animationDelay: "220ms" }}>
+              <Link href="/registro" className={cn(buttonVariants(), "group h-13 w-full px-7 shadow-brand sm:w-auto")}>
+                Probalo gratis 7 días <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
+              </Link>
+              <a href="#producto" className={cn(buttonVariants({ variant: "secondary" }), "group h-13 w-full px-7 sm:w-auto")}><Icon name="play_circle" className="text-[18px] text-primary transition-transform group-hover:scale-110" /> Ver el producto</a>
             </div>
-            <div className="absolute -right-4 top-28 z-20 hidden animate-float-slow-delayed items-center gap-sm rounded-pill bg-surface-container-lowest/95 px-lg py-md shadow-card-hover backdrop-blur-md lg:flex">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container text-status-confirmed">
-                <Icon name="payments" className="text-[18px]" />
-              </div>
-              <div className="text-left">
-                <p className="font-label-sm text-label-sm text-on-surface">Cobros directos a tu Mercado Pago</p>
-                <p className="font-body-sm text-body-sm text-status-confirmed">Acreditación instantánea</p>
-              </div>
-            </div>
-
-            <div className="w-full rounded-card bg-surface-container-lowest p-md text-left shadow-card-hover md:p-xl">
-              <div className="flex flex-wrap items-center justify-between gap-sm pb-md">
-                <div className="flex items-center gap-md">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-on-primary">
-                    <Icon name="dashboard" className="text-[18px]" />
-                  </div>
-                  <div>
-                    <p className="font-headline-sm text-headline-sm text-on-surface">Panel de Control en Vivo</p>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant">Studio Lumière · Palermo</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-xs rounded-pill bg-surface-container-low p-1">
-                  <span className="rounded-pill bg-primary px-3 py-1 font-label-sm text-label-sm text-on-primary shadow-sm">
-                    Hoy · Jueves
-                  </span>
-                  <span className="px-3 py-1 font-label-sm text-label-sm text-on-surface-variant">Viernes</span>
-                  <span className="px-3 py-1 font-label-sm text-label-sm text-on-surface-variant">Sábado</span>
-                </div>
-              </div>
-
-              <div className="mt-xs grid grid-cols-1 gap-md lg:grid-cols-12">
-                <div className="flex flex-col gap-sm lg:col-span-4">
-                  <div className="rounded-inner bg-surface-container-low p-md">
-                    <div className="mb-sm flex items-center justify-between">
-                      <span className="font-label-md text-label-md text-on-surface">Turno en Atención</span>
-                      <StatusPill status="confirmed">Confirmado</StatusPill>
-                    </div>
-                    <div className="my-xs flex items-center gap-md">
-                      <Avatar name="Camila Ferraro" src="https://i.pravatar.cc/150?u=camila-ferraro-landing" size="lg" />
-                      <div>
-                        <h4 className="font-headline-sm text-headline-sm text-on-surface">Camila Ferraro</h4>
-                        <p className="font-body-sm text-body-sm text-on-surface-variant">Limpieza Facial + Dermaplaning</p>
-                      </div>
-                    </div>
-                    <div className="mt-xs flex items-center justify-between pt-sm">
-                      <div className="flex items-center gap-xs font-label-sm text-label-sm text-on-surface">
-                        <Icon name="schedule" className="text-[18px] text-secondary" /> 10:30 - 11:45 hs
-                      </div>
-                      <span className="rounded-pill bg-secondary-soft px-3 py-0.5 font-label-sm text-label-sm text-secondary">
-                        Lucía Valenzuela
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-md rounded-inner bg-surface-container-lowest p-md shadow-card">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-confirmed text-on-primary">
-                      <Icon name="chat" className="text-[20px]" />
-                    </div>
-                    <div className="flex flex-col">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="font-label-sm text-label-sm font-bold text-on-surface">WhatsApp TurnCreate</span>
-                        <span className="font-body-sm text-body-sm text-on-surface-variant">Hace 2 min</span>
-                      </div>
-                      <p className="font-body-sm text-body-sm leading-snug text-on-surface">
-                        &ldquo;¡Hola Camila! Tu turno para Limpieza Facial está confirmado para el Jueves 10:30 hs. Seña
-                        de $11.000 recibida con Mercado Pago ✓&rdquo;
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-sm lg:col-span-8">
-                  <div className="grid grid-cols-3 gap-sm">
-                    <div className="rounded-inner bg-surface-container-low p-md">
-                      <p className="font-body-sm text-body-sm text-on-surface-variant">Turnos del Día</p>
-                      <p className="mt-1 font-headline-lg text-headline-lg text-on-surface">
-                        24 <span className="font-body-sm text-body-sm font-medium text-status-confirmed">100% cubierto</span>
-                      </p>
-                    </div>
-                    <div className="rounded-inner bg-surface-container-low p-md">
-                      <p className="font-body-sm text-body-sm text-on-surface-variant">Señas Cobradas (MP)</p>
-                      <p className="mt-1 font-headline-lg text-headline-lg text-on-surface">$264.000</p>
-                    </div>
-                    <div className="rounded-inner bg-surface-container-low p-md">
-                      <p className="font-body-sm text-body-sm text-on-surface-variant">No-Shows</p>
-                      <p className="mt-1 font-headline-lg text-headline-lg text-secondary">
-                        0% <span className="font-body-sm text-body-sm text-on-surface-variant">blindado</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-xs rounded-inner bg-surface-container-low p-md">
-                    <div className="flex items-center justify-between pb-xs">
-                      <span className="font-label-md text-label-md text-on-surface">Próximos turnos programados</span>
-                      <span className="font-label-sm text-label-sm text-secondary">Ver calendario completo →</span>
-                    </div>
-                    {AGENDA_PREVIEW.map((row) => (
-                      <div
-                        key={row.hora}
-                        className="flex items-center justify-between rounded-inner bg-surface-container-lowest p-sm shadow-card"
-                      >
-                        <div className="flex items-center gap-md">
-                          <span className="w-14 font-label-md text-label-md text-on-surface">{row.hora}</span>
-                          <Avatar name={row.nombre} src={`https://i.pravatar.cc/150?u=${row.seed}`} size="sm" />
-                          <div>
-                            <p className="font-label-md text-label-md text-on-surface">{row.nombre}</p>
-                            <p className="font-body-sm text-body-sm text-on-surface-variant">{row.servicio}</p>
-                          </div>
-                        </div>
-                        <div className="hidden items-center gap-2 sm:flex">
-                          <span className="rounded-pill bg-surface-container px-3 py-0.5 font-label-sm text-label-sm text-on-surface-variant">
-                            {row.tag}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className="mt-6 flex animate-fade-up flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] font-medium text-on-surface-variant lg:justify-start" style={{ animationDelay: "280ms" }}>
+              <span className="flex items-center gap-1.5"><Icon name="check_circle" className="text-[14px] text-primary" /> Sin tarjeta</span>
+              <span className="flex items-center gap-1.5"><Icon name="bolt" className="text-[14px] text-primary" /> Configuración guiada</span>
+              <span className="flex items-center gap-1.5"><Icon name="shield_person" className="text-[14px] text-primary" /> Sin permanencia</span>
             </div>
           </div>
+          <div className="animate-fade-up" style={{ animationDelay: "340ms" }}><HeroProductStage /></div>
         </div>
       </section>
 
-      {/* STATS DE IMPACTO */}
-      <section className="w-full px-gutter py-xl md:px-gutter-desktop">
-        <Reveal>
-          <div className="mx-auto grid max-w-6xl grid-cols-2 gap-md rounded-card border border-border bg-surface-container-lowest p-lg shadow-card md:grid-cols-4 md:p-xl">
-            {STATS.map((stat) => (
-              <div key={stat.label} className="flex flex-col items-center gap-1 text-center">
-                <span className="font-headline-xl text-headline-xl text-secondary">{stat.value}</span>
-                <span className="font-label-md text-label-md text-on-surface">{stat.label}</span>
-                <span className="font-body-sm text-body-sm text-on-surface-variant">{stat.detail}</span>
-              </div>
-            ))}
+      <section id="producto" className="landing-section bg-surface-container-low/55">
+        <Reveal className="mx-auto max-w-[1240px]">
+          <div className="mb-14 max-w-[680px] md:mb-20">
+            <Eyebrow>Reserva online</Eyebrow>
+            <h2 className="text-balance text-[2.35rem] font-semibold leading-[1.04] tracking-[-.045em] text-on-surface md:text-[3.6rem]">Tus clientes reservan en minutos, sin vueltas.</h2>
+            <p className="mt-6 max-w-[590px] text-[15px] leading-7 text-on-surface-variant md:text-[17px]">Un flujo claro desde el servicio hasta el pago. Probá cada paso: fechas visibles, horarios amplios, datos mínimos y una política de seña que se entiende.</p>
           </div>
+          <BookingJourney />
         </Reveal>
       </section>
 
-      {/* PROBLEMA */}
-      <section className="w-full bg-surface-container-low px-gutter py-2xl md:px-gutter-desktop">
-        <Reveal className="mx-auto flex max-w-6xl flex-col items-center">
-          <div className="mb-md inline-flex items-center gap-xs rounded-pill bg-error-container px-4 py-1.5 font-label-md text-label-md text-on-error-container">
-            <Icon name="warning" className="text-[16px]" />
-            El dolor del dueño del salón
-          </div>
-          <h2 className="mb-xl max-w-3xl text-center font-headline-lg text-headline-lg text-on-surface">
-            Gestionar un salón no debería ser un dolor de cabeza constante
-          </h2>
-          <div className="grid w-full grid-cols-1 gap-lg md:grid-cols-3">
-            {PROBLEMAS.map((problema, i) => (
-              <Reveal key={problema.title} delay={i * 100}>
-                <Card className="flex h-full flex-col p-xl">
-                  <div className="mb-lg flex h-12 w-12 items-center justify-center rounded-full bg-error-container text-on-error-container">
-                    <Icon name={problema.icon} className="text-[24px]" />
-                  </div>
-                  <h3 className="mb-sm font-headline-sm text-headline-sm text-on-surface">{problema.title}</h3>
-                  <p className="font-body-md text-body-md leading-relaxed text-on-surface-variant">{problema.body}</p>
-                </Card>
-              </Reveal>
-            ))}
-          </div>
-          <div className="mt-2xl flex w-full flex-col items-center rounded-card bg-surface-container p-lg text-center md:p-xl">
-            <Icon name="autorenew" className="mb-xs text-[32px] text-secondary" />
-            <p className="max-w-[42rem] font-headline-md text-headline-md text-on-surface">
-              Necesitás que tu negocio trabaje para vos, no al revés. TurnCreate pone tu salón en piloto automático.
-            </p>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* BENEFICIOS */}
-      <section id="beneficios" className="w-full px-gutter py-2xl md:px-gutter-desktop">
-        <Reveal className="mx-auto max-w-7xl">
-          <div className="mb-2xl flex flex-col items-center text-center">
-            <SectionEyebrow>Ventajas exclusivas</SectionEyebrow>
-            <h2 className="max-w-[42rem] font-headline-xl text-headline-xl text-on-surface">
-              Tu negocio en piloto automático, literal
-            </h2>
-            <p className="mt-xs max-w-[36rem] font-body-lg text-body-lg text-on-surface-variant">
-              Diseñado con los flujos de trabajo exactos que utilizan los mejores salones de Argentina.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-lg md:grid-cols-2 lg:grid-cols-12">
-            {BENEFICIOS.map((b) => (
-              <Card key={b.title} className={cn("flex flex-col justify-between p-xl", b.span)}>
-                <div>
-                  <div className="mb-md flex items-center justify-between">
-                    <span className="rounded-pill bg-secondary-soft px-4 py-1.5 font-label-sm text-label-sm text-secondary">
-                      {b.badge}
-                    </span>
-                    <Icon name={b.icon} className="text-[28px] text-secondary" />
-                  </div>
-                  <h3 className="mb-sm font-headline-md text-headline-md text-on-surface">{b.title}</h3>
-                  <p className="font-body-md text-body-md leading-relaxed text-on-surface-variant">{b.body}</p>
-                </div>
-                {b.badge === "Cobro Blindado" && (
-                  <div className="mt-lg space-y-sm rounded-inner bg-surface-container-low p-md">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-sm">
-                        <span
-                          className="flex h-9 w-9 items-center justify-center rounded-full font-label-md text-label-md text-white"
-                          style={{ backgroundColor: "#009EE3" }}
-                        >
-                          MP
-                        </span>
-                        <div>
-                          <p className="font-label-md text-label-md text-on-surface">Mercado Pago</p>
-                          <p className="font-body-sm text-body-sm text-status-confirmed">Conectado con 1 clic</p>
-                        </div>
-                      </div>
-                      <Icon name="check_circle" className="text-[20px] text-status-confirmed" />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 rounded-pill bg-surface-container p-1">
-                      <span className="rounded-pill px-3 py-1 font-label-sm text-label-sm text-on-surface-variant">
-                        Sin seña
-                      </span>
-                      <span className="rounded-pill bg-primary px-3 py-1 font-label-sm text-label-sm text-on-primary">
-                        % del servicio
-                      </span>
-                      <span className="rounded-pill px-3 py-1 font-label-sm text-label-sm text-on-surface-variant">
-                        Monto fijo
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            ))}
-          </div>
-        </Reveal>
-      </section>
-
-      {/* SHOWCASE INTERACTIVO */}
-      <section className="w-full px-gutter py-2xl md:px-gutter-desktop">
-        <Reveal className="mx-auto max-w-5xl">
-          <div className="mb-2xl flex flex-col items-center text-center">
-            <SectionEyebrow>Así se ve por dentro</SectionEyebrow>
-            <h2 className="max-w-[42rem] font-headline-xl text-headline-xl text-on-surface">
-              Todo lo que necesitás, ya construido
-            </h2>
-            <p className="mt-xs max-w-[36rem] font-body-lg text-body-lg text-on-surface-variant">
-              Elegí una pantalla y mirá cómo se siente usar TurnCreate todos los días.
-            </p>
-          </div>
-          <FeatureShowcase />
-        </Reveal>
-      </section>
-
-      {/* VERTICALES */}
-      <section id="para-quien-es" className="w-full bg-surface-container-low px-gutter py-2xl md:px-gutter-desktop">
-        <Reveal className="mx-auto max-w-7xl">
-          <div className="mb-2xl flex flex-col items-center text-center">
-            <SectionEyebrow>Verticales adaptadas</SectionEyebrow>
-            <h2 className="max-w-[42rem] font-headline-xl text-headline-xl text-on-surface">¿Para quién está pensado?</h2>
-            <p className="mt-xs max-w-[42rem] font-body-lg text-body-lg text-on-surface-variant">
-              TurnCreate entiende cómo funciona tu rubro porque fue creado para esto.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-lg md:grid-cols-2 lg:grid-cols-4">
-            {VERTICALES.map((v) => (
-              <Card key={v.title} className="flex flex-col justify-between p-xl">
-                <div>
-                  <div className="mb-md flex h-12 w-12 items-center justify-center rounded-full bg-surface-container text-xl">
-                    {v.emoji}
-                  </div>
-                  <span className="mb-sm inline-block rounded-pill bg-surface-container-high px-3 py-0.5 font-label-sm text-label-sm text-on-surface">
-                    {v.tag}
-                  </span>
-                  <h3 className="mb-xs font-headline-sm text-headline-sm text-on-surface">{v.title}</h3>
-                  <p className="font-body-sm text-body-sm leading-relaxed text-on-surface-variant">{v.body}</p>
-                </div>
-                <div className="mt-lg flex items-center gap-1 border-t border-border pt-sm font-label-sm text-label-sm text-secondary">
-                  {v.footer} <span>→</span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </Reveal>
-      </section>
-
-      {/* COMO FUNCIONA */}
-      <section id="como-funciona" className="w-full px-gutter py-2xl md:px-gutter-desktop">
-        <Reveal className="mx-auto max-w-6xl">
-          <div className="mb-2xl flex flex-col items-center text-center">
-            <SectionEyebrow>Experiencia sin fricciones</SectionEyebrow>
-            <h2 className="font-headline-xl text-headline-xl text-on-surface">¿Cómo funciona?</h2>
-            <p className="mt-xs max-w-[36rem] font-body-lg text-body-lg text-on-surface-variant">
-              El flujo mágico en 4 simples pasos para que nunca más pierdas una reserva ni un peso.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-lg md:grid-cols-2 lg:grid-cols-4">
-            {PASOS.map((paso, i) => (
-              <Card key={paso.title} className="flex flex-col p-xl">
-                <div
-                  className={cn(
-                    "mb-md flex h-10 w-10 items-center justify-center rounded-full font-headline-sm text-headline-sm",
-                    i === 2 ? "bg-secondary text-on-secondary" : "bg-primary text-on-primary",
-                  )}
-                >
-                  {i + 1}
-                </div>
-                <h3 className="mb-xs font-headline-sm text-headline-sm text-on-surface">{paso.title}</h3>
-                <p className="font-body-sm text-body-sm leading-relaxed text-on-surface-variant">{paso.body}</p>
-                <div className="mt-md rounded-inner bg-surface-container-low p-2 text-center font-label-sm text-label-sm text-secondary">
-                  {paso.tag}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </Reveal>
-      </section>
-
-      {/* PLANES */}
-      <section id="planes" className="w-full bg-surface-container-low px-gutter py-2xl md:px-gutter-desktop">
-        <Reveal className="mx-auto max-w-6xl">
-          <div className="mb-2xl flex flex-col items-center text-center">
-            <SectionEyebrow>Tarifas transparentes</SectionEyebrow>
-            <h2 className="font-headline-xl text-headline-xl text-on-surface">Planes que crecen con vos</h2>
-            <p className="mt-xs max-w-[42rem] text-balance font-body-lg text-body-lg text-on-surface-variant">
-              Pagá tu suscripción siempre en pesos, a través de Mercado Pago y sin comisiones ocultas por los turnos.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 items-stretch gap-lg lg:grid-cols-3">
-            {PLANES.map((plan) => (
-              <Card
-                key={plan.nombre}
-                className={cn(
-                  "relative flex flex-col justify-between p-xl",
-                  plan.featured && "ring-2 ring-secondary shadow-card-hover",
-                )}
-              >
-                {plan.featured && (
-                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-pill bg-secondary px-4 py-1 font-label-sm text-label-sm uppercase tracking-wider text-on-secondary shadow-card">
-                    Más elegido
-                  </span>
-                )}
-                <div>
-                  <h3 className="font-headline-md text-headline-md text-on-surface">Plan {plan.nombre}</h3>
-                  <p className="mb-lg mt-1 font-body-sm text-body-sm text-on-surface-variant">{plan.detalle}</p>
-                  <div className="mb-lg">
-                    <span className="font-headline-xl text-headline-xl text-on-surface">{plan.precio}</span>
-                    <span className="font-body-sm text-body-sm text-on-surface-variant"> ARS / mes</span>
-                  </div>
-                  <ul className="mb-xl flex flex-col gap-sm font-body-sm text-body-sm text-on-surface">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2">
-                        <Icon name="check_circle" className="text-[18px] text-secondary" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <Link
-                  href="/registro"
-                  className={buttonVariants({ variant: plan.featured ? "primary" : "secondary", size: "default" })}
-                >
-                  {plan.cta}
-                </Link>
-              </Card>
-            ))}
-          </div>
-        </Reveal>
-      </section>
-
-      {/* BANNER CTA FINAL */}
-      <section className="w-full px-gutter py-2xl md:px-gutter-desktop">
-        <Reveal className="relative mx-auto flex max-w-6xl flex-col items-center overflow-hidden rounded-card bg-primary p-xl text-center text-on-primary shadow-card-hover md:p-2xl">
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-secondary-container/30 blur-3xl" />
-          <div className="relative z-10 flex flex-col items-center">
-            <span className="mb-md rounded-pill bg-primary-hover px-4 py-1.5 font-label-sm text-label-sm text-secondary-soft">
-              Configuración rápida en 15 minutos
-            </span>
-            <h2 className="mb-md max-w-3xl text-balance font-headline-xl text-headline-xl">
-              No dejes para mañana los turnos que podés automatizar hoy.
-            </h2>
-            <p className="mb-xl max-w-[42rem] text-balance font-body-lg text-body-lg text-white/70">
-              El alta de tu cuenta toma menos de 15 minutos e incluye un asistente paso a paso para dejar tu local
-              configurado y listo para facturar.
-            </p>
-            <Link
-              href="/registro"
-              className="inline-flex h-14 items-center justify-center rounded-pill bg-on-primary px-2xl font-headline-sm text-headline-sm text-primary shadow-card-hover transition-all hover:-translate-y-0.5 hover:bg-surface-container-low"
-            >
-              Creá tu cuenta y configurá tu local hoy mismo →
-            </Link>
-            <div className="mt-lg flex flex-wrap items-center justify-center gap-sm font-body-sm text-body-sm text-white/70">
-              <span>✓ Prueba gratuita por 7 días</span>
-              <span>•</span>
-              <span>✓ Asistencia humana por WhatsApp para la migración de tu agenda</span>
+      <section className="landing-section">
+        <Reveal className="mx-auto grid max-w-[1240px] items-center gap-16 lg:grid-cols-[0.68fr_1.32fr] lg:gap-20">
+          <div>
+            <Eyebrow>Todo en un solo lugar</Eyebrow>
+            <h2 className="text-balance text-[2.35rem] font-semibold leading-[1.04] tracking-[-.045em] text-on-surface md:text-[3.35rem]">Gestioná tu negocio desde un panel completo.</h2>
+            <p className="mt-6 text-[15px] leading-7 text-on-surface-variant">Agenda, clientes, pagos, caja y reportes se conectan para que veas qué está pasando sin saltar entre planillas.</p>
+            <div className="mt-9 space-y-1">
+              <FeatureRow icon="calendar_month" title="Agenda en tiempo real" body="Turnos ordenados por horario y profesional." />
+              <FeatureRow icon="group" title="Clientes" body="Historial, notas y próximas visitas en contexto." />
+              <FeatureRow icon="payments" title="Pagos y caja" body="Señas, cobros y movimientos del día." />
+              <FeatureRow icon="monitoring" title="Reportes" body="Información clara para decidir mejor." />
             </div>
+          </div>
+          <div className="relative min-w-0">
+            <div aria-hidden="true" className="absolute inset-10 -z-10 rounded-full bg-primary-glow/30 blur-3xl" />
+            <div className="overflow-x-auto rounded-[2rem] bg-surface-container-low p-4 shadow-card [scrollbar-width:none] md:p-7"><DashboardPreview compact /></div>
+          </div>
+        </Reveal>
+      </section>
+
+      <section id="personalizacion" className="landing-section bg-[linear-gradient(180deg,rgba(245,242,255,.25),rgba(245,242,255,.85),rgba(255,255,255,1))]">
+        <Reveal className="mx-auto max-w-[1240px]">
+          <div className="mb-14 max-w-[700px] md:mb-20">
+            <Eyebrow>Tu marca, tu color</Eyebrow>
+            <h2 className="text-balance text-[2.35rem] font-semibold leading-[1.04] tracking-[-.045em] text-on-surface md:text-[3.45rem]">Una experiencia que se siente propia.</h2>
+            <p className="mt-6 max-w-[620px] text-[15px] leading-7 text-on-surface-variant md:text-[17px]">Personalizá el color del turnero desde Configuración. Cada interacción conserva el diseño premium de TurnCreate con la identidad de tu negocio.</p>
+          </div>
+          <BrandColorShowcase />
+        </Reveal>
+      </section>
+
+      <section id="integraciones" className="landing-section">
+        <Reveal className="mx-auto max-w-[1240px]">
+          <div className="grid items-end gap-10 lg:grid-cols-[0.65fr_1.35fr]">
+            <div>
+              <Eyebrow>Integraciones</Eyebrow>
+              <h2 className="text-balance text-[2.35rem] font-semibold leading-[1.04] tracking-[-.045em] text-on-surface md:text-[3.35rem]">Todo conectado para que vendas más.</h2>
+              <p className="mt-6 text-[15px] leading-7 text-on-surface-variant">Cobrá con las herramientas que ya usás y preparate para la facturación electrónica.</p>
+            </div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="marketing-integration-card group rounded-card border border-border bg-surface p-7 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-card-hover">
+                <div className="flex items-center gap-4"><span className="flex size-14 items-center justify-center rounded-full bg-[#e8f8ff]"><MercadoPagoLogo className="text-[28px]" /></span><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-[17px] font-semibold text-on-surface">Mercado Pago</h3><span className="rounded-pill bg-status-confirmed-bg px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-status-confirmed">Disponible</span></div><p className="mt-1 text-[12px] text-on-surface-variant">Ecosistema Mercado Libre</p></div></div>
+                <p className="mt-5 text-[13px] leading-6 text-on-surface-variant">Cobrá señas online. El pago se acredita en la cuenta conectada del comercio.</p>
+              </div>
+              <div className="marketing-integration-card group rounded-card border border-border bg-surface p-7 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-card-hover">
+                <div className="flex items-center gap-4"><span className="flex size-14 items-center justify-center rounded-full bg-[#29275f] text-[12px] font-extrabold tracking-tight text-white">ARCA</span><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-[17px] font-semibold text-on-surface">Facturación ARCA</h3><span className="rounded-pill bg-secondary-soft px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Próximamente · beta</span></div><p className="mt-1 text-[12px] text-on-surface-variant">Prevista para el plan Equipo</p></div></div>
+                <p className="mt-5 text-[13px] leading-6 text-on-surface-variant">Estamos preparando comprobantes electrónicos desde TurnCreate. La landing lo comunica como hoja de ruta, no como función activa.</p>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
+      <section id="planes" className="landing-section bg-surface-container-low/55">
+        <Reveal className="mx-auto max-w-[1180px]">
+          <div className="mx-auto mb-14 max-w-[680px] text-center md:mb-20">
+            <Eyebrow>Planes claros</Eyebrow>
+            <h2 className="text-balance text-[2.35rem] font-semibold leading-[1.04] tracking-[-.045em] text-on-surface md:text-[3.45rem]">Un plan para cada etapa.</h2>
+            <p className="mt-6 text-[15px] leading-7 text-on-surface-variant md:text-[17px]">Todos incluyen agenda, clientes, turnero y cobro de señas. Cambia la capacidad operativa de tu equipo.</p>
+          </div>
+          <div className="marketing-plan-grid grid gap-5 lg:grid-cols-3">
+            {PLANS.map((plan) => (
+              <article key={plan.name} className={cn("group relative flex min-h-[470px] flex-col rounded-[2rem] border bg-surface p-7 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-card-hover md:p-8", plan.featured ? "border-primary ring-2 ring-primary/10" : "border-border")}>
+                {plan.featured && <span className="absolute inset-x-5 -top-3 flex h-7 items-center justify-center rounded-pill bg-primary text-[10px] font-bold uppercase tracking-[.14em] text-on-primary shadow-brand">Más elegido</span>}
+                <div className="flex items-start justify-between gap-3"><div><h3 className="text-[22px] font-semibold tracking-[-.03em] text-on-surface">{plan.name}</h3><p className="mt-1 text-[12px] font-semibold text-primary">{plan.limit}</p></div><span className="flex size-10 items-center justify-center rounded-full bg-secondary-soft text-primary transition-transform duration-300 group-hover:scale-110"><Icon name={plan.name === "Individual" ? "person" : "group"} className="text-[19px]" /></span></div>
+                <p className="mt-5 min-h-10 text-[13px] leading-5 text-on-surface-variant">{plan.detail}</p>
+                <div className="mt-6"><span className="text-[34px] font-semibold tracking-[-.04em] text-on-surface">{formatPlanPrice(plan.price)}</span><span className="ml-1 text-[11px] text-on-surface-variant">ARS / mes</span></div>
+                <Link href="/registro" className={cn(buttonVariants({ variant: plan.featured ? "primary" : "secondary" }), "mt-6 w-full")}>Probalo gratis 7 días</Link>
+                <ul className="mt-7 space-y-3">
+                  {plan.features.map((feature) => <li key={feature} className="flex items-start gap-2.5 text-[12px] leading-5 text-on-surface-variant"><Icon name="check_circle" className="mt-0.5 text-[15px] text-primary" />{feature}</li>)}
+                </ul>
+              </article>
+            ))}
+          </div>
+          <p className="mt-8 text-center text-[11px] text-on-surface-variant">Precios mensuales en pesos argentinos. Consultá las condiciones vigentes al contratar.</p>
+        </Reveal>
+      </section>
+
+      <section className="px-gutter pb-16 pt-24 md:px-gutter-desktop md:pb-24 md:pt-36">
+        <Reveal className="relative mx-auto max-w-[1240px] overflow-hidden rounded-[2.5rem] bg-[#17143f] px-6 py-20 text-center text-white shadow-[0_36px_100px_-34px_rgba(35,28,118,.65)] md:px-12 md:py-28">
+          <Image src="/marketing/turncreate-dark-waves.webp" alt="" fill sizes="1200px" className="object-cover opacity-70" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(123,97,255,.25),transparent_55%)]" />
+          <div className="relative z-10 mx-auto max-w-[760px]">
+            <Eyebrow dark>Empezá hoy</Eyebrow>
+            <h2 className="text-balance text-[2.4rem] font-semibold leading-[1.02] tracking-[-.045em] md:text-[4rem]">Llevá tu negocio al próximo nivel.</h2>
+            <p className="mx-auto mt-6 max-w-[610px] text-[15px] leading-7 text-white/65">Probá TurnCreate durante 7 días. Explorá el turnero, tu panel y la personalización antes de elegir un plan.</p>
+            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"><Link href="/registro" className={cn(buttonVariants(), "group h-13 w-full bg-white px-7 text-[#28205e] hover:bg-white/90 sm:w-auto")}>Probalo gratis 7 días <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" /></Link><a href="#producto" className="inline-flex h-13 w-full items-center justify-center gap-2 rounded-pill border border-white/20 bg-white/5 px-7 text-[12px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-white/10 sm:w-auto"><Icon name="play_circle" className="text-[17px]" /> Ver el producto</a></div>
           </div>
         </Reveal>
       </section>

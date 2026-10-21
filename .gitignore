@@ -52,3 +52,11 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /blob-report/
+
+# Design QA: conservar solo las capturas finales y sus comparaciones.
+/artifacts/landing-audit/
+/artifacts/landing-redesign/*
+!/artifacts/landing-redesign/desktop-final.png
+!/artifacts/landing-redesign/mobile-final.png
+!/artifacts/landing-redesign/comparison-desktop.png
+!/artifacts/landing-redesign/comparison-mobile.png

@@ -12,6 +12,7 @@ import { normalizeArPhone } from "@/lib/phone";
 import { DESCRIPTION_MAX_LENGTH, normalizeDescription, normalizeInstagramUrl } from "@/server/tenant-profile";
 import { validateTransfer, type TransferFieldErrors } from "./transfer-validation";
 import { MAX_CANCELLATION_REFUND_HOURS } from "@/domain/booking/cancellation-policy";
+import { isBrandColorId } from "@/lib/brand-theme";
 
 export type ConfigActionState = { error: string | null; success?: boolean };
 export type TransferActionState = ConfigActionState & { fieldErrors?: TransferFieldErrors };
@@ -64,6 +65,19 @@ export async function updateBusinessInfo(tenantSlug: string, _prev: ConfigAction
     revalidateTenant(tenantSlug);
     return { error: null, success: true };
   } catch (error) { return { error: error instanceof Error ? error.message : "No se pudo actualizar el negocio" }; }
+}
+
+export async function updateBrandColor(tenantSlug: string, _prev: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
+  const brandColor = formData.get("brandColor");
+  if (!isBrandColorId(brandColor)) return { error: "Elegí un color de la paleta" };
+  try {
+    const { tenant } = await tenantForUser(tenantSlug);
+    await tenantDoc(tenant.id).update({ brandColor, updatedAt: FieldValue.serverTimestamp() });
+    revalidateTenant(tenantSlug);
+    return { error: null, success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo guardar el color" };
+  }
 }
 
 // El logo viaja ya comprimido desde el navegador (~512px). El techo de

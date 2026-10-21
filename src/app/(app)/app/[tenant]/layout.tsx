@@ -24,6 +24,7 @@ import { NewAppointmentFab } from "./new-appointment-fab";
 import { NotificationsButton } from "./notifications-button";
 import { TenantSwitcher, type TenantOption } from "./tenant-switcher";
 import { billingBanner } from "./plan/billing-copy";
+import { brandThemeStyle } from "@/lib/brand-theme";
 
 const NAV = [
   { href: "", label: "Inicio", icon: "home" },
@@ -78,7 +79,7 @@ export default async function TenantAppLayout({
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-canvas">
+      <div style={brandThemeStyle(tenant.brandColor)} className="min-h-screen bg-canvas">
         {/* Header-pill flotante: solo desktop/tablet ancho (lg+). En mobile
             lo reemplaza MobilePageHeader (sticky, violeta, con ‹Volver +
             título de la sección -- lo que pedía el rediseño) para no

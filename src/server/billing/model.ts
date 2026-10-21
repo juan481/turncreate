@@ -24,7 +24,7 @@ export type BillingConfig = {
 export const DEFAULT_BILLING_CONFIG: BillingConfig = {
   prices: { ...DEFAULT_PLAN_PRICES_ARS },
   newTenantMode: "free",
-  trialDays: 15,
+  trialDays: 7,
   graceDays: DEFAULT_GRACE_DAYS,
 };
 

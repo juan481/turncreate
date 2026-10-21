@@ -16,6 +16,7 @@ import { getMpConnection } from "@/server/mercadopago/connections";
 import { addDaysISO, formatInTz, toDateISOInTz, todayISO } from "@/lib/dates";
 import { getPublicServiceCatalog } from "@/server/services/catalog";
 import { planFeatures } from "@/lib/plans";
+import { normalizeBrandColor } from "@/lib/brand-theme";
 import { tenantBillingAllowsPublicBooking } from "@/server/billing/tenant-billing";
 import { assertPublicBookingRate } from "@/server/public-booking/rate-limit";
 import {
@@ -96,6 +97,7 @@ export async function getPublicTenant(slug: string): Promise<PublicTenant | null
     address: tenant.address ?? null,
     instagram_url: tenant.instagramUrl ?? null,
     whatsapp_number: tenant.whatsappNumber ?? null,
+    brand_color: normalizeBrandColor(tenant.brandColor),
   };
 }
 

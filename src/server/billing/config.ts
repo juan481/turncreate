@@ -16,7 +16,7 @@ function configRef() {
 
 /**
  * Config vigente (platformConfig/billing) con defaults para lo que falte:
- * precios DEFAULT_PLAN_PRICES_ARS, alta "free", 15 días de prueba, 3 de gracia.
+ * precios DEFAULT_PLAN_PRICES_ARS, alta "free", 7 días de prueba, 3 de gracia.
  * Cacheada por request.
  */
 export const getBillingConfig = cache(async (): Promise<BillingConfig> => {

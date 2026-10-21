@@ -30,7 +30,11 @@ export function Reveal({
           observer.disconnect();
         }
       },
-      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" },
+      // Algunas secciones de marketing son más altas que el viewport. Con
+      // threshold 0.15 nunca llegaban a tener 15% visible en mobile y
+      // quedaban transparentes para siempre. Cualquier intersección real es
+      // suficiente para iniciar la entrada.
+      { threshold: 0.01, rootMargin: "0px 0px -8% 0px" },
     );
     observer.observe(el);
     return () => observer.disconnect();

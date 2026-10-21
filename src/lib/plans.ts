@@ -13,9 +13,9 @@ export type PlanFeatures = {
 };
 
 export const PLANS: Record<PlanId, PlanFeatures> = {
-  solo: { id: "solo", name: "Solo", maxStaff: 1, cashSessions: false, publicBooking: true },
-  equipo: { id: "equipo", name: "Equipo", maxStaff: 5, cashSessions: true, publicBooking: true },
-  pro: { id: "pro", name: "Pro", maxStaff: 15, cashSessions: true, publicBooking: true },
+  solo: { id: "solo", name: "Individual", maxStaff: 1, cashSessions: false, publicBooking: true },
+  equipo: { id: "equipo", name: "Estudio", maxStaff: 5, cashSessions: true, publicBooking: true },
+  pro: { id: "pro", name: "Equipo", maxStaff: 15, cashSessions: true, publicBooking: true },
 };
 
 export const PLAN_IDS: PlanId[] = ["solo", "equipo", "pro"];
@@ -36,7 +36,7 @@ export function isPlanId(value: unknown): value is PlanId {
 }
 
 // Los locales creados antes de que existieran los planes no tienen `plan`:
-// se tratan como Equipo para no quitarles nada de lo que ya venían usando.
+// se tratan como Estudio para no quitarles nada de lo que ya venían usando.
 export function planFeatures(tenant: { plan?: unknown }): PlanFeatures {
   return PLANS[isPlanId(tenant.plan) ? tenant.plan : "equipo"];
 }
